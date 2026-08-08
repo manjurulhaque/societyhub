@@ -1,0 +1,272 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//
+// ENUMS
+//
+
+enum AppRole {
+  SUPER_ADMIN
+  USER
+}
+
+enum SocietyRole {
+  PRESIDENT
+  VICE_PRESIDENT
+  SECRETARY
+  JOINT_SECRETARY
+  TREASURER
+  MANAGER
+  ACCOUNTANT
+  SECURITY
+  MEMBER
+}
+
+enum FlatRole {
+  OWNER
+  TENANT
+  FAMILY
+}
+
+enum UnitType {
+  STUDIO
+  RK1
+  BHK1
+  BHK2
+  BHK3
+  BHK4
+  PENTHOUSE
+  DUPLEX
+  SHOP
+  OFFICE
+}
+
+enum MaintenanceType {
+  FIXED
+  PER_SQFT
+}
+
+enum PaymentMode {
+  APP
+  CASH
+  UPI
+  BANK
+  CHEQUE
+  CARD
+}
+
+//
+// AUTHENTICATION
+//
+
+model User {
+  id           String   @id @default(cuid())
+
+  email        String   @unique
+  password     String?
+
+  appRole      AppRole  @default(USER)
+
+  memberships  SocietyMember[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+//
+// SOCIETY
+//
+
+model Society {
+  id                 String   @id @default(cuid())
+
+  name               String
+  code               String   @unique
+
+  address            String?
+
+  maintenanceType    MaintenanceType @default(FIXED)
+  ratePerSqft        Decimal? @db.Decimal(10,2)
+
+  blocks             Block[]
+  people             Person[]
+  members            SocietyMember[]
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+//
+// LOGIN USER ↔ SOCIETY
+//
+
+model SocietyMember {
+  id          String @id @default(cuid())
+
+  societyId   String
+  userId      String
+
+  society      Society @relation(fields: [societyId], references: [id], onDelete: Cascade)
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role         SocietyRole
+
+  createdAt    DateTime @default(now())
+
+  @@unique([societyId, userId])
+}
+
+//
+// BLOCK
+//
+
+model Block {
+  id          String @id @default(cuid())
+
+  societyId   String
+  society     Society @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  name        String
+
+  flats       Flat[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([societyId, name])
+}
+
+//
+// FLAT
+//
+
+model Flat {
+  id          String @id @default(cuid())
+
+  blockId     String
+  block       Block @relation(fields: [blockId], references: [id], onDelete: Cascade)
+
+  number      String
+
+  unitType    UnitType?
+
+  area        Decimal? @db.Decimal(10,2)
+  areaUnit    String @default("sqft")
+
+  people      FlatPerson[]
+
+  bills       Bill[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([blockId, number])
+}
+
+//
+// PERSON
+//
+
+model Person {
+  id          String @id @default(cuid())
+
+  societyId   String
+  society     Society @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  name        String
+
+  phone       String?
+  email       String?
+
+  flats       FlatPerson[]
+
+  payments    Payment[] @relation("PaymentBy")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([phone])
+  @@index([email])
+}
+
+//
+// PERSON ↔ FLAT
+//
+
+model FlatPerson {
+  id          String @id @default(cuid())
+
+  flatId      String
+  personId    String
+
+  flat         Flat @relation(fields: [flatId], references: [id], onDelete: Cascade)
+  person       Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  role         FlatRole
+
+  isPrimary    Boolean @default(false)
+
+  fromDate     DateTime
+  toDate       DateTime?
+
+  createdAt    DateTime @default(now())
+
+  @@index([flatId])
+  @@index([personId])
+}
+
+//
+// MONTHLY BILL
+//
+
+model Bill {
+  id          String @id @default(cuid())
+
+  flatId      String
+  flat        Flat @relation(fields: [flatId], references: [id], onDelete: Cascade)
+
+  year        Int
+  month       Int
+
+  amount      Decimal @db.Decimal(10,2)
+
+  dueDate     DateTime?
+
+  payments    Payment[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([flatId, year, month])
+}
+
+//
+// PAYMENT
+//
+
+model Payment {
+  id          String @id @default(cuid())
+
+  billId       String
+  bill         Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  paidById     String?
+  paidBy       Person? @relation("PaymentBy", fields: [paidById], references: [id])
+
+  amount       Decimal @db.Decimal(10,2)
+
+  paidOn       DateTime @default(now())
+
+  mode         PaymentMode
+
+  reference    String?
+  remarks      String?
+
+  createdAt    DateTime @default(now())
+}
