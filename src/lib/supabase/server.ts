@@ -12,11 +12,10 @@ export async function createClient() {
         getAll() {
           return cookieStore.getAll()
         },
-        // 🚨 DO NOT allow cookie writes in Server Components
         setAll() {
-          // no-op
+          // Server Components cannot reliably write cookies.
         },
       },
-    }
+    },
   )
 }

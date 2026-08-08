@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -65,17 +66,17 @@ enum PaymentMode {
 //
 
 model User {
-  id           String   @id @default(cuid())
+  id String @id @default(cuid())
 
-  email        String   @unique
-  password     String?
+  email    String  @unique
+  password String?
 
-  appRole      AppRole  @default(USER)
+  appRole AppRole @default(USER)
 
-  memberships  SocietyMember[]
+  memberships SocietyMember[]
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 //
@@ -83,22 +84,21 @@ model User {
 //
 
 model Society {
-  id                 String   @id @default(cuid())
+  id String @id @default(cuid())
 
-  name               String
-  code               String   @unique
+  name    String
+  code    String  @unique
+  address String?
 
-  address            String?
+  maintenanceType MaintenanceType @default(FIXED)
+  ratePerSqft     Decimal?        @db.Decimal(10, 2)
 
-  maintenanceType    MaintenanceType @default(FIXED)
-  ratePerSqft        Decimal? @db.Decimal(10,2)
+  blocks  Block[]
+  people  Person[]
+  members SocietyMember[]
 
-  blocks             Block[]
-  people             Person[]
-  members            SocietyMember[]
-
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 //
@@ -106,19 +106,21 @@ model Society {
 //
 
 model SocietyMember {
-  id          String @id @default(cuid())
+  id String @id @default(cuid())
 
-  societyId   String
-  userId      String
+  societyId String
+  userId    String
 
-  society      Society @relation(fields: [societyId], references: [id], onDelete: Cascade)
-  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  society Society @relation(fields: [societyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  role         SocietyRole
+  role SocietyRole
 
-  createdAt    DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([societyId, userId])
+  @@index([userId])
+  @@index([societyId])
 }
 
 //
@@ -126,19 +128,20 @@ model SocietyMember {
 //
 
 model Block {
-  id          String @id @default(cuid())
+  id String @id @default(cuid())
 
-  societyId   String
-  society     Society @relation(fields: [societyId], references: [id], onDelete: Cascade)
+  societyId String
+  society   Society @relation(fields: [societyId], references: [id], onDelete: Cascade)
 
-  name        String
+  name String
 
-  flats       Flat[]
+  flats Flat[]
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([societyId, name])
+  @@index([societyId])
 }
 
 //
@@ -146,26 +149,26 @@ model Block {
 //
 
 model Flat {
-  id          String @id @default(cuid())
+  id String @id @default(cuid())
 
-  blockId     String
-  block       Block @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  blockId String
+  block   Block  @relation(fields: [blockId], references: [id], onDelete: Cascade)
 
-  number      String
+  number String
 
-  unitType    UnitType?
+  unitType UnitType?
 
-  area        Decimal? @db.Decimal(10,2)
-  areaUnit    String @default("sqft")
+  area     Decimal? @db.Decimal(10, 2)
+  areaUnit String   @default("sqft")
 
-  people      FlatPerson[]
+  people FlatPerson[]
+  bills  Bill[]
 
-  bills       Bill[]
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([blockId, number])
+  @@index([blockId])
 }
 
 //
@@ -173,23 +176,24 @@ model Flat {
 //
 
 model Person {
-  id          String @id @default(cuid())
+  id String @id @default(cuid())
 
-  societyId   String
-  society     Society @relation(fields: [societyId], references: [id], onDelete: Cascade)
+  societyId String
+  society   Society @relation(fields: [societyId], references: [id], onDelete: Cascade)
 
-  name        String
+  name String
 
-  phone       String?
-  email       String?
+  phone String?
+  email String?
 
-  flats       FlatPerson[]
+  flats FlatPerson[]
 
-  payments    Payment[] @relation("PaymentBy")
+  payments Payment[] @relation("PaymentBy")
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  @@index([societyId])
   @@index([phone])
   @@index([email])
 }
@@ -199,22 +203,22 @@ model Person {
 //
 
 model FlatPerson {
-  id          String @id @default(cuid())
+  id String @id @default(cuid())
 
-  flatId      String
-  personId    String
+  flatId   String
+  personId String
 
-  flat         Flat @relation(fields: [flatId], references: [id], onDelete: Cascade)
-  person       Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  flat   Flat   @relation(fields: [flatId], references: [id], onDelete: Cascade)
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
 
-  role         FlatRole
+  role FlatRole
 
-  isPrimary    Boolean @default(false)
+  isPrimary Boolean @default(false)
 
-  fromDate     DateTime
-  toDate       DateTime?
+  fromDate DateTime
+  toDate   DateTime?
 
-  createdAt    DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([flatId])
   @@index([personId])
@@ -225,24 +229,25 @@ model FlatPerson {
 //
 
 model Bill {
-  id          String @id @default(cuid())
+  id String @id @default(cuid())
 
-  flatId      String
-  flat        Flat @relation(fields: [flatId], references: [id], onDelete: Cascade)
+  flatId String
+  flat   Flat   @relation(fields: [flatId], references: [id], onDelete: Cascade)
 
-  year        Int
-  month       Int
+  year  Int
+  month Int
 
-  amount      Decimal @db.Decimal(10,2)
+  amount Decimal @db.Decimal(10, 2)
 
-  dueDate     DateTime?
+  dueDate DateTime?
 
-  payments    Payment[]
+  payments Payment[]
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([flatId, year, month])
+  @@index([flatId])
 }
 
 //
@@ -250,22 +255,25 @@ model Bill {
 //
 
 model Payment {
-  id          String @id @default(cuid())
+  id String @id @default(cuid())
 
-  billId       String
-  bill         Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  billId String
+  bill   Bill   @relation(fields: [billId], references: [id], onDelete: Cascade)
 
-  paidById     String?
-  paidBy       Person? @relation("PaymentBy", fields: [paidById], references: [id])
+  paidById String?
+  paidBy   Person? @relation("PaymentBy", fields: [paidById], references: [id])
 
-  amount       Decimal @db.Decimal(10,2)
+  amount Decimal @db.Decimal(10, 2)
 
-  paidOn       DateTime @default(now())
+  paidOn DateTime @default(now())
 
-  mode         PaymentMode
+  mode PaymentMode
 
-  reference    String?
-  remarks      String?
+  reference String?
+  remarks   String?
 
-  createdAt    DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([billId])
+  @@index([paidById])
 }
