@@ -33,6 +33,14 @@ export default async function ProtectedAdminLayout({
 
         <nav className="flex flex-col space-y-3 text-sm">
           <SidebarLink href="/admin/dashboard">Dashboard</SidebarLink>
+          <SidebarLink href="/admin/societies">Societies</SidebarLink>
+          <SidebarLink href="/admin/blocks">Blocks</SidebarLink>
+          <SidebarLink href="/admin/members">Members</SidebarLink>
+          <SidebarLink href="/admin/bills">Bills</SidebarLink>
+          <SidebarLink href="/admin/payments">Payments</SidebarLink>
+          <SidebarLink href="/admin/reports">Reports</SidebarLink>
+          <SidebarLink href="/admin/people">People</SidebarLink>
+          <SidebarLink href="/admin/flats">Flats</SidebarLink>
 
           <div className="pt-6 border-t mt-6">
             <form action="/admin/logout" method="POST">

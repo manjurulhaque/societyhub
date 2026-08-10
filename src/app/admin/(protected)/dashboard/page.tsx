@@ -211,12 +211,12 @@ export default async function DashboardPage() {
 
   const fixedSocieties =
     maintenanceBreakdown.find(
-      (item) => item.maintenanceType === "FIXED",
+      (item: { maintenanceType: string; _count: { _all: number } }) => item.maintenanceType === "FIXED",
     )?._count._all ?? 0
 
   const perSqftSocieties =
     maintenanceBreakdown.find(
-      (item) => item.maintenanceType === "PER_SQFT",
+      (item: { maintenanceType: string; _count: { _all: number } }) => item.maintenanceType === "PER_SQFT",
     )?._count._all ?? 0
 
   return (
