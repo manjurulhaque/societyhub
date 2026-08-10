@@ -60,6 +60,12 @@ export default async function SocietyDetailPage({
 
         <div className="flex gap-2">
           <Link
+            href={`/admin/societies/${society.id}/edit`}
+            className="rounded-full bg-stone-950 px-4 py-2 text-sm font-medium text-stone-50 transition hover:bg-stone-800"
+          >
+            Edit Society
+          </Link>
+          <Link
             href="/admin/societies"
             className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
           >
@@ -115,3 +121,4 @@ export default async function SocietyDetailPage({
     </div>
   )
 }
+
