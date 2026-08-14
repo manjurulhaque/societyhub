@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
 import { prisma } from "@/lib/prisma"
+import type { SocietyRole } from "@/generated/prisma/client"
 
 export default async function NewMemberPage() {
   const [societies, users] = await Promise.all([
@@ -92,7 +93,7 @@ async function createMember(formData: FormData) {
     data: {
       societyId,
       userId,
-      role: role as any,
+      role: role as SocietyRole,
     },
   })
 

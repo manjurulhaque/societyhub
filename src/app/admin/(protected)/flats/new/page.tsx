@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
 import { prisma } from "@/lib/prisma"
+import type { UnitType } from "@/generated/prisma/client"
 import { AdminFormCard } from "@/components/admin/AdminFormCard"
 import { AdminFormField } from "@/components/admin/AdminFormField"
 import { AdminPrimaryButton } from "@/components/admin/AdminPrimaryButton"
@@ -91,7 +92,7 @@ async function createFlat(formData: FormData) {
     data: {
       blockId,
       number,
-      unitType: unitType as any,
+      unitType: (unitType as UnitType) || null,
       area: area ? Number(area) : null,
     },
   })

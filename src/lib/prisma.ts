@@ -1,22 +1,21 @@
 import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-type PrismaClientLike = PrismaClient & Record<string, any>;
-
 const globalForPrisma = global as unknown as {
-  prisma: PrismaClientLike | undefined;
+  prisma: PrismaClient | undefined;
 };
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL!,
 });
 
-export const prisma: PrismaClientLike =
+export const prisma =
   globalForPrisma.prisma ??
-  (new PrismaClient({
+  new PrismaClient({
     adapter,
-  }) as PrismaClientLike);
+  });
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
+

@@ -66,7 +66,7 @@ enum PaymentMode {
 //
 
 model User {
-  id String @id @default(cuid())
+  id String @id @default(uuid())
 
   email    String  @unique
   password String?
@@ -84,7 +84,7 @@ model User {
 //
 
 model Society {
-  id String @id @default(cuid())
+  id String @id @default(uuid())
 
   name    String
   code    String  @unique
@@ -106,7 +106,7 @@ model Society {
 //
 
 model SocietyMember {
-  id String @id @default(cuid())
+  id String @id @default(uuid())
 
   societyId String
   userId    String
@@ -128,7 +128,7 @@ model SocietyMember {
 //
 
 model Block {
-  id String @id @default(cuid())
+  id String @id @default(uuid())
 
   societyId String
   society   Society @relation(fields: [societyId], references: [id], onDelete: Cascade)
@@ -149,7 +149,7 @@ model Block {
 //
 
 model Flat {
-  id String @id @default(cuid())
+  id String @id @default(uuid())
 
   blockId String
   block   Block  @relation(fields: [blockId], references: [id], onDelete: Cascade)
@@ -176,7 +176,7 @@ model Flat {
 //
 
 model Person {
-  id String @id @default(cuid())
+  id String @id @default(uuid())
 
   societyId String
   society   Society @relation(fields: [societyId], references: [id], onDelete: Cascade)
@@ -203,7 +203,7 @@ model Person {
 //
 
 model FlatPerson {
-  id String @id @default(cuid())
+  id String @id @default(uuid())
 
   flatId   String
   personId String
@@ -229,7 +229,7 @@ model FlatPerson {
 //
 
 model Bill {
-  id String @id @default(cuid())
+  id String @id @default(uuid())
 
   flatId String
   flat   Flat   @relation(fields: [flatId], references: [id], onDelete: Cascade)
@@ -255,7 +255,7 @@ model Bill {
 //
 
 model Payment {
-  id String @id @default(cuid())
+  id String @id @default(uuid())
 
   billId String
   bill   Bill   @relation(fields: [billId], references: [id], onDelete: Cascade)

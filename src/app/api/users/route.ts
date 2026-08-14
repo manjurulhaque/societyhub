@@ -2,18 +2,17 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 export async function GET() {
-  const admins = await prisma.admin.findMany({
+  const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
       email: true,
-      name: true,
-      role: true,
+      appRole: true,
       createdAt: true,
       updatedAt: true,
     },
   });
-  return NextResponse.json(admins);
+  return NextResponse.json(users);
 }
 
 export async function POST(req: Request) {
@@ -23,12 +22,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "email is required" }, { status: 400 });
   }
 
-  const admin = await prisma.admin.create({
+  const user = await prisma.user.create({
     data: {
       email: body.email,
-      name: typeof body.name === "string" ? body.name : null,
     },
   });
 
-  return NextResponse.json(admin, { status: 201 });
+  return NextResponse.json(user, { status: 201 });
 }
