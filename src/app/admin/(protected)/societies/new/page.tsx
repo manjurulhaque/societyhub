@@ -2,6 +2,8 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
 import { prisma } from "@/lib/prisma"
+import { generateUniqueSocietyCode } from "@/lib/society"
+import { seedSocietyChartOfAccounts } from "@/lib/chartOfAccounts"
 import { AdminFormCard } from "@/components/admin/AdminFormCard"
 import { AdminFormField } from "@/components/admin/AdminFormField"
 import { AdminPrimaryButton } from "@/components/admin/AdminPrimaryButton"
@@ -25,14 +27,15 @@ export default function NewSocietyPage() {
               <input
                 name="name"
                 required
+                placeholder="e.g. Palm Grove Residency"
                 className="w-full rounded-xl border border-stone-300 px-3 py-2 outline-none ring-0"
               />
             </AdminFormField>
 
-            <AdminFormField label="Code">
+            <AdminFormField label="Code (Optional)">
               <input
                 name="code"
-                required
+                placeholder="Auto-generated if left blank"
                 className="w-full rounded-xl border border-stone-300 px-3 py-2 outline-none ring-0"
               />
             </AdminFormField>
@@ -54,6 +57,7 @@ export default function NewSocietyPage() {
             >
               <option value="FIXED">Fixed</option>
               <option value="PER_SQFT">Per Sqft</option>
+              <option value="CUSTOM">Custom</option>
             </select>
           </AdminFormField>
 
@@ -68,22 +72,32 @@ async function createSociety(formData: FormData) {
   "use server"
 
   const name = formData.get("name")?.toString().trim()
-  const code = formData.get("code")?.toString().trim()
+  const rawCode = formData.get("code")?.toString().trim() || null
   const address = formData.get("address")?.toString().trim() || null
   const maintenanceType = formData.get("maintenanceType")?.toString()
 
-  if (!name || !code) {
-    throw new Error("Name and code are required")
+  if (!name) {
+    throw new Error("Society name is required")
   }
 
-  await prisma.society.create({
+  const code = await generateUniqueSocietyCode(name, rawCode)
+
+  const society = await prisma.society.create({
     data: {
       name,
       code,
       address,
-      maintenanceType: maintenanceType === "PER_SQFT" ? "PER_SQFT" : "FIXED",
+      maintenanceType:
+        maintenanceType === "PER_SQFT"
+          ? "PER_SQFT"
+          : maintenanceType === "CUSTOM"
+            ? "CUSTOM"
+            : "FIXED",
     },
   })
+
+  // Auto-seed standard Chart of Accounts for the society
+  await seedSocietyChartOfAccounts(society.id)
 
   revalidatePath("/admin/societies")
   redirect("/admin/societies")
