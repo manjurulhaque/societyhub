@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client"
+import { Prisma } from "@/generated/prisma/client"
 import { NextResponse } from "next/server"
 
 export async function parseJsonObjectBody(req: Request) {

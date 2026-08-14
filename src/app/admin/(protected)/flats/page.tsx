@@ -1,5 +1,3 @@
-import Link from "next/link"
-
 import { prisma } from "@/lib/prisma"
 import { AdminPrimaryButton } from "@/components/admin/AdminPrimaryButton"
 import { AdminListPage } from "@/components/admin/AdminListPage"

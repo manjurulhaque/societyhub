@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
 import { prisma } from "@/lib/prisma"
+import type { PaymentMode } from "@/generated/prisma/client"
 
 export default async function NewPaymentPage() {
   const [bills, people] = await Promise.all([
@@ -135,7 +136,7 @@ async function createPayment(formData: FormData) {
       paidById,
       amount: amount.toFixed(2),
       paidOn: new Date(paidOn),
-      mode: mode as any,
+      mode: mode as PaymentMode,
       reference,
       remarks,
     },
