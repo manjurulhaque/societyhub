@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
 import { prisma } from "@/lib/prisma"
+import { generateUniqueSocietyCode } from "@/lib/society"
 import { AdminFormCard } from "@/components/admin/AdminFormCard"
 import { AdminFormField } from "@/components/admin/AdminFormField"
 import { AdminPrimaryButton } from "@/components/admin/AdminPrimaryButton"
@@ -54,11 +55,11 @@ export default async function EditSocietyPage({
               />
             </AdminFormField>
 
-            <AdminFormField label="Code">
+            <AdminFormField label="Code (Optional)">
               <input
                 name="code"
-                defaultValue={society.code}
-                required
+                defaultValue={society.code ?? ""}
+                placeholder="Auto-generated if left blank"
                 className="w-full rounded-xl border border-stone-300 px-3 py-2 outline-none ring-0"
               />
             </AdminFormField>
@@ -81,6 +82,7 @@ export default async function EditSocietyPage({
             >
               <option value="FIXED">Fixed</option>
               <option value="PER_SQFT">Per Sqft</option>
+              <option value="CUSTOM">Custom</option>
             </select>
           </AdminFormField>
 
@@ -95,12 +97,23 @@ async function updateSociety(id: string, formData: FormData) {
   "use server"
 
   const name = formData.get("name")?.toString().trim()
-  const code = formData.get("code")?.toString().trim()
+  const rawCode = formData.get("code")?.toString().trim() || null
   const address = formData.get("address")?.toString().trim() || null
   const maintenanceType = formData.get("maintenanceType")?.toString()
 
-  if (!name || !code) {
-    throw new Error("Name and code are required")
+  if (!name) {
+    throw new Error("Society name is required")
+  }
+
+  const existingSociety = await prisma.society.findUnique({
+    where: { id },
+    select: { code: true },
+  })
+
+  // If code is not changed, keep it. If changed or cleared, generate/sanitize.
+  let code = existingSociety?.code
+  if (rawCode !== existingSociety?.code) {
+    code = await generateUniqueSocietyCode(name, rawCode)
   }
 
   await prisma.society.update({
@@ -109,7 +122,12 @@ async function updateSociety(id: string, formData: FormData) {
       name,
       code,
       address,
-      maintenanceType: maintenanceType === "PER_SQFT" ? "PER_SQFT" : "FIXED",
+      maintenanceType:
+        maintenanceType === "PER_SQFT"
+          ? "PER_SQFT"
+          : maintenanceType === "CUSTOM"
+            ? "CUSTOM"
+            : "FIXED",
     },
   })
 

@@ -7,9 +7,9 @@ datasource db {
   provider = "postgresql"
 }
 
-//
+// ==========================================
 // ENUMS
-//
+// ==========================================
 
 enum AppRole {
   SUPER_ADMIN
@@ -28,10 +28,35 @@ enum SocietyRole {
   MEMBER
 }
 
+enum SocietyType {
+  COOPERATIVE_HOUSING_SOCIETY
+  APARTMENT_OWNERS_ASSOCIATION
+  RESIDENT_WELFARE_ASSOCIATION
+  COMMERCIAL_COMPLEX
+  PLOTTED_COMMUNITY
+}
+
 enum FlatRole {
   OWNER
+  JOINT_OWNER
   TENANT
   FAMILY
+}
+
+enum TransferType {
+  BUILDER_ALLOTMENT
+  RESALE_PURCHASE
+  INHERITANCE
+  GIFT_DEED
+  TRANSMISSION
+  COURT_ORDER
+  OTHER
+}
+
+enum OccupancyStatus {
+  OCCUPIED
+  VACANT
+  UNDER_RENOVATION
 }
 
 enum UnitType {
@@ -41,15 +66,66 @@ enum UnitType {
   BHK2
   BHK3
   BHK4
+  BHK5
   PENTHOUSE
   DUPLEX
+  VILLA
+  ROW_HOUSE
   SHOP
   OFFICE
+  COMMERCIAL
+  PLOT
 }
 
 enum MaintenanceType {
   FIXED
   PER_SQFT
+  CUSTOM
+}
+
+enum BillingFrequency {
+  MONTHLY
+  BI_MONTHLY
+  QUARTERLY
+  HALF_YEARLY
+  ANNUALLY
+}
+
+enum LateFeeType {
+  PERCENTAGE_PER_ANNUM
+  PERCENTAGE_PER_MONTH
+  FLAT_MONTHLY
+  FLAT_DAILY
+}
+
+enum AssessmentStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentPlan {
+  ONE_TIME_ONLY
+  INSTALLMENTS
+}
+
+enum BillType {
+  MAINTENANCE
+  BUILDING_PAINTING
+  WATER
+  ELECTRICITY
+  PENALTY
+  SPECIAL_ASSESSMENT
+  EVENT
+}
+
+enum BillStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
 }
 
 enum PaymentMode {
@@ -61,219 +137,1743 @@ enum PaymentMode {
   CARD
 }
 
-//
-// AUTHENTICATION
-//
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum AccountType {
+  BANK
+  CASH
+  PETTY_CASH
+  FIXED_DEPOSIT
+  OTHER
+}
+
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+}
+
+enum LedgerGroup {
+  ASSET
+  LIABILITY
+  INCOME
+  EXPENSE
+  EQUITY
+}
+
+enum BalanceType {
+  DEBIT
+  CREDIT
+}
+
+enum VoucherType {
+  JOURNAL
+  RECEIPT
+  PAYMENT
+  CONTRA
+  INVOICE
+  DEBIT_NOTE
+  CREDIT_NOTE
+}
+
+enum VoucherStatus {
+  DRAFT
+  POSTED
+  VOID
+}
+
+enum FdStatus {
+  ACTIVE
+  MATURED
+  REINVESTED
+  CLOSED
+}
+
+enum PayoutFrequency {
+  MONTHLY
+  QUARTERLY
+  ANNUALLY
+  ON_MATURITY
+}
+
+enum DepositType {
+  SECURITY
+  FIT_OUT
+  CORPUS
+  OTHER
+}
+
+enum DepositStatus {
+  HELD
+  REFUNDED
+  FORFEITED
+}
+
+enum ReconStatus {
+  DRAFT
+  RECONCILED
+}
+
+enum PettyCashType {
+  EXPENSE
+  TOPUP_RECEIPT
+  REFUND
+}
+
+enum ChequeDirection {
+  INWARD
+  OUTWARD
+}
+
+enum ChequeStatus {
+  RECEIVED
+  ISSUED
+  IN_CLEARING
+  CLEARED
+  BOUNCED
+  CANCELLED
+  EXPIRED
+}
+
+enum AssetStatus {
+  ACTIVE
+  UNDER_MAINTENANCE
+  DISPOSED
+  WRITTEN_OFF
+}
+
+enum ShareStatus {
+  ACTIVE
+  TRANSFERRED
+  SURRENDERED
+  CANCELLED
+}
+
+enum NominationStatus {
+  ACTIVE
+  REVOKED
+  EXECUTED
+}
+
+enum LienStatus {
+  ACTIVE
+  DISCHARGED
+  CLOSED
+}
+
+enum MeetingType {
+  AGM
+  SGM
+  MANAGING_COMMITTEE
+  EMERGENCY
+}
+
+enum AmenityType {
+  CLUBHOUSE
+  COMMUNITY_HALL
+  PARTY_LAWN
+  SWIMMING_POOL
+  GUEST_ROOM
+  TENNIS_COURT
+  TERRACE
+  OTHER
+}
+
+enum BookingStatus {
+  REQUESTED
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  STATUS_CHANGE
+  PAYMENT_COLLECTED
+  BILL_GENERATED
+  EXPORT
+}
+
+// ==========================================
+// AUTHENTICATION & USERS
+// ==========================================
 
 model User {
-  id String @id @default(uuid())
+  id          String          @id @default(uuid())
 
-  email    String  @unique
-  password String?
+  email       String          @unique
+  password    String?
 
-  appRole AppRole @default(USER)
+  appRole     AppRole         @default(USER)
+  isActive    Boolean         @default(true)
+  deletedAt   DateTime?
 
+  person      Person?
   memberships SocietyMember[]
+  auditLogs   AuditLog[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([isActive])
+  @@index([deletedAt])
 }
 
-//
-// SOCIETY
-//
+// ==========================================
+// SOCIETY (TENANT ROOT)
+// ==========================================
 
 model Society {
-  id String @id @default(uuid())
+  id                    String                 @id @default(uuid())
 
-  name    String
-  code    String  @unique
-  address String?
+  name                  String
+  code                  String?                @unique
+  societyType           SocietyType            @default(COOPERATIVE_HOUSING_SOCIETY)
 
-  maintenanceType MaintenanceType @default(FIXED)
-  ratePerSqft     Decimal?        @db.Decimal(10, 2)
+  // Statutory & Tax Registrations
+  registrationNumber    String?
+  registrationDate      DateTime?
+  panNumber             String?                // Society PAN
+  tanNumber             String?                // Tax Deduction A/C Number (for TDS)
+  gstin                 String?                // GST Identification Number
 
-  blocks  Block[]
-  people  Person[]
-  members SocietyMember[]
+  // Structured Address
+  address               String?                // Street / Road / Survey No.
+  city                  String?
+  state                 String?
+  pincode               String?
+  country               String                 @default("India")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // Official Contact Details
+  email                 String?
+  phone                 String?
+
+  // Maintenance & Billing Policy
+  maintenanceType       MaintenanceType        @default(FIXED)
+  ratePerSqft           Decimal?               @db.Decimal(10, 2)
+  fixedRate             Decimal?               @db.Decimal(10, 2)
+  maintenanceEffectiveFrom DateTime?           @default(now())
+  maintenanceEffectiveUpto DateTime?
+
+  billingFrequency      BillingFrequency       @default(MONTHLY)
+  billGenerationDay     Int                    @default(1) // Day of month bills are generated (1st)
+  dueDayOfMonth         Int                    @default(10) // Due by 10th of every month by default
+  gracePeriodDays       Int                    @default(0) // Extra grace days before late fee kicks in
+  lateFeeType           LateFeeType            @default(PERCENTAGE_PER_ANNUM)
+  lateFeeRate           Decimal                @default(21.00) @db.Decimal(6, 2) // e.g. 21% p.a. as per CHS bye-laws
+
+  invoicePrefix         String?                @default("INV")
+  receiptPrefix         String?                @default("RCPT")
+
+  currency              String                 @default("INR")
+  currencySymbol        String                 @default("₹")
+
+  fyStartMonth          Int                    @default(4) // 4 = April (1st April start)
+  fyStartDay            Int                    @default(1) // 1st of the month
+
+  isActive              Boolean                @default(true)
+  deletedAt             DateTime?
+
+  blocks                Block[]
+  people                Person[]
+  members               SocietyMember[]
+
+  // Accounting & Fee Relations
+  maintenanceRates      MaintenanceRate[]
+  oneTimeCollections    OneTimeCollection[]
+  financialYears        FinancialYear[]
+  accounts              Account[]
+  expenseCategories     ExpenseCategory[]
+  expenses              Expense[]
+  vendors               Vendor[]
+  vendorBills           VendorBill[]
+  fixedDeposits         FixedDeposit[]
+  memberDeposits        MemberDeposit[]
+  budgets               Budget[]
+  ledgers               Ledger[]
+  journalEntries        JournalEntry[]
+
+  // Maintenance Collection Register
+  maintenanceRegisters  MaintenanceRegister[]
+
+  // Cash Book, Bank Book, Petty Cash & Cheque Registers
+  pettyCashEntries      PettyCashEntry[]
+  cashClosingLogs       CashClosingLog[]
+  chequeRegister        ChequeRegister[]
+
+  // RBAC & Roles
+  customRoles           Role[]
+
+  // Ownership, Facility & Statutory Registers
+  facilityBookings      FacilityBooking[]
+  ownershipHistories    FlatOwnershipHistory[]
+  assetCategories       AssetCategory[]
+  fixedAssets           FixedAsset[]
+  shareCertificates     ShareCertificate[]
+  nominations           Nomination[]
+  propertyLiens         PropertyLien[]
+  meetings              Meeting[]
+
+  auditLogs             AuditLog[]
+
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@index([isActive])
+  @@index([deletedAt])
 }
 
-//
+// ==========================================
+// MAINTENANCE RATE REVISION HISTORY & SLABS
+// ==========================================
+
+model MaintenanceRate {
+  id                  String          @id @default(uuid())
+
+  societyId           String
+  society             Society         @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  maintenanceType     MaintenanceType @default(FIXED)
+  ratePerSqft         Decimal?        @db.Decimal(10, 2)
+  fixedRate           Decimal?        @db.Decimal(10, 2)
+
+  unitType            UnitType?       // Optional: specific rate per unit type
+
+  effectiveFrom       DateTime        // Date rate revision becomes effective
+  effectiveUpto       DateTime?       // Null for the currently active rate
+
+  isCurrent           Boolean         @default(true)
+  approvedInMeeting   String?         // e.g. "12th AGM Resolution No. 4"
+  remarks             String?
+
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([societyId, isCurrent])
+  @@index([societyId, effectiveFrom])
+}
+
+// ==========================================
+// ONE-TIME COLLECTION / SPECIAL ASSESSMENTS
+// (e.g. Painting, Lift Replacement, Solar, Renovation)
+// ==========================================
+
+model OneTimeCollection {
+  id                    String                 @id @default(uuid())
+
+  societyId             String
+  society               Society                @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  title                 String                 // e.g. "Building Exterior Painting 2026", "Lift Modernization Fund"
+  description           String?
+  totalTargetAmount     Decimal?               @db.Decimal(14, 2)
+
+  calculationType       MaintenanceType        @default(FIXED)
+  ratePerSqft           Decimal?               @db.Decimal(10, 2)
+  fixedAmountPerFlat    Decimal?               @db.Decimal(10, 2)
+
+  paymentPlan           PaymentPlan            @default(ONE_TIME_ONLY)
+  numberOfInstallments  Int                    @default(1) // 1 = Lump sum / one-time, >1 = Installment scheme
+
+  startDate             DateTime               @default(now())
+  dueDate               DateTime?              // Full payment / first installment due date
+
+  status                AssessmentStatus       @default(ACTIVE)
+  approvedInMeeting     String?                // e.g. "SGM Resolution No. 2 dated 10-Jan-2026"
+  remarks               String?
+
+  allocations           AssessmentAllocation[]
+
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@index([societyId])
+  @@index([status])
+}
+
+model AssessmentAllocation {
+  id                    String                  @id @default(uuid())
+
+  collectionId          String
+  collection            OneTimeCollection       @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  flatId                String
+  flat                  Flat                    @relation(fields: [flatId], references: [id], onDelete: Cascade)
+
+  totalAmount           Decimal                 @db.Decimal(10, 2)
+  paidAmount            Decimal                 @default(0) @db.Decimal(10, 2)
+  balanceAmount         Decimal                 @db.Decimal(10, 2)
+
+  status                BillStatus              @default(PENDING)
+
+  installments          AssessmentInstallment[]
+
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  @@unique([collectionId, flatId])
+  @@index([collectionId])
+  @@index([flatId])
+  @@index([status])
+}
+
+model AssessmentInstallment {
+  id                    String               @id @default(uuid())
+
+  allocationId          String
+  allocation            AssessmentAllocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+
+  installmentNumber     Int                  // 1, 2, 3...
+  amount                Decimal              @db.Decimal(10, 2)
+  dueDate               DateTime
+
+  paidAmount            Decimal              @default(0) @db.Decimal(10, 2)
+  status                BillStatus           @default(PENDING)
+
+  paidOn                DateTime?
+  billId                String?              // Optional link if billed on invoice
+  bill                  Bill?                @relation(fields: [billId], references: [id], onDelete: SetNull)
+
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@unique([allocationId, installmentNumber])
+  @@index([allocationId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+// ==========================================
+// ROLE-BASED ACCESS CONTROL (RBAC)
+// ==========================================
+
+model Permission {
+  id              String           @id @default(uuid())
+
+  code            String           @unique // e.g. "BILLS_GENERATE", "EXPENSES_APPROVE", "LEDGERS_MANAGE"
+  name            String           // e.g. "Generate Monthly Bills", "Approve Operational Expenses"
+  module          String           // e.g. "BILLING", "ACCOUNTING", "CASH_BANK", "REGISTERS", "ASSETS", "ADMIN"
+  description     String?
+
+  rolePermissions RolePermission[]
+
+  createdAt       DateTime         @default(now())
+
+  @@index([module])
+}
+
+model Role {
+  id              String              @id @default(uuid())
+
+  societyId       String?             // Null for global/system defaults, set for custom roles per society
+  society         Society?            @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  name            String              // e.g. "Treasurer", "Estate Manager", "Auditor"
+  code            String?             // e.g. "TREASURER", "ESTATE_MANAGER"
+  description     String?
+  isSystem        Boolean             @default(false)
+
+  rolePermissions RolePermission[]
+  memberRoles     SocietyMemberRole[]
+
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@unique([societyId, name])
+  @@index([societyId])
+}
+
+model RolePermission {
+  roleId          String
+  role            Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  permissionId    String
+  permission      Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime   @default(now())
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+}
+
+model SocietyMemberRole {
+  societyMemberId String
+  societyMember   SocietyMember @relation(fields: [societyMemberId], references: [id], onDelete: Cascade)
+
+  roleId          String
+  role            Role          @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  assignedAt      DateTime      @default(now())
+
+  @@id([societyMemberId, roleId])
+  @@index([roleId])
+}
+
+// ==========================================
 // LOGIN USER ↔ SOCIETY
-//
+// ==========================================
 
 model SocietyMember {
-  id String @id @default(uuid())
+  id          String              @id @default(uuid())
 
-  societyId String
-  userId    String
+  societyId   String
+  userId      String
 
-  society Society @relation(fields: [societyId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  society     Society             @relation(fields: [societyId], references: [id], onDelete: Cascade)
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  role SocietyRole
+  role        SocietyRole         @default(MEMBER)
+  customRoles SocietyMemberRole[]
 
-  createdAt DateTime @default(now())
+  createdAt   DateTime            @default(now())
 
   @@unique([societyId, userId])
   @@index([userId])
   @@index([societyId])
 }
 
-//
-// BLOCK
-//
+// ==========================================
+// PROPERTY STRUCTURE (BLOCK & FLAT)
+// ==========================================
 
 model Block {
-  id String @id @default(uuid())
+  id        String    @id @default(uuid())
 
   societyId String
-  society   Society @relation(fields: [societyId], references: [id], onDelete: Cascade)
+  society   Society   @relation(fields: [societyId], references: [id], onDelete: Cascade)
 
-  name String
+  name      String
+  isActive  Boolean   @default(true)
+  deletedAt DateTime?
 
-  flats Flat[]
+  flats     Flat[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@unique([societyId, name])
   @@index([societyId])
+  @@index([isActive])
+  @@index([deletedAt])
 }
 
-//
-// FLAT
-//
-
 model Flat {
-  id String @id @default(uuid())
+  id                    String                 @id @default(uuid())
 
-  blockId String
-  block   Block  @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  blockId               String
+  block                 Block                  @relation(fields: [blockId], references: [id], onDelete: Cascade)
 
-  number String
+  number                String
+  floor                 Int?
+  unitType              UnitType?
+  status                OccupancyStatus        @default(VACANT)
 
-  unitType UnitType?
+  area                  Decimal?               @db.Decimal(10, 2)
+  areaUnit              String                 @default("sqft")
 
-  area     Decimal? @db.Decimal(10, 2)
-  areaUnit String   @default("sqft")
+  intercomNumber        String?                // Intercom extension number
+  parkingSlot           String?                // e.g. "B1-P24"
 
-  people FlatPerson[]
-  bills  Bill[]
+  isActive              Boolean                @default(true)
+  deletedAt             DateTime?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  people                FlatPerson[]
+  ownershipHistory      FlatOwnershipHistory[]
+  bills                 Bill[]
+  memberDeposits        MemberDeposit[]
+  maintenanceRegisters  MaintenanceRegister[]
+  assessmentAllocations AssessmentAllocation[]
+  facilityBookings      FacilityBooking[]
+  shareCertificate      ShareCertificate?
+  nominations           Nomination[]
+  propertyLiens         PropertyLien[]
+
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 
   @@unique([blockId, number])
   @@index([blockId])
+  @@index([isActive])
+  @@index([deletedAt])
 }
 
-//
-// PERSON
-//
+// ==========================================
+// RESIDENTS & OCCUPANCY
+// ==========================================
 
 model Person {
-  id String @id @default(uuid())
+  id                      String                 @id @default(uuid())
 
-  societyId String
-  society   Society @relation(fields: [societyId], references: [id], onDelete: Cascade)
+  societyId               String
+  society                 Society                @relation(fields: [societyId], references: [id], onDelete: Cascade)
 
-  name String
+  userId                  String?                @unique
+  user                    User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  phone String?
-  email String?
+  name                    String
+  phone                   String?
+  email                   String?
 
-  flats FlatPerson[]
+  // KYC & Statutory Identifiers
+  panNumber               String?
+  aadhaarNumber           String?
+  passportNumber          String?
+  voterId                 String?
+  dob                     DateTime?
+  gender                  String?
+  bloodGroup              String?
+  occupation              String?
+  permanentAddress        String?
 
-  payments Payment[] @relation("PaymentBy")
+  emergencyContactName    String?
+  emergencyContactPhone   String?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  kycVerified             Boolean                @default(false)
+  kycVerifiedAt           DateTime?
+
+  isActive                Boolean                @default(true)
+  deletedAt               DateTime?
+
+  flats                   FlatPerson[]
+  ownershipTransfersFrom  FlatOwnershipHistory[] @relation("TransferFrom")
+  ownershipTransfersTo    FlatOwnershipHistory[] @relation("TransferTo")
+  payments                Payment[]              @relation("PaymentBy")
+  memberDeposits          MemberDeposit[]
+  shareCertificates       ShareCertificate[]
+  nominationsFiled        Nomination[]
+  propertyLiens           PropertyLien[]
+  facilityBookings        FacilityBooking[]
+
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
 
   @@index([societyId])
   @@index([phone])
   @@index([email])
+  @@index([panNumber])
+  @@index([isActive])
+  @@index([deletedAt])
 }
 
-//
-// PERSON ↔ FLAT
-//
-
 model FlatPerson {
-  id String @id @default(uuid())
+  id        String    @id @default(uuid())
 
-  flatId   String
-  personId String
+  flatId    String
+  personId  String
 
-  flat   Flat   @relation(fields: [flatId], references: [id], onDelete: Cascade)
-  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  flat      Flat      @relation(fields: [flatId], references: [id], onDelete: Cascade)
+  person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
 
-  role FlatRole
+  role      FlatRole
+  isPrimary Boolean   @default(false)
 
-  isPrimary Boolean @default(false)
+  fromDate  DateTime  @default(now())
+  toDate    DateTime?
 
-  fromDate DateTime
-  toDate   DateTime?
+  createdAt DateTime  @default(now())
 
-  createdAt DateTime @default(now())
+  @@index([flatId, isPrimary])
+  @@index([flatId, role])
+  @@index([personId])
+}
 
+// ==========================================
+// FLAT OWNERSHIP HISTORY & TITLE DEEDS
+// ==========================================
+
+model FlatOwnershipHistory {
+  id                      String       @id @default(uuid())
+
+  societyId               String
+  society                 Society      @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  flatId                  String
+  flat                    Flat         @relation(fields: [flatId], references: [id], onDelete: Cascade)
+
+  fromPersonId            String?      // Nullable for first allotment by builder
+  fromPerson              Person?      @relation("TransferFrom", fields: [fromPersonId], references: [id], onDelete: SetNull)
+
+  toPersonId              String       // New owner
+  toPerson                Person       @relation("TransferTo", fields: [toPersonId], references: [id], onDelete: Restrict)
+
+  transferType            TransferType @default(RESALE_PURCHASE)
+  transferDate            DateTime     // Deed execution date
+
+  // Ownership Period (Tenure)
+  fromDate                DateTime     @default(now()) // Ownership start date
+  toDate                  DateTime?    // Ownership end date (null for current active owner)
+  isCurrentOwner          Boolean      @default(true)
+
+  // Registration & Deed Details
+  registeredDocNumber     String?      // Sub-Registrar deed number
+  registrationDate        DateTime?
+
+  transferFeePaid         Decimal?     @default(0) @db.Decimal(10, 2) // Society transfer premium
+  nocIssuedDate           DateTime?
+  nocReference            String?
+
+  committeeApprovalDate   DateTime?    // Date Managing Committee approved transfer
+  resolutionNumber        String?      // MCM Resolution Number
+
+  remarks                 String?
+
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
+
+  @@index([societyId])
   @@index([flatId])
+  @@index([toPersonId])
+  @@index([fromPersonId])
+  @@index([transferDate])
+  @@index([fromDate])
+  @@index([toDate])
+  @@index([isCurrentOwner])
+}
+
+// ==========================================
+// BILLING & REVENUE RECEIPTS
+// ==========================================
+
+model Bill {
+  id                      String                  @id @default(uuid())
+
+  flatId                  String
+  flat                    Flat                    @relation(fields: [flatId], references: [id], onDelete: Restrict)
+
+  billNumber              String?                 @unique
+  billType                BillType                @default(MAINTENANCE)
+  title                   String?
+
+  year                    Int
+  month                   Int
+
+  amount                  Decimal                 @db.Decimal(10, 2)
+  lateFeeAmount           Decimal                 @default(0) @db.Decimal(10, 2)
+  discountAmount          Decimal                 @default(0) @db.Decimal(10, 2)
+
+  status                  BillStatus              @default(PENDING)
+
+  billDate                DateTime                @default(now())
+  dueDate                 DateTime?
+  gracePeriodDate         DateTime?
+  paidDate                DateTime?
+
+  payments                Payment[]
+  chequeRegisters         ChequeRegister[]
+  assessmentInstallments  AssessmentInstallment[]
+
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+
+  @@unique([flatId, billType, year, month])
+  @@index([flatId, status])
+  @@index([year, month])
+  @@index([dueDate])
+}
+
+model Payment {
+  id                String          @id @default(uuid())
+
+  billId            String
+  bill              Bill            @relation(fields: [billId], references: [id], onDelete: Restrict)
+
+  paidById          String?
+  paidBy            Person?         @relation("PaymentBy", fields: [paidById], references: [id], onDelete: SetNull)
+
+  accountId         String?
+  account           Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  chequeRegisterId  String?         @unique
+  chequeRegister    ChequeRegister? @relation(fields: [chequeRegisterId], references: [id], onDelete: SetNull)
+
+  receiptNumber     String?         @unique
+  amount            Decimal         @db.Decimal(10, 2)
+  lateFeePaid       Decimal         @default(0) @db.Decimal(10, 2)
+  discountApplied   Decimal         @default(0) @db.Decimal(10, 2)
+
+  paidOn            DateTime        @default(now())
+
+  mode              PaymentMode
+  status            PaymentStatus   @default(SUCCESS)
+
+  reference         String?
+  remarks           String?
+
+  createdAt         DateTime        @default(now())
+
+  @@index([billId])
+  @@index([paidById])
+  @@index([accountId])
+  @@index([paidOn])
+}
+
+// ==========================================
+// MAINTENANCE DEMAND & COLLECTION REGISTER
+// (MEMBER DUES & ARREARS REGISTER)
+// ==========================================
+
+model MaintenanceRegister {
+  id                  String         @id @default(uuid())
+
+  societyId           String
+  society             Society        @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  flatId              String
+  flat                Flat           @relation(fields: [flatId], references: [id], onDelete: Cascade)
+
+  financialYearId     String?
+  financialYear       FinancialYear? @relation(fields: [financialYearId], references: [id], onDelete: SetNull)
+
+  year                Int
+  month               Int
+
+  // Demand Breakdown Heads
+  openingDues         Decimal        @default(0) @db.Decimal(10, 2)
+  serviceCharges      Decimal        @default(0) @db.Decimal(10, 2)
+  sinkingFund         Decimal        @default(0) @db.Decimal(10, 2)
+  repairFund          Decimal        @default(0) @db.Decimal(10, 2)
+  waterCharges        Decimal        @default(0) @db.Decimal(10, 2)
+  parkingCharges      Decimal        @default(0) @db.Decimal(10, 2)
+  nonOccupancyCharges Decimal        @default(0) @db.Decimal(10, 2)
+  interestOrLateFee   Decimal        @default(0) @db.Decimal(10, 2)
+  specialAssessment   Decimal        @default(0) @db.Decimal(10, 2) // e.g. Building painting
+  otherCharges        Decimal        @default(0) @db.Decimal(10, 2)
+
+  totalDemand         Decimal        @db.Decimal(10, 2)
+
+  // Collection Details
+  amountCollected     Decimal        @default(0) @db.Decimal(10, 2)
+  discountRebate      Decimal        @default(0) @db.Decimal(10, 2)
+  advanceAdjusted     Decimal        @default(0) @db.Decimal(10, 2)
+  closingBalance      Decimal        @db.Decimal(10, 2) // +ve = Arrears Due, -ve = Advance Surplus
+
+  isSettled           Boolean        @default(false)
+  settledDate         DateTime?
+
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@unique([flatId, year, month])
+  @@index([societyId, year, month])
+  @@index([flatId])
+  @@index([isSettled])
+}
+
+// ==========================================
+// FINANCIAL YEAR & PERIODS
+// ==========================================
+
+model FinancialYear {
+  id                    String                @id @default(uuid())
+
+  societyId             String
+  society               Society               @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  name                  String                // e.g. "FY 2025-2026"
+  startYear             Int                   // e.g. 2025
+  endYear               Int                   // e.g. 2026
+
+  startDate             DateTime              // e.g. 2025-04-01T00:00:00.000Z
+  endDate               DateTime              // e.g. 2026-03-31T23:59:59.999Z
+
+  isClosed              Boolean               @default(false)
+  isCurrent             Boolean               @default(false)
+
+  // Audit Freeze Protection
+  isLocked              Boolean               @default(false)
+  lockedAt              DateTime?
+  lockedBy              String?               // Auditor/Admin ID or name
+
+  budgets               Budget[]
+  journalEntries        JournalEntry[]
+  maintenanceRegisters  MaintenanceRegister[]
+
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  @@unique([societyId, name])
+  @@unique([societyId, startYear])
+  @@index([societyId, isCurrent])
+  @@index([isLocked])
+}
+
+// ==========================================
+// BANK, CASH & PETTY CASH ACCOUNTS
+// ==========================================
+
+model Account {
+  id                  String               @id @default(uuid())
+
+  societyId           String
+  society             Society              @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  name                String               // e.g. "HDFC Main Operational A/C", "Petty Cash Float", "Cash in Hand"
+  accountType         AccountType          @default(BANK)
+
+  bankName            String?
+  accountNumber       String?
+  ifscCode            String?
+  branch              String?
+
+  openingBalance      Decimal              @default(0) @db.Decimal(12, 2)
+  currentBalance      Decimal              @default(0) @db.Decimal(12, 2)
+  isDefault           Boolean              @default(false)
+  isActive            Boolean              @default(true)
+  deletedAt           DateTime?
+
+  payments            Payment[]            // Incoming collections deposited here
+  expenses            Expense[]            // Outgoing expenses paid from here
+  reconciliations     BankReconciliation[]
+
+  pettyCashEntries    PettyCashEntry[]
+  cashClosingLogs     CashClosingLog[]
+  chequeRegisters     ChequeRegister[]
+
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([societyId])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+model BankReconciliation {
+  id                String       @id @default(uuid())
+
+  accountId         String
+  account           Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  statementDate     DateTime
+  statementBalance  Decimal      @db.Decimal(12, 2)
+  ledgerBalance     Decimal      @db.Decimal(12, 2)
+  difference        Decimal      @default(0) @db.Decimal(12, 2)
+
+  status            ReconStatus  @default(DRAFT)
+  notes             String?
+
+  reconciledAt      DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([accountId])
+}
+
+// ==========================================
+// PETTY CASH BOOK (IMPREST REGISTER)
+// ==========================================
+
+model PettyCashEntry {
+  id              String        @id @default(uuid())
+
+  societyId       String
+  society         Society       @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  accountId       String        // Link to Petty Cash Account
+  account         Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  voucherNumber   String?       // e.g. "PCV-2026-0045"
+  entryDate       DateTime      @default(now())
+  type            PettyCashType @default(EXPENSE)
+
+  amount          Decimal       @db.Decimal(10, 2)
+  runningBalance  Decimal?      @db.Decimal(10, 2)
+
+  payee           String?       // Person/Shop receiving the cash (e.g. "Stationery Shop", "Tea Vendor")
+  categoryName    String?       // e.g. "Office Stationery", "Refreshments", "Minor Hardware"
+  purpose         String        // Description of expense/topup
+  billReference   String?       // Receipt/Bill number
+  approvedBy      String?       // Manager/Treasurer name
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([societyId])
+  @@index([accountId])
+  @@index([entryDate])
+  @@index([type])
+}
+
+// ==========================================
+// CASH BOOK CLOSING & DENOMINATIONS LOG
+// ==========================================
+
+model CashClosingLog {
+  id                String    @id @default(uuid())
+
+  societyId         String
+  society           Society   @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  accountId         String    // Link to Cash / Petty Cash Account
+  account           Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  closingDate       DateTime  @default(now())
+
+  openingBalance    Decimal   @db.Decimal(12, 2)
+  totalReceipts     Decimal   @default(0) @db.Decimal(12, 2)
+  totalPayments     Decimal   @default(0) @db.Decimal(12, 2)
+  calculatedBalance Decimal   @db.Decimal(12, 2)
+  actualPhysicalCash Decimal  @db.Decimal(12, 2)
+  difference        Decimal   @default(0) @db.Decimal(12, 2)
+
+  // Currency Denominations Count
+  note500           Int       @default(0)
+  note200           Int       @default(0)
+  note100           Int       @default(0)
+  note50            Int       @default(0)
+  note20            Int       @default(0)
+  note10            Int       @default(0)
+  coins             Decimal   @default(0) @db.Decimal(8, 2)
+
+  verifiedBy        String?   // Treasurer / Auditor signature/name
+  notes             String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([societyId])
+  @@index([accountId])
+  @@index([closingDate])
+}
+
+// ==========================================
+// BANK BOOK CHEQUE REGISTER (INWARD / OUTWARD)
+// ==========================================
+
+model ChequeRegister {
+  id              String          @id @default(uuid())
+
+  societyId       String
+  society         Society         @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  accountId       String          // Link to Bank Account
+  account         Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  // Inward Member Cheque Linkage
+  billId          String?
+  bill            Bill?           @relation(fields: [billId], references: [id], onDelete: SetNull)
+
+  payment         Payment?
+
+  // Outward Vendor / Expense Cheque Linkage
+  expenseId       String?
+  expense         Expense?        @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+
+  vendorBillId    String?
+  vendorBill      VendorBill?     @relation(fields: [vendorBillId], references: [id], onDelete: SetNull)
+
+  chequeNumber    String          // 6-digit cheque number e.g. "045231"
+  chequeDate      DateTime
+  direction       ChequeDirection @default(INWARD)
+
+  partyName       String          // Member name (if inward) or Vendor name (if outward)
+  bankName        String?         // Drawee bank name e.g. "SBI", "HDFC"
+  amount          Decimal         @db.Decimal(12, 2)
+
+  status          ChequeStatus    @default(RECEIVED)
+  depositDate     DateTime?       // Date deposited into society bank account
+  clearedOn       DateTime?       // Date cleared by bank
+  bouncedOn       DateTime?
+  bouncedReason   String?
+  bounceCharges   Decimal?        @default(0) @db.Decimal(8, 2)
+
+  remarks         String?
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([societyId])
+  @@index([accountId])
+  @@index([chequeNumber])
+  @@index([status])
+  @@index([chequeDate])
+  @@index([expenseId])
+  @@index([vendorBillId])
+}
+
+// ==========================================
+// VENDORS & PAYABLES (PURCHASES)
+// ==========================================
+
+model Vendor {
+  id                String             @id @default(uuid())
+
+  societyId         String
+  society           Society            @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  name              String             // Contact person or business name
+  companyName       String?
+  phone             String?
+  email             String?
+
+  pan               String?
+  gstin             String?
+
+  bankAccount       String?
+  ifscCode          String?
+  address           String?
+
+  isActive          Boolean            @default(true)
+  deletedAt         DateTime?
+
+  vendorBills       VendorBill[]
+  fixedAssets       FixedAsset[]       // AMC provider / vendor
+  assetServiceLogs  AssetServiceLog[]
+
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([societyId])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+model VendorBill {
+  id              String           @id @default(uuid())
+
+  societyId       String
+  society         Society          @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  vendorId        String
+  vendor          Vendor           @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+
+  billNumber      String
+  billDate        DateTime
+  dueDate         DateTime?
+
+  amount          Decimal          @db.Decimal(12, 2)
+  gstAmount       Decimal          @default(0) @db.Decimal(12, 2)
+  tdsAmount       Decimal          @default(0) @db.Decimal(12, 2)
+  paidAmount      Decimal          @default(0) @db.Decimal(12, 2)
+
+  status          BillStatus       @default(PENDING)
+  notes           String?
+  reference       String?
+
+  expenses        Expense[]
+  chequeRegisters ChequeRegister[]
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([societyId])
+  @@index([vendorId])
+  @@index([status])
+}
+
+// ==========================================
+// EXPENSE CATEGORIES & EXPENSES
+// ==========================================
+
+model ExpenseCategory {
+  id          String    @id @default(uuid())
+
+  societyId   String
+  society     Society   @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  name        String    // e.g. "Security Agency", "Lift AMC", "Electricity Common"
+  description String?
+  isActive    Boolean   @default(true)
+  deletedAt   DateTime?
+
+  expenses    Expense[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([societyId, name])
+  @@index([societyId])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+model Expense {
+  id              String           @id @default(uuid())
+
+  societyId       String
+  society         Society          @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  categoryId      String
+  category        ExpenseCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  accountId       String?
+  account         Account?         @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  // Direct linkage to Vendor Bill if paying a purchase invoice
+  vendorBillId    String?
+  vendorBill      VendorBill?      @relation(fields: [vendorBillId], references: [id], onDelete: SetNull)
+
+  title           String
+  description     String?
+  vendorName      String?
+
+  amount          Decimal          @db.Decimal(12, 2)
+  gstAmount       Decimal          @default(0) @db.Decimal(12, 2)
+  tdsAmount       Decimal          @default(0) @db.Decimal(12, 2)
+  expenseDate     DateTime         @default(now())
+
+  mode            PaymentMode      @default(BANK)
+  status          ExpenseStatus    @default(PAID)
+
+  invoiceNumber   String?
+  reference       String?          // UTR, Cheque No, Transaction ID
+
+  chequeRegisters ChequeRegister[]
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([societyId])
+  @@index([categoryId])
+  @@index([accountId])
+  @@index([vendorBillId])
+  @@index([expenseDate])
+  @@index([status])
+}
+
+// ==========================================
+// FIXED DEPOSITS & SINKING FUND INVESTMENTS
+// ==========================================
+
+model FixedDeposit {
+  id                String          @id @default(uuid())
+
+  societyId         String
+  society           Society         @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  fdNumber          String
+  bankName          String
+  branch            String?
+
+  principalAmount   Decimal         @db.Decimal(12, 2)
+  interestRate      Decimal         @db.Decimal(5, 2) // e.g. 7.25%
+  maturityAmount    Decimal         @db.Decimal(12, 2)
+
+  startDate         DateTime
+  maturityDate      DateTime
+
+  status            FdStatus        @default(ACTIVE)
+  interestPayout    PayoutFrequency @default(ON_MATURITY)
+
+  remarks           String?
+
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([societyId, fdNumber])
+  @@index([societyId])
+  @@index([status])
+  @@index([maturityDate])
+}
+
+// ==========================================
+// MEMBER DEPOSITS (CORPUS, SECURITY, FIT-OUT)
+// ==========================================
+
+model MemberDeposit {
+  id            String        @id @default(uuid())
+
+  societyId     String
+  society       Society       @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  flatId        String
+  flat          Flat          @relation(fields: [flatId], references: [id], onDelete: Restrict)
+
+  personId      String?
+  person        Person?       @relation(fields: [personId], references: [id], onDelete: SetNull)
+
+  depositType   DepositType   @default(SECURITY)
+  amount        Decimal       @db.Decimal(12, 2)
+
+  status        DepositStatus @default(HELD)
+
+  receivedOn    DateTime      @default(now())
+  refundedOn    DateTime?
+
+  reference     String?
+  remarks       String?
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([societyId])
+  @@index([flatId])
+  @@index([status])
+}
+
+// ==========================================
+// BUDGETING & AGM PLANNING
+// ==========================================
+
+model Budget {
+  id              String        @id @default(uuid())
+
+  societyId       String
+  society         Society       @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  financialYearId String
+  financialYear   FinancialYear @relation(fields: [financialYearId], references: [id], onDelete: Cascade)
+
+  name            String        // e.g. "Annual Operating Budget 2025-26"
+  totalAmount     Decimal       @db.Decimal(14, 2)
+
+  items           BudgetItem[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([societyId])
+  @@index([financialYearId])
+}
+
+model BudgetItem {
+  id              String   @id @default(uuid())
+
+  budgetId        String
+  budget          Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  ledgerId        String
+  ledger          Ledger   @relation(fields: [ledgerId], references: [id], onDelete: Restrict)
+
+  allocatedAmount Decimal  @db.Decimal(12, 2)
+  utilizedAmount  Decimal  @default(0) @db.Decimal(12, 2)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([budgetId])
+  @@index([ledgerId])
+}
+
+// ==========================================
+// GENERAL LEDGER & DOUBLE-ENTRY CORE
+// ==========================================
+
+model Ledger {
+  id              String        @id @default(uuid())
+
+  societyId       String
+  society         Society       @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  name            String        // e.g. "Maintenance Receivables", "Bank - HDFC", "Security Exp"
+  code            String?       // e.g. "1001", "2001", "3001"
+  group           LedgerGroup   // ASSET, LIABILITY, INCOME, EXPENSE, EQUITY
+  description     String?
+
+  // Hierarchical Sub-Ledgers
+  parentLedgerId  String?
+  parentLedger    Ledger?       @relation("LedgerHierarchy", fields: [parentLedgerId], references: [id], onDelete: SetNull)
+  subLedgers      Ledger[]      @relation("LedgerHierarchy")
+
+  openingBalance  Decimal       @default(0) @db.Decimal(12, 2)
+  balanceType     BalanceType   @default(DEBIT)
+
+  isSystem        Boolean       @default(false)
+  isActive        Boolean       @default(true)
+  deletedAt       DateTime?
+
+  entries         LedgerEntry[]
+  budgetItems     BudgetItem[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([societyId, name])
+  @@index([societyId])
+  @@index([group])
+  @@index([parentLedgerId])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+model JournalEntry {
+  id              String         @id @default(uuid())
+
+  societyId       String
+  society         Society        @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  financialYearId String?
+  financialYear   FinancialYear? @relation(fields: [financialYearId], references: [id], onDelete: SetNull)
+
+  voucherNumber   String?
+  voucherType     VoucherType    @default(JOURNAL)
+  status          VoucherStatus  @default(POSTED)
+  entryDate       DateTime       @default(now())
+
+  narration       String?
+  reference       String?
+
+  entries         LedgerEntry[]
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([societyId])
+  @@index([financialYearId])
+  @@index([entryDate])
+  @@index([voucherType])
+  @@index([status])
+}
+
+model LedgerEntry {
+  id              String        @id @default(uuid())
+
+  journalEntryId  String
+  journalEntry    JournalEntry  @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+
+  ledgerId        String
+  ledger          Ledger        @relation(fields: [ledgerId], references: [id], onDelete: Restrict)
+
+  debit           Decimal       @default(0) @db.Decimal(12, 2)
+  credit          Decimal       @default(0) @db.Decimal(12, 2)
+
+  narration       String?
+
+  createdAt       DateTime      @default(now())
+
+  @@index([journalEntryId])
+  @@index([ledgerId])
+}
+
+// ==========================================
+// FIXED ASSETS REGISTER & AMC
+// ==========================================
+
+model AssetCategory {
+  id                String       @id @default(uuid())
+
+  societyId         String
+  society           Society      @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  name              String       // e.g. "Lifts & Elevators", "Generators", "Pumps", "CCTV & Security", "Gym Equipment"
+  depreciationRate  Decimal?     @db.Decimal(5, 2) // e.g. 10.00%
+  description       String?
+  isActive          Boolean      @default(true)
+  deletedAt         DateTime?
+
+  assets            FixedAsset[]
+
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@unique([societyId, name])
+  @@index([societyId])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+model FixedAsset {
+  id                String            @id @default(uuid())
+
+  societyId         String
+  society           Society           @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  categoryId        String
+  category          AssetCategory     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  name              String            // e.g. "Schindler Lift 8-Passenger Block A", "Cummins 125kVA Generator"
+  assetCode         String?           // e.g. "AST-LIFT-01"
+  location          String?           // e.g. "Block A Shaft 1", "Basement Power Room"
+  serialNumber      String?
+
+  purchaseDate      DateTime?
+  purchaseCost      Decimal?          @db.Decimal(12, 2)
+  currentBookValue  Decimal?          @db.Decimal(12, 2)
+
+  warrantyExpiresAt DateTime?
+  status            AssetStatus       @default(ACTIVE)
+  isActive          Boolean           @default(true)
+  deletedAt         DateTime?
+
+  // AMC / Vendor Details
+  amcVendorId       String?
+  amcVendor         Vendor?           @relation(fields: [amcVendorId], references: [id], onDelete: SetNull)
+  amcStartDate      DateTime?
+  amcEndDate        DateTime?
+  amcAmount         Decimal?          @db.Decimal(12, 2)
+
+  serviceLogs       AssetServiceLog[]
+
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@unique([societyId, assetCode])
+  @@index([societyId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+model AssetServiceLog {
+  id            String      @id @default(uuid())
+
+  assetId       String
+  asset         FixedAsset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  vendorId      String?
+  vendor        Vendor?     @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+
+  serviceDate   DateTime    @default(now())
+  description   String      // Service performed, parts replaced
+  cost          Decimal     @default(0) @db.Decimal(10, 2)
+  nextDueDate   DateTime?
+
+  servicedBy    String?     // Technician name
+  remarks       String?
+
+  createdAt     DateTime    @default(now())
+
+  @@index([assetId])
+  @@index([vendorId])
+  @@index([serviceDate])
+}
+
+// ==========================================
+// STATUTORY REGISTERS
+// ==========================================
+
+//
+// REGISTER OF MEMBERS & SHARE CERTIFICATES ("I" REGISTER)
+//
+model ShareCertificate {
+  id                String       @id @default(uuid())
+
+  societyId         String
+  society           Society      @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  flatId            String       @unique
+  flat              Flat         @relation(fields: [flatId], references: [id], onDelete: Restrict)
+
+  personId          String
+  person            Person       @relation(fields: [personId], references: [id], onDelete: Restrict)
+
+  certificateNumber String       // e.g. "SC-0042"
+  sharesCount       Int          @default(5) // Typically 5 or 10 shares per member
+  shareDistinctFrom Int?         // Distinctive share numbers e.g. 201
+  shareDistinctTo   Int?         // to 205
+  faceValuePerShare Decimal      @default(50) @db.Decimal(8, 2) // e.g. ₹50 per share
+
+  issueDate         DateTime     @default(now())
+  status            ShareStatus  @default(ACTIVE)
+
+  transferDate      DateTime?
+  transferredTo     String?
+  remarks           String?
+
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@unique([societyId, certificateNumber])
+  @@index([societyId])
   @@index([personId])
 }
 
 //
-// MONTHLY BILL
+// NOMINATION REGISTER ("J" REGISTER - FORM X)
 //
+model Nomination {
+  id              String           @id @default(uuid())
 
-model Bill {
-  id String @id @default(uuid())
+  societyId       String
+  society         Society          @relation(fields: [societyId], references: [id], onDelete: Cascade)
 
-  flatId String
-  flat   Flat   @relation(fields: [flatId], references: [id], onDelete: Cascade)
+  flatId          String
+  flat            Flat             @relation(fields: [flatId], references: [id], onDelete: Cascade)
 
-  year  Int
-  month Int
+  personId        String           // Member / Owner who filed the nomination
+  person          Person           @relation(fields: [personId], references: [id], onDelete: Cascade)
 
-  amount Decimal @db.Decimal(10, 2)
+  nomineeName     String
+  relationship    String           // e.g. "Spouse", "Son", "Daughter", "Father"
+  percentageShare Decimal          @default(100) @db.Decimal(5, 2) // Percentage of interest e.g. 100%, 50%
+  nomineeDob      DateTime?
+  nomineeAddress  String?
+  guardianName    String?          // If nominee is minor
 
-  dueDate DateTime?
+  nominationDate  DateTime         @default(now())
+  status          NominationStatus @default(ACTIVE)
+  remarks         String?
 
-  payments Payment[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([flatId, year, month])
+  @@index([societyId])
   @@index([flatId])
+  @@index([personId])
+  @@index([status])
 }
 
 //
-// PAYMENT
+// MORTGAGE & BANK NOC REGISTER ("M" REGISTER)
 //
+model PropertyLien {
+  id                String     @id @default(uuid())
 
-model Payment {
-  id String @id @default(uuid())
+  societyId         String
+  society           Society    @relation(fields: [societyId], references: [id], onDelete: Cascade)
 
-  billId String
-  bill   Bill   @relation(fields: [billId], references: [id], onDelete: Cascade)
+  flatId            String
+  flat              Flat       @relation(fields: [flatId], references: [id], onDelete: Restrict)
 
-  paidById String?
-  paidBy   Person? @relation("PaymentBy", fields: [paidById], references: [id])
+  personId          String
+  person            Person     @relation(fields: [personId], references: [id], onDelete: Restrict)
 
-  amount Decimal @db.Decimal(10, 2)
+  bankName          String     // e.g. "State Bank of India", "HDFC Bank", "ICICI Bank"
+  branchName        String?
+  loanAccountNumber String?
+  sanctionAmount    Decimal?   @db.Decimal(14, 2)
 
-  paidOn DateTime @default(now())
+  nocIssuedDate     DateTime?
+  nocReference      String?
 
-  mode PaymentMode
+  status            LienStatus @default(ACTIVE)
+  isCleared         Boolean    @default(false)
+  clearanceDate     DateTime?
+  remarks           String?
 
-  reference String?
-  remarks   String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
-  createdAt DateTime @default(now())
+  @@index([societyId])
+  @@index([flatId])
+  @@index([personId])
+  @@index([status])
+}
 
-  @@index([billId])
-  @@index([paidById])
+//
+// COMMITTEE & GENERAL BODY MEETINGS REGISTER (AGM/MCM MINUTES)
+//
+model Meeting {
+  id              String        @id @default(uuid())
+
+  societyId       String
+  society         Society       @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  title           String        // e.g. "12th Annual General Body Meeting (AGM)", "MCM July 2026"
+  meetingType     MeetingType   @default(MANAGING_COMMITTEE)
+  meetingDate     DateTime
+  venue           String?
+
+  agenda          String?
+  quorumMet       Boolean       @default(true)
+  attendeeCount   Int?
+  minutesNotes    String?
+
+  resolutions     Resolution[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([societyId])
+  @@index([meetingDate])
+  @@index([meetingType])
+}
+
+model Resolution {
+  id                String    @id @default(uuid())
+
+  meetingId         String
+  meeting           Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  resolutionNumber  String?   // e.g. "RES/2026/01"
+  title             String
+  description       String
+  proposedBy        String?
+  secondedBy        String?
+
+  passed            Boolean   @default(true)
+  passedUnanimously Boolean   @default(false)
+  votesInFavor      Int?
+  votesAgainst      Int?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([meetingId])
+}
+
+// ==========================================
+// AMENITY & FACILITY BOOKINGS REGISTER
+// (Clubhouse, Community Hall, Party Lawn, etc.)
+// ==========================================
+
+model FacilityBooking {
+  id                  String        @id @default(uuid())
+
+  societyId           String
+  society             Society       @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  flatId              String
+  flat                Flat          @relation(fields: [flatId], references: [id], onDelete: Restrict)
+
+  personId            String
+  person              Person        @relation(fields: [personId], references: [id], onDelete: Restrict)
+
+  amenity             AmenityType   @default(CLUBHOUSE)
+  eventTitle          String?       // e.g. "Birthday Party", "Wedding Reception"
+  bookingDate         DateTime      // Date of reservation
+  startTime           String?       // e.g. "10:00 AM"
+  endTime             String?       // e.g. "04:00 PM"
+
+  rentAmount          Decimal       @db.Decimal(10, 2) // Booking rent fee -> Income
+  depositAmount       Decimal       @default(0) @db.Decimal(10, 2) // Refundable caution deposit -> Liability
+  isDepositRefunded   Boolean       @default(false)
+  depositRefundedOn   DateTime?
+
+  status              BookingStatus @default(CONFIRMED)
+  receiptNumber       String?       // Payment receipt number
+  paymentMode         PaymentMode   @default(BANK)
+
+  remarks             String?
+
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  @@index([societyId, bookingDate])
+  @@index([flatId])
+  @@index([personId])
+  @@index([status])
+}
+
+// ==========================================
+// AUDIT TRAIL / LOG
+// ==========================================
+
+model AuditLog {
+  id          String      @id @default(uuid())
+
+  societyId   String?
+  society     Society?    @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  userId      String?
+  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action      AuditAction
+  entity      String      // Target table/model name
+  entityId    String?     // Target record ID
+
+  oldData     Json?       // Previous state snapshot
+  newData     Json?       // New state snapshot
+
+  ipAddress   String?
+  userAgent   String?
+  description String?     // Human-readable action description
+
+  createdAt   DateTime    @default(now())
+
+  @@index([societyId])
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([action])
+  @@index([createdAt])
 }
