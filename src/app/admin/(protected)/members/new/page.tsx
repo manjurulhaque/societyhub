@@ -1,78 +1,119 @@
+import Link from "next/link"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-
 import { prisma } from "@/lib/prisma"
 import type { SocietyRole } from "@/generated/prisma/client"
+import {
+  AdminPageHeader,
+  AdminCard,
+  AdminSelect,
+  AdminButton,
+} from "@/components/admin"
 
 export default async function NewMemberPage() {
   const [societies, users] = await Promise.all([
     prisma.society.findMany({
+      where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
+      select: { id: true, name: true, code: true },
     }),
     prisma.user.findMany({
       orderBy: { email: "asc" },
-      select: { id: true, email: true },
+      select: { id: true, email: true, appRole: true },
     }),
   ])
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-6 py-8 md:px-8">
-      <div>
-        <p className="text-sm font-medium uppercase tracking-[0.24em] text-stone-600">
-          Membership Setup
-        </p>
-        <h1 className="text-3xl font-bold tracking-tight text-stone-950">
-          Create Member
-        </h1>
-      </div>
+    <div className="mx-auto max-w-2xl space-y-8 px-6 py-8 md:px-8">
+      <AdminPageHeader
+        eyebrow="Governance Setup"
+        title="Assign Society Member"
+        description="Grant a user administrative or committee member authority within a specific housing society."
+        action={
+          <Link
+            href="/admin/members"
+            className="rounded-full border border-stone-300 bg-white px-4 py-2 text-xs font-medium text-stone-700 transition hover:bg-stone-100 shadow-sm"
+          >
+            Cancel
+          </Link>
+        }
+      />
 
-      <form action={createMember} className="space-y-5 rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
-        <label className="block space-y-2 text-sm font-medium text-stone-700">
-          <span>Society</span>
-          <select name="societyId" required className="w-full rounded-xl border border-stone-300 px-3 py-2 outline-none ring-0">
-            <option value="">Select a society</option>
-            {societies.map((society) => (
-              <option key={society.id} value={society.id}>
-                {society.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block space-y-2 text-sm font-medium text-stone-700">
-          <span>User</span>
-          <select name="userId" required className="w-full rounded-xl border border-stone-300 px-3 py-2 outline-none ring-0">
-            <option value="">Select a user</option>
-            {users.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.email}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block space-y-2 text-sm font-medium text-stone-700">
-          <span>Role</span>
-          <select name="role" required className="w-full rounded-xl border border-stone-300 px-3 py-2 outline-none ring-0">
-            <option value="PRESIDENT">President</option>
-            <option value="VICE_PRESIDENT">Vice President</option>
-            <option value="SECRETARY">Secretary</option>
-            <option value="JOINT_SECRETARY">Joint Secretary</option>
-            <option value="TREASURER">Treasurer</option>
-            <option value="MANAGER">Manager</option>
-            <option value="ACCOUNTANT">Accountant</option>
-            <option value="SECURITY">Security</option>
-            <option value="MEMBER">Member</option>
-          </select>
-        </label>
-
-        <button
-          type="submit"
-          className="rounded-full bg-stone-950 px-4 py-2 text-sm font-medium text-stone-50 transition hover:bg-stone-800"
+      <form action={createMember} className="space-y-6">
+        <AdminCard
+          title="Membership & Role Details"
+          description="Select the housing society, user account, and committee designation"
         >
-          Save Member
-        </button>
+          <div className="space-y-5">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                Housing Society *
+              </label>
+              <AdminSelect
+                name="societyId"
+                required
+                options={[
+                  { label: "Select a housing society...", value: "", disabled: true },
+                  ...societies.map((s) => ({
+                    label: s.code ? `${s.name} (${s.code})` : s.name,
+                    value: s.id,
+                  })),
+                ]}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                User Account *
+              </label>
+              <AdminSelect
+                name="userId"
+                required
+                options={[
+                  { label: "Select a user account...", value: "", disabled: true },
+                  ...users.map((u) => ({
+                    label: `${u.email} (${u.appRole})`,
+                    value: u.id,
+                  })),
+                ]}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                Committee Designation / Role *
+              </label>
+              <AdminSelect
+                name="designation"
+                defaultValue="MEMBER"
+                options={[
+                  { label: "President", value: "PRESIDENT" },
+                  { label: "Secretary", value: "SECRETARY" },
+                  { label: "Treasurer", value: "TREASURER" },
+                  { label: "Vice President", value: "VICE_PRESIDENT" },
+                  { label: "Joint Secretary", value: "JOINT_SECRETARY" },
+                  { label: "Society Manager", value: "MANAGER" },
+                  { label: "Accountant", value: "ACCOUNTANT" },
+                  { label: "Security In-Charge", value: "SECURITY" },
+                  { label: "General Committee Member", value: "MEMBER" },
+                ]}
+              />
+            </div>
+          </div>
+        </AdminCard>
+
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-3 pt-2">
+          <Link
+            href="/admin/members"
+            className="rounded-full border border-stone-300 bg-white px-5 py-2.5 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+          >
+            Cancel
+          </Link>
+          <AdminButton type="submit" variant="primary" size="lg">
+            Assign Member
+          </AdminButton>
+        </div>
       </form>
     </div>
   )
@@ -83,20 +124,30 @@ async function createMember(formData: FormData) {
 
   const societyId = formData.get("societyId")?.toString().trim()
   const userId = formData.get("userId")?.toString().trim()
-  const role = formData.get("role")?.toString().trim()
+  const designation = formData.get("designation")?.toString().trim()
 
-  if (!societyId || !userId || !role) {
-    throw new Error("Society, user, and role are required")
+  if (!societyId || !userId || !designation) {
+    throw new Error("Society, user, and designation are required")
   }
 
-  await prisma.societyMember.create({
-    data: {
+  await prisma.societyMember.upsert({
+    where: {
+      societyId_userId: {
+        societyId,
+        userId,
+      },
+    },
+    update: {
+      designation: designation as SocietyRole,
+    },
+    create: {
       societyId,
       userId,
-      role: role as SocietyRole,
+      designation: designation as SocietyRole,
     },
   })
 
   revalidatePath("/admin/members")
+  revalidatePath(`/admin/societies/${societyId}`)
   redirect("/admin/members")
 }

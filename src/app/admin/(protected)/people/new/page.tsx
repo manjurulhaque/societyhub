@@ -1,57 +1,197 @@
+import Link from "next/link"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-
 import { prisma } from "@/lib/prisma"
-import { AdminFormCard } from "@/components/admin/AdminFormCard"
-import { AdminFormField } from "@/components/admin/AdminFormField"
-import { AdminPrimaryButton } from "@/components/admin/AdminPrimaryButton"
+import {
+  AdminPageHeader,
+  AdminCard,
+  AdminSelect,
+  AdminInput,
+  AdminButton,
+} from "@/components/admin"
 
 export default async function NewPersonPage() {
   const societies = await prisma.society.findMany({
+    where: { isActive: true, deletedAt: null },
     orderBy: { name: "asc" },
-    select: { id: true, name: true },
+    select: { id: true, name: true, code: true },
   })
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-6 py-8 md:px-8">
-      <div>
-        <p className="text-sm font-medium uppercase tracking-[0.24em] text-stone-600">
-          Resident Setup
-        </p>
-        <h1 className="text-3xl font-bold tracking-tight text-stone-950">
-          Create Person
-        </h1>
-      </div>
+    <div className="mx-auto max-w-3xl space-y-8 px-6 py-8 md:px-8">
+      <AdminPageHeader
+        eyebrow="Resident Registration"
+        title="Register New Person"
+        description="Add a new flat owner, tenant, or family resident to a housing society."
+        action={
+          <Link
+            href="/admin/people"
+            className="rounded-full border border-stone-300 bg-white px-4 py-2 text-xs font-medium text-stone-700 transition hover:bg-stone-100 shadow-sm"
+          >
+            Cancel
+          </Link>
+        }
+      />
 
-      <form action={createPerson}>
-        <AdminFormCard>
-          <AdminFormField label="Society">
-            <select name="societyId" required className="w-full rounded-xl border border-stone-300 px-3 py-2 outline-none ring-0">
-              <option value="">Select a society</option>
-              {societies.map((society) => (
-                <option key={society.id} value={society.id}>
-                  {society.name}
-                </option>
-              ))}
-            </select>
-          </AdminFormField>
+      <form action={createPerson} className="space-y-8">
+        {/* 1. Basic Profile */}
+        <AdminCard
+          title="Personal Profile & Society"
+          description="Select housing society and basic resident contact details"
+        >
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                Housing Society *
+              </label>
+              <AdminSelect
+                name="societyId"
+                required
+                options={[
+                  { label: "Select a housing society...", value: "", disabled: true },
+                  ...societies.map((s) => ({
+                    label: s.code ? `${s.name} (${s.code})` : s.name,
+                    value: s.id,
+                  })),
+                ]}
+              />
+            </div>
 
-          <AdminFormField label="Name">
-            <input name="name" required className="w-full rounded-xl border border-stone-300 px-3 py-2 outline-none ring-0" />
-          </AdminFormField>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                Full Name *
+              </label>
+              <AdminInput
+                name="name"
+                required
+                placeholder="e.g. Ramesh Chandra Sharma"
+              />
+            </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <AdminFormField label="Phone">
-              <input name="phone" className="w-full rounded-xl border border-stone-300 px-3 py-2 outline-none ring-0" />
-            </AdminFormField>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                Phone Number
+              </label>
+              <AdminInput
+                name="phone"
+                type="tel"
+                placeholder="+91 98765 43210"
+              />
+            </div>
 
-            <AdminFormField label="Email">
-              <input type="email" name="email" className="w-full rounded-xl border border-stone-300 px-3 py-2 outline-none ring-0" />
-            </AdminFormField>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                Email Address
+              </label>
+              <AdminInput
+                name="email"
+                type="email"
+                placeholder="ramesh@example.com"
+              />
+            </div>
           </div>
+        </AdminCard>
 
-          <AdminPrimaryButton type="submit">Save Person</AdminPrimaryButton>
-        </AdminFormCard>
+        {/* 2. KYC & Identifiers */}
+        <AdminCard
+          title="KYC & Statutory Identifiers"
+          description="Official government identity documents for society records"
+        >
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                PAN Number
+              </label>
+              <AdminInput
+                name="panNumber"
+                placeholder="e.g. ABCDE1234F"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                Aadhaar Number (Last 4 Digits / Masked)
+              </label>
+              <AdminInput
+                name="aadhaarNumber"
+                placeholder="e.g. XXXX-XXXX-1234"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                Occupation
+              </label>
+              <AdminInput
+                name="occupation"
+                placeholder="e.g. Software Engineer, Business"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                Blood Group
+              </label>
+              <AdminSelect
+                name="bloodGroup"
+                defaultValue=""
+                options={[
+                  { label: "Select Blood Group", value: "" },
+                  { label: "A+", value: "A+" },
+                  { label: "A-", value: "A-" },
+                  { label: "B+", value: "B+" },
+                  { label: "B-", value: "B-" },
+                  { label: "O+", value: "O+" },
+                  { label: "O-", value: "O-" },
+                  { label: "AB+", value: "AB+" },
+                  { label: "AB-", value: "AB-" },
+                ]}
+              />
+            </div>
+          </div>
+        </AdminCard>
+
+        {/* 3. Emergency Contact */}
+        <AdminCard
+          title="Emergency Contact"
+          description="Next of kin or emergency point of contact"
+        >
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                Emergency Contact Name
+              </label>
+              <AdminInput
+                name="emergencyContactName"
+                placeholder="e.g. Sunita Sharma"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                Emergency Contact Phone
+              </label>
+              <AdminInput
+                name="emergencyContactPhone"
+                type="tel"
+                placeholder="+91 98765 00000"
+              />
+            </div>
+          </div>
+        </AdminCard>
+
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-3 pt-2">
+          <Link
+            href="/admin/people"
+            className="rounded-full border border-stone-300 bg-white px-5 py-2.5 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+          >
+            Cancel
+          </Link>
+          <AdminButton type="submit" variant="primary" size="lg">
+            Register Person
+          </AdminButton>
+        </div>
       </form>
     </div>
   )
@@ -63,7 +203,13 @@ async function createPerson(formData: FormData) {
   const societyId = formData.get("societyId")?.toString().trim()
   const name = formData.get("name")?.toString().trim()
   const phone = formData.get("phone")?.toString().trim() || null
-  const email = formData.get("email")?.toString().trim() || null
+  const email = formData.get("email")?.toString().trim().toLowerCase() || null
+  const panNumber = formData.get("panNumber")?.toString().trim().toUpperCase() || null
+  const aadhaarNumber = formData.get("aadhaarNumber")?.toString().trim() || null
+  const occupation = formData.get("occupation")?.toString().trim() || null
+  const bloodGroup = formData.get("bloodGroup")?.toString().trim() || null
+  const emergencyContactName = formData.get("emergencyContactName")?.toString().trim() || null
+  const emergencyContactPhone = formData.get("emergencyContactPhone")?.toString().trim() || null
 
   if (!societyId || !name) {
     throw new Error("Society and name are required")
@@ -75,9 +221,16 @@ async function createPerson(formData: FormData) {
       name,
       phone,
       email,
+      panNumber,
+      aadhaarNumber,
+      occupation,
+      bloodGroup,
+      emergencyContactName,
+      emergencyContactPhone,
     },
   })
 
   revalidatePath("/admin/people")
+  revalidatePath(`/admin/societies/${societyId}`)
   redirect("/admin/people")
 }

@@ -1,47 +1,86 @@
+import Link from "next/link"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-
 import { prisma } from "@/lib/prisma"
-import { AdminFormCard } from "@/components/admin/AdminFormCard"
-import { AdminFormField } from "@/components/admin/AdminFormField"
-import { AdminPrimaryButton } from "@/components/admin/AdminPrimaryButton"
+import {
+  AdminPageHeader,
+  AdminCard,
+  AdminSelect,
+  AdminInput,
+  AdminButton,
+} from "@/components/admin"
 
 export default async function NewBlockPage() {
   const societies = await prisma.society.findMany({
+    where: { isActive: true, deletedAt: null },
     orderBy: { name: "asc" },
-    select: { id: true, name: true },
+    select: { id: true, name: true, code: true },
   })
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-6 py-8 md:px-8">
-      <div>
-        <p className="text-sm font-medium uppercase tracking-[0.24em] text-stone-600">
-          Block Setup
-        </p>
-        <h1 className="text-3xl font-bold tracking-tight text-stone-950">
-          Create Block
-        </h1>
-      </div>
+    <div className="mx-auto max-w-2xl space-y-8 px-6 py-8 md:px-8">
+      <AdminPageHeader
+        eyebrow="Structure Setup"
+        title="Create New Block"
+        description="Add a new residential wing, tower, or structural block to a housing society."
+        action={
+          <Link
+            href="/admin/blocks"
+            className="rounded-full border border-stone-300 bg-white px-4 py-2 text-xs font-medium text-stone-700 transition hover:bg-stone-100 shadow-sm"
+          >
+            Cancel
+          </Link>
+        }
+      />
 
-      <form action={createBlock}>
-        <AdminFormCard>
-          <AdminFormField label="Society">
-            <select name="societyId" required className="w-full rounded-xl border border-stone-300 px-3 py-2 outline-none ring-0">
-              <option value="">Select a society</option>
-              {societies.map((society) => (
-                <option key={society.id} value={society.id}>
-                  {society.name}
-                </option>
-              ))}
-            </select>
-          </AdminFormField>
+      <form action={createBlock} className="space-y-6">
+        <AdminCard
+          title="Block Details"
+          description="Specify the target society and block identifier"
+        >
+          <div className="space-y-5">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                Housing Society *
+              </label>
+              <AdminSelect
+                name="societyId"
+                required
+                options={[
+                  { label: "Select a housing society...", value: "", disabled: true },
+                  ...societies.map((s) => ({
+                    label: s.code ? `${s.name} (${s.code})` : s.name,
+                    value: s.id,
+                  })),
+                ]}
+              />
+            </div>
 
-          <AdminFormField label="Block Name">
-            <input name="name" required className="w-full rounded-xl border border-stone-300 px-3 py-2 outline-none ring-0" />
-          </AdminFormField>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                Block / Tower Name *
+              </label>
+              <AdminInput
+                name="name"
+                required
+                placeholder="e.g. Wing A, Tower 1, Block B"
+              />
+            </div>
+          </div>
+        </AdminCard>
 
-          <AdminPrimaryButton type="submit">Save Block</AdminPrimaryButton>
-        </AdminFormCard>
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-3 pt-2">
+          <Link
+            href="/admin/blocks"
+            className="rounded-full border border-stone-300 bg-white px-5 py-2.5 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+          >
+            Cancel
+          </Link>
+          <AdminButton type="submit" variant="primary" size="lg">
+            Create Block
+          </AdminButton>
+        </div>
       </form>
     </div>
   )
@@ -65,5 +104,6 @@ async function createBlock(formData: FormData) {
   })
 
   revalidatePath("/admin/blocks")
+  revalidatePath("/admin/societies")
   redirect("/admin/blocks")
 }
