@@ -130,8 +130,15 @@ async function createPayment(formData: FormData) {
     throw new Error("Bill, payer, amount, paid date, and mode are required")
   }
 
+  // Resolve societyId from the Bill
+  const bill = await prisma.bill.findUniqueOrThrow({
+    where: { id: billId },
+    select: { societyId: true },
+  })
+
   await prisma.payment.create({
     data: {
+      societyId: bill.societyId,
       billId,
       paidById,
       amount: amount.toFixed(2),

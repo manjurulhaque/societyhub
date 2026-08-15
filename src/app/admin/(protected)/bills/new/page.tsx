@@ -87,8 +87,15 @@ async function createBill(formData: FormData) {
     throw new Error("Flat, year, month, and amount are required")
   }
 
+  // Resolve the societyId from the flat's block
+  const flat = await prisma.flat.findUniqueOrThrow({
+    where: { id: flatId },
+    select: { block: { select: { societyId: true } } },
+  })
+
   await prisma.bill.create({
     data: {
+      societyId: flat.block.societyId,
       flatId,
       year,
       month,

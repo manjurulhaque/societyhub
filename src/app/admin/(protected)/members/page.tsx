@@ -56,7 +56,7 @@ export default async function MembersPage() {
                 <tr key={member.id} className="border-t border-stone-200 hover:bg-stone-50">
                   <td className="px-4 py-3 font-semibold text-stone-900">{member.society.name}</td>
                   <td className="px-4 py-3 text-stone-600">{member.user.email}</td>
-                  <td className="px-4 py-3 text-stone-600">{member.role}</td>
+                  <td className="px-4 py-3 text-stone-600">{member.designation}</td>
                 </tr>
               ))}
             </tbody>
