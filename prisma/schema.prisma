@@ -388,6 +388,10 @@ model Society {
   people                Person[]
   members               SocietyMember[]
 
+  // Billing & Revenue
+  bills                 Bill[]
+  payments              Payment[]
+
   // Accounting & Fee Relations
   maintenanceRates      MaintenanceRate[]
   oneTimeCollections    OneTimeCollection[]
@@ -414,8 +418,11 @@ model Society {
   // RBAC & Roles
   customRoles           Role[]
 
-  // Ownership, Facility & Statutory Registers
+  // Amenities & Facility Bookings
+  amenities             Amenity[]
   facilityBookings      FacilityBooking[]
+
+  // Ownership & Statutory Registers
   ownershipHistories    FlatOwnershipHistory[]
   assetCategories       AssetCategory[]
   fixedAssets           FixedAsset[]
@@ -632,7 +639,9 @@ model SocietyMember {
   society     Society             @relation(fields: [societyId], references: [id], onDelete: Cascade)
   user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  role        SocietyRole         @default(MEMBER)
+  // Committee designation (President, Secretary, etc.) — for display purposes.
+  // Actual permissions are controlled via the RBAC system (customRoles → Role → Permission).
+  designation SocietyRole         @default(MEMBER)
   customRoles SocietyMemberRole[]
 
   createdAt   DateTime            @default(now())
@@ -847,12 +856,16 @@ model FlatOwnershipHistory {
 model Bill {
   id                      String                  @id @default(uuid())
 
+  societyId               String
+  society                 Society                 @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
   flatId                  String
   flat                    Flat                    @relation(fields: [flatId], references: [id], onDelete: Restrict)
 
   billNumber              String?                 @unique
   billType                BillType                @default(MAINTENANCE)
   title                   String?
+  sequence                Int                     @default(1) // Allows supplementary / correction bills for same flat+type+period
 
   year                    Int
   month                   Int
@@ -871,11 +884,13 @@ model Bill {
   payments                Payment[]
   chequeRegisters         ChequeRegister[]
   assessmentInstallments  AssessmentInstallment[]
+  maintenanceRegisters    MaintenanceRegister[]
 
   createdAt               DateTime                @default(now())
   updatedAt               DateTime                @updatedAt
 
-  @@unique([flatId, billType, year, month])
+  @@unique([flatId, billType, year, month, sequence])
+  @@index([societyId])
   @@index([flatId, status])
   @@index([year, month])
   @@index([dueDate])
@@ -883,6 +898,9 @@ model Bill {
 
 model Payment {
   id                String          @id @default(uuid())
+
+  societyId         String
+  society           Society         @relation(fields: [societyId], references: [id], onDelete: Cascade)
 
   billId            String
   bill              Bill            @relation(fields: [billId], references: [id], onDelete: Restrict)
@@ -910,7 +928,9 @@ model Payment {
   remarks           String?
 
   createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
+  @@index([societyId])
   @@index([billId])
   @@index([paidById])
   @@index([accountId])
@@ -960,12 +980,17 @@ model MaintenanceRegister {
   isSettled           Boolean        @default(false)
   settledDate         DateTime?
 
+  // Link to the generated Bill for this period (enables register ↔ invoice reconciliation)
+  billId              String?
+  bill                Bill?          @relation(fields: [billId], references: [id], onDelete: SetNull)
+
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 
   @@unique([flatId, year, month])
   @@index([societyId, year, month])
   @@index([flatId])
+  @@index([billId])
   @@index([isSettled])
 }
 
@@ -1215,7 +1240,7 @@ model Vendor {
   phone             String?
   email             String?
 
-  pan               String?
+  panNumber         String?            // Standardised naming (was 'pan')
   gstin             String?
 
   bankAccount       String?
@@ -1226,6 +1251,7 @@ model Vendor {
   deletedAt         DateTime?
 
   vendorBills       VendorBill[]
+  expenses          Expense[]          // Direct expense linkage (ad-hoc expenses without vendor bill)
   fixedAssets       FixedAsset[]       // AMC provider / vendor
   assetServiceLogs  AssetServiceLog[]
 
@@ -1312,9 +1338,13 @@ model Expense {
   vendorBillId    String?
   vendorBill      VendorBill?      @relation(fields: [vendorBillId], references: [id], onDelete: SetNull)
 
+  // Direct vendor link for ad-hoc expenses (without a formal vendor bill)
+  vendorId        String?
+  vendor          Vendor?          @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+
   title           String
   description     String?
-  vendorName      String?
+  vendorName      String?          // Fallback for ad-hoc expenses without a registered vendor
 
   amount          Decimal          @db.Decimal(12, 2)
   gstAmount       Decimal          @default(0) @db.Decimal(12, 2)
@@ -1336,6 +1366,7 @@ model Expense {
   @@index([categoryId])
   @@index([accountId])
   @@index([vendorBillId])
+  @@index([vendorId])
   @@index([expenseDate])
   @@index([status])
 }
@@ -1803,7 +1834,39 @@ model Resolution {
 }
 
 // ==========================================
-// AMENITY & FACILITY BOOKINGS REGISTER
+// AMENITIES
+// (Society-specific amenity catalogue with default pricing)
+// ==========================================
+
+model Amenity {
+  id              String            @id @default(uuid())
+
+  societyId       String
+  society         Society           @relation(fields: [societyId], references: [id], onDelete: Cascade)
+
+  name            String            // e.g. "Block A Clubhouse", "Rooftop Party Lawn"
+  type            AmenityType       @default(CLUBHOUSE)
+  description     String?
+
+  defaultRent     Decimal           @default(0) @db.Decimal(10, 2)
+  defaultDeposit  Decimal           @default(0) @db.Decimal(10, 2)
+  capacity        Int?
+
+  isActive        Boolean           @default(true)
+  deletedAt       DateTime?
+
+  bookings        FacilityBooking[]
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([societyId, name])
+  @@index([societyId])
+  @@index([isActive])
+}
+
+// ==========================================
+// FACILITY BOOKINGS REGISTER
 // (Clubhouse, Community Hall, Party Lawn, etc.)
 // ==========================================
 
@@ -1819,11 +1882,13 @@ model FacilityBooking {
   personId            String
   person              Person        @relation(fields: [personId], references: [id], onDelete: Restrict)
 
-  amenity             AmenityType   @default(CLUBHOUSE)
+  amenityId           String
+  amenity             Amenity       @relation(fields: [amenityId], references: [id], onDelete: Restrict)
+
   eventTitle          String?       // e.g. "Birthday Party", "Wedding Reception"
   bookingDate         DateTime      // Date of reservation
-  startTime           String?       // e.g. "10:00 AM"
-  endTime             String?       // e.g. "04:00 PM"
+  startTime           DateTime?     // Booking start time
+  endTime             DateTime?     // Booking end time
 
   rentAmount          Decimal       @db.Decimal(10, 2) // Booking rent fee -> Income
   depositAmount       Decimal       @default(0) @db.Decimal(10, 2) // Refundable caution deposit -> Liability
@@ -1840,6 +1905,7 @@ model FacilityBooking {
   updatedAt           DateTime      @updatedAt
 
   @@index([societyId, bookingDate])
+  @@index([amenityId])
   @@index([flatId])
   @@index([personId])
   @@index([status])
