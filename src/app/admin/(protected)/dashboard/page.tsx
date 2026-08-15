@@ -1,18 +1,22 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-
 import { prisma } from "@/lib/prisma"
 import { getAdmin } from "@/lib/auth/getAdmin"
 import {
-  formatDateInAppTimeZone,
-  formatShortDateInAppTimeZone,
-} from "@/lib/datetime"
+  AdminPageHeader,
+  AdminStatCard,
+  AdminCard,
+  AdminBadge,
+  AdminTable,
+  AdminButton,
+} from "@/components/admin"
+import { formatDateInAppTimeZone } from "@/lib/datetime"
 
 export default async function DashboardPage() {
   const admin = await getAdmin()
 
   if (!admin || admin.role !== "SUPER_ADMIN") {
-    redirect("/admin/login")
+    redirect("/login")
   }
 
   const [
@@ -22,809 +26,449 @@ export default async function DashboardPage() {
     totalBlocks,
     totalFlats,
     totalPeople,
-    totalBills,
-    totalPayments,
-    billTotal,
-    paymentTotal,
+    billAggregate,
+    paymentAggregate,
     recentSocieties,
     recentPeople,
     recentBills,
     recentPayments,
-    largestSocieties,
-    maintenanceBreakdown,
   ] = await Promise.all([
-    prisma.society.count(),
-
+    prisma.society.count({ where: { isActive: true, deletedAt: null } }),
     prisma.user.count(),
-
     prisma.societyMember.count(),
-
-    prisma.block.count(),
-
-    prisma.flat.count(),
-
-    prisma.person.count(),
-
-    prisma.bill.count(),
-
-    prisma.payment.count(),
-
+    prisma.block.count({ where: { isActive: true, deletedAt: null } }),
+    prisma.flat.count({ where: { isActive: true, deletedAt: null } }),
+    prisma.person.count({ where: { isActive: true, deletedAt: null } }),
     prisma.bill.aggregate({
-      _sum: {
-        amount: true,
-      },
+      _sum: { amount: true },
+      _count: { _all: true },
     }),
-
     prisma.payment.aggregate({
-      _sum: {
-        amount: true,
-      },
+      _sum: { amount: true },
+      _count: { _all: true },
     }),
-
     prisma.society.findMany({
-      orderBy: {
-        createdAt: "desc",
-      },
+      where: { isActive: true, deletedAt: null },
+      orderBy: { createdAt: "desc" },
       take: 5,
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        address: true,
-        maintenanceType: true,
-        createdAt: true,
+      include: {
+        _count: {
+          select: { blocks: true, people: true, members: true },
+        },
       },
     }),
-
     prisma.person.findMany({
-      orderBy: {
-        createdAt: "desc",
-      },
+      where: { isActive: true, deletedAt: null },
+      orderBy: { createdAt: "desc" },
       take: 5,
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        email: true,
-        createdAt: true,
+      include: {
         society: {
-          select: {
-            name: true,
+          select: { id: true, name: true, code: true },
+        },
+        flats: {
+          where: { toDate: null },
+          include: {
+            flat: {
+              select: { number: true, block: { select: { name: true } } },
+            },
           },
         },
       },
     }),
-
     prisma.bill.findMany({
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: { createdAt: "desc" },
       take: 5,
-      select: {
-        id: true,
-        year: true,
-        month: true,
-        amount: true,
-        dueDate: true,
-        createdAt: true,
+      include: {
+        society: {
+          select: { name: true, code: true },
+        },
         flat: {
           select: {
             number: true,
-            block: {
-              select: {
-                name: true,
-                society: {
-                  select: {
-                    name: true,
-                  },
-                },
-              },
-            },
+            block: { select: { name: true } },
           },
         },
       },
     }),
-
     prisma.payment.findMany({
-      orderBy: {
-        paidOn: "desc",
-      },
+      orderBy: { createdAt: "desc" },
       take: 5,
-      select: {
-        id: true,
-        amount: true,
-        paidOn: true,
-        mode: true,
-        reference: true,
-        remarks: true,
-        paidBy: {
-          select: {
-            name: true,
-          },
+      include: {
+        society: {
+          select: { name: true, code: true },
         },
+        paidBy: { select: { name: true } },
         bill: {
           select: {
-            year: true,
             month: true,
-            flat: {
-              select: {
-                number: true,
-                block: {
-                  select: {
-                    name: true,
-                    society: {
-                      select: {
-                        name: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
+            year: true,
+            flat: { select: { number: true, block: { select: { name: true } } } },
           },
         },
-      },
-    }),
-
-    prisma.society.findMany({
-      orderBy: {
-        createdAt: "desc",
-      },
-      take: 5,
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        _count: {
-          select: {
-            members: true,
-            blocks: true,
-            people: true,
-          },
-        },
-      },
-    }),
-
-    prisma.society.groupBy({
-      by: ["maintenanceType"],
-      _count: {
-        _all: true,
       },
     }),
   ])
 
-  const totalBilled = Number(billTotal._sum.amount ?? 0)
-  const totalCollected = Number(paymentTotal._sum.amount ?? 0)
-
-  const outstandingAmount = Math.max(
-    0,
-    totalBilled - totalCollected,
-  )
-
+  const totalBilled = Number(billAggregate._sum.amount ?? 0)
+  const totalCollected = Number(paymentAggregate._sum.amount ?? 0)
+  const outstandingAmount = Math.max(0, totalBilled - totalCollected)
   const collectionRate =
-    totalBilled === 0
-      ? 0
-      : Math.min(
-          100,
-          Math.round((totalCollected / totalBilled) * 100),
-        )
-
-  const fixedSocieties =
-    maintenanceBreakdown.find(
-      (item: { maintenanceType: string; _count: { _all: number } }) => item.maintenanceType === "FIXED",
-    )?._count._all ?? 0
-
-  const perSqftSocieties =
-    maintenanceBreakdown.find(
-      (item: { maintenanceType: string; _count: { _all: number } }) => item.maintenanceType === "PER_SQFT",
-    )?._count._all ?? 0
+    totalBilled === 0 ? 0 : Math.min(100, Math.round((totalCollected / totalBilled) * 100))
 
   return (
-    <div className="mx-auto max-w-7xl space-y-10 px-6 py-8 md:px-8">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="space-y-2">
-          <span className="inline-flex items-center rounded-full border border-stone-300 bg-stone-100 px-3 py-1 text-xs font-medium uppercase tracking-[0.24em] text-stone-700">
-            Admin Overview
-          </span>
-
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-stone-950 md:text-4xl">
-              Dashboard
-            </h1>
-
-            <p className="text-sm text-stone-600">
-              Society management, residents, flats, billing and payments
-            </p>
+    <div className="mx-auto max-w-7xl space-y-8 px-6 py-8 md:px-8">
+      {/* Header */}
+      <AdminPageHeader
+        eyebrow="Platform Administration"
+        title="Super Admin Dashboard"
+        description="Global command center for managing housing societies, properties, residents, billing, and accounting operations."
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <AdminButton href="/admin/societies/new" variant="primary" size="sm">
+              + New Society
+            </AdminButton>
+            <AdminButton href="/admin/members/new" variant="outline" size="sm">
+              + Assign Member
+            </AdminButton>
+            <AdminButton href="/admin/bills/new" variant="outline" size="sm">
+              + Generate Bill
+            </AdminButton>
+            <AdminButton href="/admin/payments/new" variant="outline" size="sm">
+              + Record Payment
+            </AdminButton>
           </div>
-        </div>
+        }
+      />
 
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/admin/societies/new"
-            className="rounded-full bg-stone-950 px-4 py-2 text-sm font-medium text-stone-50 transition hover:bg-stone-800"
-          >
-            + New Society
-          </Link>
-
-          <Link
-            href="/admin/people/new"
-            className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm text-stone-700 transition hover:border-stone-400 hover:bg-stone-50"
-          >
-            Add Person
-          </Link>
-
-          <Link
-            href="/admin/bills/new"
-            className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm text-stone-700 transition hover:border-stone-400 hover:bg-stone-50"
-          >
-            Create Bill
-          </Link>
-
-          <Link
-            href="/admin/payments/new"
-            className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm text-stone-700 transition hover:border-stone-400 hover:bg-stone-50"
-          >
-            Record Payment
-          </Link>
-        </div>
-      </div>
-
-      <section className="overflow-hidden rounded-[28px] border border-stone-200 bg-white p-5 shadow-[0_18px_50px_rgba(28,25,23,0.08)]">
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:grid-cols-8">
-          <StatCard
-            title="Societies"
-            value={totalSocieties}
-            href="/admin/societies"
-          />
-
-          <StatCard
-            title="Users"
-            value={totalUsers}
-            href="/admin/users"
-          />
-
-          <StatCard
-            title="Members"
-            value={totalMembers}
-            href="/admin/members"
-          />
-
-          <StatCard
-            title="Blocks"
-            value={totalBlocks}
-            href="/admin/blocks"
-          />
-
-          <StatCard
-            title="Flats"
-            value={totalFlats}
-            href="/admin/flats"
-          />
-
-          <StatCard
-            title="People"
-            value={totalPeople}
-            href="/admin/people"
-          />
-
-          <StatCard
-            title="Bills"
-            value={totalBills}
-            href="/admin/bills"
-          />
-
-          <StatCard
-            title="Payments"
-            value={totalPayments}
-            href="/admin/payments"
-          />
-        </div>
-      </section>
-
-      <DashboardCard title="Financial Overview">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <FinancialCard
-            title="Total Billed"
-            value={formatCurrency(totalBilled)}
-            subtitle={`${formatNumber(totalBills)} bills`}
-          />
-
-          <FinancialCard
-            title="Total Collected"
-            value={formatCurrency(totalCollected)}
-            subtitle={`${formatNumber(totalPayments)} payments`}
-          />
-
-          <FinancialCard
-            title="Outstanding"
-            value={formatCurrency(outstandingAmount)}
-            subtitle={`${100 - collectionRate}% of billed amount`}
-          />
-
-          <FinancialCard
-            title="Collection Rate"
-            value={`${collectionRate}%`}
-            subtitle="Payments / total billed"
-          />
-        </div>
-      </DashboardCard>
-
-      <DashboardCard title="Quick Actions">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <DashboardLink
-            href="/admin/societies"
-            label="Manage Societies"
-          />
-
-          <DashboardLink
-            href="/admin/members"
-            label="Manage Society Members"
-          />
-
-          <DashboardLink
-            href="/admin/blocks"
-            label="Manage Blocks"
-          />
-
-          <DashboardLink
-            href="/admin/flats"
-            label="Manage Flats"
-          />
-
-          <DashboardLink
-            href="/admin/people"
-            label="Manage People"
-          />
-
-          <DashboardLink
-            href="/admin/bills"
-            label="Manage Bills"
-          />
-
-          <DashboardLink
-            href="/admin/payments"
-            label="Manage Payments"
-          />
-
-          <DashboardLink
-            href="/admin/users"
-            label="Manage Users"
-          />
-        </div>
-      </DashboardCard>
-
-      <DashboardCard title="Maintenance Overview">
-        <div className="grid gap-4 md:grid-cols-3">
-          <Metric
-            label="Total Societies"
-            value={totalSocieties}
-          />
-
-          <Metric
-            label="Fixed Maintenance"
-            value={fixedSocieties}
-          />
-
-          <Metric
-            label="Per Sqft Maintenance"
-            value={perSqftSocieties}
-          />
-        </div>
-      </DashboardCard>
-
-      <DashboardCard title="Largest Societies">
-        <ListOrEmpty
-          empty="No societies available yet."
-          items={largestSocieties.map((society, index) => ({
-            key: society.id,
-            left: `${index + 1}. ${society.name}`,
-            right: `${formatNumber(society._count.members)} members`,
-          }))}
+      {/* Row 1: Core Platform Inventory KPIs */}
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <AdminStatCard
+          title="Total Societies"
+          value={totalSocieties}
+          subtitle={`${totalUsers} registered user accounts`}
+          href="/admin/societies"
+          icon={
+            <svg className="h-5 w-5 text-stone-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+          }
         />
-      </DashboardCard>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <DashboardCard title="Recent Societies">
-          <div className="space-y-3 text-sm">
-            {recentSocieties.length === 0 && (
-              <EmptyRow message="No societies created yet." />
-            )}
+        <AdminStatCard
+          title="Total Blocks / Wings"
+          value={totalBlocks}
+          subtitle={`Across ${totalSocieties} societies`}
+          href="/admin/blocks"
+          icon={
+            <svg className="h-5 w-5 text-stone-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
+            </svg>
+          }
+        />
 
-            {recentSocieties.map((society) => (
-              <div
-                key={society.id}
-                className="rounded-2xl border border-stone-100 bg-stone-50/70 p-3"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="font-medium text-stone-900">
-                      {society.name}
-                    </div>
+        <AdminStatCard
+          title="Flats & Units"
+          value={totalFlats}
+          subtitle="Residential & commercial spaces"
+          href="/admin/flats"
+          icon={
+            <svg className="h-5 w-5 text-stone-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+          }
+        />
 
-                    <div className="text-xs text-stone-500">
-                      Code: {society.code}
-                    </div>
-                  </div>
-
-                  <span className="rounded-full bg-stone-200 px-2 py-1 text-[10px] uppercase tracking-wider text-stone-600">
-                    {society.maintenanceType === "PER_SQFT"
-                      ? "Per Sqft"
-                      : "Fixed"}
-                  </span>
-                </div>
-
-                <div className="mt-2 text-xs text-stone-500">
-                  {society.address || "No address"} ·{" "}
-                  {formatDateInAppTimeZone(society.createdAt)}
-                </div>
-              </div>
-            ))}
-          </div>
-        </DashboardCard>
-
-        <DashboardCard title="Recent People">
-          <div className="space-y-3 text-sm">
-            {recentPeople.length === 0 && (
-              <EmptyRow message="No people added yet." />
-            )}
-
-            {recentPeople.map((person) => (
-              <div
-                key={person.id}
-                className="flex items-center justify-between gap-4 rounded-2xl border border-stone-100 bg-stone-50/70 p-3"
-              >
-                <div>
-                  <div className="font-medium text-stone-900">
-                    {person.name}
-                  </div>
-
-                  <div className="text-xs text-stone-500">
-                    {person.society.name}
-                  </div>
-                </div>
-
-                <div className="text-right text-xs text-stone-500">
-                  <div>
-                    {person.phone ||
-                      person.email ||
-                      "No contact"}
-                  </div>
-
-                  <div>
-                    {formatDateInAppTimeZone(
-                      person.createdAt,
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </DashboardCard>
+        <AdminStatCard
+          title="People & Residents"
+          value={totalPeople}
+          subtitle={`${totalMembers} committee members`}
+          href="/admin/people"
+          icon={
+            <svg className="h-5 w-5 text-stone-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          }
+        />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <DashboardCard title="Recent Bills">
-          <div className="space-y-3 text-sm">
-            {recentBills.length === 0 && (
-              <EmptyRow message="No bills created yet." />
-            )}
+      {/* Row 2: Financial & Revenue KPIs */}
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <AdminStatCard
+          title="Total Billed"
+          value={`₹${totalBilled.toLocaleString("en-IN")}`}
+          subtitle={`${billAggregate._count._all} total demands issued`}
+          href="/admin/bills"
+          icon={
+            <svg className="h-5 w-5 text-stone-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
+            </svg>
+          }
+        />
 
-            {recentBills.map((bill) => (
-              <div
-                key={bill.id}
-                className="flex items-center justify-between gap-4 rounded-2xl border border-stone-100 bg-stone-50/70 p-3"
-              >
-                <div>
-                  <div className="font-medium text-stone-900">
-                    {bill.flat.block.society.name}
-                  </div>
+        <AdminStatCard
+          title="Total Collections"
+          value={`₹${totalCollected.toLocaleString("en-IN")}`}
+          subtitle={`${paymentAggregate._count._all} payment receipts`}
+          href="/admin/payments"
+          icon={
+            <svg className="h-5 w-5 text-stone-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
+        />
 
-                  <div className="text-xs text-stone-500">
-                    Block {bill.flat.block.name} · Flat{" "}
-                    {bill.flat.number}
-                  </div>
+        <AdminStatCard
+          title="Outstanding Dues"
+          value={`₹${outstandingAmount.toLocaleString("en-IN")}`}
+          subtitle="Pending collection across societies"
+          href="/admin/reports"
+          icon={
+            <svg className="h-5 w-5 text-stone-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          }
+        />
 
-                  <div className="text-xs text-stone-500">
-                    {monthName(bill.month)} {bill.year}
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <div className="font-semibold text-stone-900">
-                    {formatCurrency(Number(bill.amount))}
-                  </div>
-
-                  <div className="text-xs text-stone-500">
-                    {bill.dueDate
-                      ? `Due ${formatShortDateInAppTimeZone(
-                          bill.dueDate,
-                        )}`
-                      : "No due date"}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </DashboardCard>
-
-        <DashboardCard title="Recent Payments">
-          <div className="space-y-3 text-sm">
-            {recentPayments.length === 0 && (
-              <EmptyRow message="No payments recorded yet." />
-            )}
-
-            {recentPayments.map((payment) => (
-              <div
-                key={payment.id}
-                className="flex items-center justify-between gap-4 rounded-2xl border border-stone-100 bg-stone-50/70 p-3"
-              >
-                <div>
-                  <div className="font-medium text-stone-900">
-                    {payment.paidBy?.name ||
-                      "Unknown payer"}
-                  </div>
-
-                  <div className="text-xs text-stone-500">
-                    {payment.bill.flat.block.society.name} · Block{" "}
-                    {payment.bill.flat.block.name} · Flat{" "}
-                    {payment.bill.flat.number}
-                  </div>
-
-                  <div className="text-xs text-stone-500">
-                    {payment.mode} ·{" "}
-                    {formatDateInAppTimeZone(payment.paidOn)}
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <div className="font-semibold text-emerald-700">
-                    {formatCurrency(Number(payment.amount))}
-                  </div>
-
-                  {payment.reference && (
-                    <div className="text-xs text-stone-500">
-                      {payment.reference}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </DashboardCard>
+        <AdminStatCard
+          title="Collection Rate"
+          value={`${collectionRate}%`}
+          trend={{
+            value: `${collectionRate}%`,
+            direction: collectionRate >= 80 ? "up" : "down",
+            label: collectionRate >= 80 ? "Healthy recovery" : "Needs attention",
+          }}
+          href="/admin/reports"
+          icon={
+            <svg className="h-5 w-5 text-stone-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          }
+        />
       </div>
 
-      <DashboardCard title="System Summary">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
-          <Metric
-            label="Societies"
-            value={totalSocieties}
-          />
-
-          <Metric
-            label="Users"
-            value={totalUsers}
-          />
-
-          <Metric
-            label="Members"
-            value={totalMembers}
-          />
-
-          <Metric
-            label="Blocks"
-            value={totalBlocks}
-          />
-
-          <Metric
-            label="Flats"
-            value={totalFlats}
-          />
-
-          <Metric
-            label="People"
-            value={totalPeople}
-          />
-
-          <Metric
-            label="Bills"
-            value={totalBills}
-          />
-
-          <Metric
-            label="Payments"
-            value={totalPayments}
-          />
-        </div>
-      </DashboardCard>
-    </div>
-  )
-}
-
-function formatNumber(value: number) {
-  return new Intl.NumberFormat().format(value)
-}
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 2,
-  }).format(value)
-}
-
-function monthName(month: number) {
-  const months = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ]
-
-  return months[month - 1] ?? `Month ${month}`
-}
-
-function StatCard({
-  title,
-  value,
-  href,
-}: {
-  title: string
-  value: number
-  href?: string
-}) {
-  const content = (
-    <div className="h-full rounded-2xl border border-white/70 bg-white/85 p-4 shadow-[0_8px_24px_rgba(28,25,23,0.06)] backdrop-blur transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(28,25,23,0.1)]">
-      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-stone-500">
-        {title}
-      </p>
-
-      <p className="mt-2 text-2xl font-bold tracking-tight text-stone-950">
-        {formatNumber(value)}
-      </p>
-    </div>
-  )
-
-  return href ? (
-    <Link href={href}>{content}</Link>
-  ) : (
-    content
-  )
-}
-
-function FinancialCard({
-  title,
-  value,
-  subtitle,
-}: {
-  title: string
-  value: string
-  subtitle: string
-}) {
-  return (
-    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-5">
-      <p className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-        {title}
-      </p>
-
-      <p className="mt-2 text-2xl font-bold tracking-tight text-stone-950">
-        {value}
-      </p>
-
-      <p className="mt-2 text-xs text-stone-500">
-        {subtitle}
-      </p>
-    </div>
-  )
-}
-
-function DashboardCard({
-  title,
-  children,
-}: {
-  title: string
-  children: React.ReactNode
-}) {
-  return (
-    <section className="rounded-[24px] border border-stone-200 bg-white p-6 shadow-[0_14px_36px_rgba(28,25,23,0.06)]">
-      <h2 className="mb-4 text-lg font-semibold tracking-tight text-stone-950">
-        {title}
-      </h2>
-
-      {children}
-    </section>
-  )
-}
-
-function Metric({
-  label,
-  value,
-}: {
-  label: string
-  value: string | number
-}) {
-  return (
-    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3">
-      <div className="text-xl font-bold tracking-tight text-stone-950">
-        {typeof value === "number"
-          ? formatNumber(value)
-          : value}
-      </div>
-
-      <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-        {label}
-      </div>
-    </div>
-  )
-}
-
-function DashboardLink({
-  href,
-  label,
-}: {
-  href: string
-  label: string
-}) {
-  return (
-    <Link
-      href={href}
-      className="rounded-2xl border border-stone-200 px-4 py-3 text-sm text-stone-700 transition hover:border-stone-300 hover:bg-stone-50"
-    >
-      {label}
-    </Link>
-  )
-}
-
-function ListOrEmpty({
-  items,
-  empty,
-}: {
-  items: {
-    key: string
-    left: string
-    right: string
-  }[]
-  empty: string
-}) {
-  if (items.length === 0) {
-    return <EmptyRow message={empty} />
-  }
-
-  return (
-    <div className="space-y-3">
-      {items.map((item) => (
-        <div
-          key={item.key}
-          className="flex justify-between gap-4 rounded-2xl border border-stone-100 bg-stone-50/70 px-3 py-3 text-sm"
+      {/* Grid: Recent Societies & Recent Residents */}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+        {/* Recent Societies */}
+        <AdminCard
+          title="Recent Societies"
+          description="Latest organizations onboarded onto the platform"
+          action={
+            <Link
+              href="/admin/societies"
+              className="text-xs font-semibold text-stone-900 hover:text-stone-700"
+            >
+              All Societies →
+            </Link>
+          }
         >
-          <span className="text-stone-800">
-            {item.left}
-          </span>
+          {recentSocieties.length === 0 ? (
+            <p className="py-6 text-center text-xs text-stone-500">
+              No societies created yet.
+            </p>
+          ) : (
+            <AdminTable
+              headers={["Society", "Code", "Units / People", "Actions"]}
+              rows={recentSocieties.map((s) => (
+                <tr key={s.id} className="border-t border-stone-100 hover:bg-stone-50/60">
+                  <td className="px-4 py-3">
+                    <Link
+                      href={`/admin/societies/${s.id}`}
+                      className="font-bold text-xs text-stone-950 hover:underline block"
+                    >
+                      {s.name}
+                    </Link>
+                    <span className="text-[10px] text-stone-500">
+                      {s.societyType.replace(/_/g, " ")}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {s.code ? (
+                      <AdminBadge variant="neutral" size="sm">
+                        {s.code}
+                      </AdminBadge>
+                    ) : (
+                      <span className="text-xs text-stone-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-stone-600">
+                    {s._count.blocks} blocks · {s._count.people} residents
+                  </td>
+                  <td className="px-4 py-3">
+                    <AdminButton
+                      href={`/society/${s.code || s.id}/dashboard`}
+                      variant="outline"
+                      size="xs"
+                    >
+                      Portal ↗
+                    </AdminButton>
+                  </td>
+                </tr>
+              ))}
+            />
+          )}
+        </AdminCard>
 
-          <span className="whitespace-nowrap text-stone-500">
-            {item.right}
-          </span>
-        </div>
-      ))}
+        {/* Recent People */}
+        <AdminCard
+          title="Recently Registered People"
+          description="Latest residents, owners, and tenants added"
+          action={
+            <Link
+              href="/admin/people"
+              className="text-xs font-semibold text-stone-900 hover:text-stone-700"
+            >
+              All People →
+            </Link>
+          }
+        >
+          {recentPeople.length === 0 ? (
+            <p className="py-6 text-center text-xs text-stone-500">
+              No residents added yet.
+            </p>
+          ) : (
+            <AdminTable
+              headers={["Name", "Society", "Unit(s)", "Added On"]}
+              rows={recentPeople.map((p) => {
+                const flatText = p.flats
+                  .map((f) => `${f.flat.block.name}-${f.flat.number}`)
+                  .join(", ")
+
+                return (
+                  <tr key={p.id} className="border-t border-stone-100 hover:bg-stone-50/60">
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/admin/people/${p.id}`}
+                        className="font-bold text-xs text-stone-950 hover:underline block"
+                      >
+                        {p.name}
+                      </Link>
+                      <span className="text-[10px] text-stone-500">{p.phone || p.email || "No contact"}</span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-stone-700">
+                      {p.society.name}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-stone-600">
+                      {flatText || <span className="text-stone-400">None</span>}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-stone-500">
+                      {formatDateInAppTimeZone(p.createdAt)}
+                    </td>
+                  </tr>
+                )
+              })}
+            />
+          )}
+        </AdminCard>
+      </div>
+
+      {/* Grid: Recent Bills & Recent Payments */}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+        {/* Recent Bills */}
+        <AdminCard
+          title="Recent Bills Generated"
+          description="Latest maintenance demands and utility assessments"
+          action={
+            <Link
+              href="/admin/bills"
+              className="text-xs font-semibold text-stone-900 hover:text-stone-700"
+            >
+              All Bills →
+            </Link>
+          }
+        >
+          {recentBills.length === 0 ? (
+            <p className="py-6 text-center text-xs text-stone-500">
+              No bills generated yet.
+            </p>
+          ) : (
+            <AdminTable
+              headers={["Bill # / Period", "Flat & Society", "Amount", "Status"]}
+              rows={recentBills.map((b) => (
+                <tr key={b.id} className="border-t border-stone-100 hover:bg-stone-50/60">
+                  <td className="px-4 py-3">
+                    <span className="font-mono font-bold text-xs text-stone-900 block">
+                      {b.billNumber || `#${b.month}/${b.year}`}
+                    </span>
+                    <span className="text-[10px] text-stone-500">
+                      {b.month}/{b.year}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-stone-800">
+                    <p className="font-semibold">{b.flat.block.name} - {b.flat.number}</p>
+                    <p className="text-[10px] text-stone-500">{b.society.name}</p>
+                  </td>
+                  <td className="px-4 py-3 text-xs font-bold text-stone-950">
+                    ₹{Number(b.amount).toLocaleString("en-IN")}
+                  </td>
+                  <td className="px-4 py-3">
+                    <AdminBadge
+                      variant={
+                        b.status === "PAID"
+                          ? "success"
+                          : b.status === "OVERDUE"
+                            ? "danger"
+                            : "warning"
+                      }
+                      size="sm"
+                      dot
+                    >
+                      {b.status}
+                    </AdminBadge>
+                  </td>
+                </tr>
+              ))}
+            />
+          )}
+        </AdminCard>
+
+        {/* Recent Payments */}
+        <AdminCard
+          title="Recent Collections"
+          description="Latest receipts recorded across housing societies"
+          action={
+            <Link
+              href="/admin/payments"
+              className="text-xs font-semibold text-stone-900 hover:text-stone-700"
+            >
+              All Payments →
+            </Link>
+          }
+        >
+          {recentPayments.length === 0 ? (
+            <p className="py-6 text-center text-xs text-stone-500">
+              No payments recorded yet.
+            </p>
+          ) : (
+            <AdminTable
+              headers={["Receipt #", "Payer & Flat", "Amount", "Date"]}
+              rows={recentPayments.map((p) => (
+                <tr key={p.id} className="border-t border-stone-100 hover:bg-stone-50/60">
+                  <td className="px-4 py-3">
+                    <span className="font-mono font-bold text-xs text-stone-900 block">
+                      {p.receiptNumber || `#${p.id.slice(0, 8)}`}
+                    </span>
+                    <AdminBadge variant="neutral" size="sm">
+                      {p.mode}
+                    </AdminBadge>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-stone-800">
+                    <p className="font-semibold">{p.paidBy?.name || "Resident"}</p>
+                    <p className="text-[10px] text-stone-500">
+                      {p.society.name} {p.bill?.flat ? `(${p.bill.flat.block.name}-${p.bill.flat.number})` : ""}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3 text-xs font-bold text-emerald-700">
+                    ₹{Number(p.amount).toLocaleString("en-IN")}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-stone-500">
+                    {formatDateInAppTimeZone(p.createdAt)}
+                  </td>
+                </tr>
+              ))}
+            />
+          )}
+        </AdminCard>
+      </div>
     </div>
-  )
-}
-
-function EmptyRow({
-  message,
-}: {
-  message: string
-}) {
-  return (
-    <p className="rounded-2xl border border-dashed border-stone-300 p-3 text-sm text-stone-500">
-      {message}
-    </p>
   )
 }

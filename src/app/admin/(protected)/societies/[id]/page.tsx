@@ -58,7 +58,13 @@ export default async function SocietyDetailPage({
           <p className="text-sm text-stone-600">{society.code}</p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/society/${society.code || society.id}/dashboard`}
+            className="rounded-full bg-emerald-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-800"
+          >
+            Open Society Portal ↗
+          </Link>
           <Link
             href={`/admin/societies/${society.id}/edit`}
             className="rounded-full bg-stone-950 px-4 py-2 text-sm font-medium text-stone-50 transition hover:bg-stone-800"

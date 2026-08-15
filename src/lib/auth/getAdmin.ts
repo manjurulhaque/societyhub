@@ -14,8 +14,13 @@ export async function getAdmin() {
 
   const admin = await prisma.user.findFirst({
     where: {
-      email: user.email,
+      email: {
+        equals: user.email,
+        mode: "insensitive",
+      },
       appRole: "SUPER_ADMIN",
+      isActive: true,
+      deletedAt: null,
     },
     select: {
       id: true,

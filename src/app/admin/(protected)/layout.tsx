@@ -13,7 +13,7 @@ export default async function ProtectedAdminLayout({
   const requestIp = await getRequestIp()
 
   if (!admin) {
-    redirect("/admin/login")
+    redirect("/login")
   }
 
   if (admin.role !== "SUPER_ADMIN") {
@@ -24,9 +24,11 @@ export default async function ProtectedAdminLayout({
     <div className="min-h-screen flex">
       <aside className="w-64 bg-white border-r p-6 space-y-6">
         <div>
-          <h2 className="font-bold text-lg">Admin Panel</h2>
-          <p className="text-xs text-gray-500 mt-1">{admin.email}</p>
-          <p className="text-xs text-blue-600 font-medium">{admin.role}</p>
+          <Link href="/admin/profile" className="group block">
+            <h2 className="font-bold text-lg text-stone-900 group-hover:text-stone-700 transition">Admin Panel</h2>
+            <p className="text-xs text-gray-500 mt-1 break-all group-hover:text-stone-700 transition">{admin.email}</p>
+            <p className="text-xs text-blue-600 font-medium">{admin.role}</p>
+          </Link>
           <p className="text-xs text-gray-500 mt-3">Current IP</p>
           <CurrentIpDisplay initialIp={requestIp.value} initialSource={requestIp.source} />
         </div>
@@ -35,12 +37,19 @@ export default async function ProtectedAdminLayout({
           <SidebarLink href="/admin/dashboard">Dashboard</SidebarLink>
           <SidebarLink href="/admin/societies">Societies</SidebarLink>
           <SidebarLink href="/admin/blocks">Blocks</SidebarLink>
+          <SidebarLink href="/admin/flats">Flats</SidebarLink>
+          <SidebarLink href="/admin/people">People</SidebarLink>
           <SidebarLink href="/admin/members">Members</SidebarLink>
+          <SidebarLink href="/admin/users">Users</SidebarLink>
           <SidebarLink href="/admin/bills">Bills</SidebarLink>
           <SidebarLink href="/admin/payments">Payments</SidebarLink>
+          <SidebarLink href="/admin/expenses">Expenses & Payables</SidebarLink>
+          <SidebarLink href="/admin/accounts">Bank & Cash Accounts</SidebarLink>
+          <SidebarLink href="/admin/investments">Investments & FDs</SidebarLink>
+          <SidebarLink href="/admin/registers">Statutory Registers</SidebarLink>
+          <SidebarLink href="/admin/amenities">Amenities & Bookings</SidebarLink>
           <SidebarLink href="/admin/reports">Reports</SidebarLink>
-          <SidebarLink href="/admin/people">People</SidebarLink>
-          <SidebarLink href="/admin/flats">Flats</SidebarLink>
+          <SidebarLink href="/admin/profile">Account Settings</SidebarLink>
 
           <div className="pt-6 border-t mt-6">
             <form action="/admin/logout" method="POST">

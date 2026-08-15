@@ -5,9 +5,12 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Quotations | Timeless Quotes and Ideas",
+  title: {
+    default: "SocietyHub | Society & Community Management",
+    template: "%s | SocietyHub",
+  },
   description:
-    "Explore a curated collection of meaningful quotes from books, speeches, and thinkers.",
+    "Modern society management platform for housing societies, resident welfare associations, billing, member management, and community operations.",
 };
 
 export default function RootLayout({
