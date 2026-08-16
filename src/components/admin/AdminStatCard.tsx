@@ -28,7 +28,7 @@ export function AdminStatCard({
 }: AdminStatCardProps) {
   const content = (
     <div
-      className={`relative overflow-hidden rounded-2xl border border-stone-200 bg-white p-6 shadow-sm transition-all duration-200 ${
+      className={`relative overflow-hidden rounded-2xl border border-stone-200 bg-white p-4 sm:p-6 shadow-sm transition-all duration-200 ${
         href ? "hover:border-stone-400 hover:shadow-md cursor-pointer" : ""
       } ${className}`.trim()}
     >

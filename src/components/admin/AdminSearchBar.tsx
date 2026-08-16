@@ -11,7 +11,7 @@ export const AdminSearchBar = forwardRef<HTMLInputElement, AdminSearchBarProps>(
     const hasValue = Boolean(value && String(value).length > 0)
 
     return (
-      <div className={`relative w-full max-w-sm ${className}`.trim()}>
+      <div className={`relative w-full max-w-full sm:max-w-sm ${className}`.trim()}>
         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-stone-400">
           <svg
             className="h-4 w-4"
