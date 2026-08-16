@@ -42,6 +42,14 @@ export default async function SocietyPaymentsPage({
           },
         },
       },
+      flat: {
+        select: {
+          number: true,
+          block: {
+            select: { name: true },
+          },
+        },
+      },
     },
   })
 
@@ -73,7 +81,7 @@ export default async function SocietyPaymentsPage({
         </div>
       ) : (
         <AdminTable
-          headers={["Receipt #", "Paid By", "Flat / Unit", "Bill Period", "Payment Mode", "Amount", "Paid On"]}
+          headers={["Receipt #", "Paid By", "Flat / Unit", "Bill Period", "Payment Mode", "Amount", "Excess", "Paid On"]}
           rows={payments.map((payment) => (
             <tr key={payment.id} className="border-t border-stone-100 hover:bg-stone-50/60">
               <td className="px-4 py-3 font-mono text-xs font-semibold text-stone-900">
@@ -83,10 +91,20 @@ export default async function SocietyPaymentsPage({
                 {payment.paidBy?.name || "Resident"}
               </td>
               <td className="px-4 py-3 text-xs text-stone-700">
-                {payment.bill ? `${payment.bill.flat.block.name} - ${payment.bill.flat.number}` : "—"}
+                {payment.bill
+                  ? `${payment.bill.flat.block.name} - ${payment.bill.flat.number}`
+                  : payment.flat
+                    ? `${payment.flat.block.name} - ${payment.flat.number}`
+                    : "—"}
               </td>
               <td className="px-4 py-3 text-xs text-stone-600">
-                {payment.bill ? `${payment.bill.month}/${payment.bill.year}` : "—"}
+                {payment.isAdvance ? (
+                  <AdminBadge variant="info" size="sm">ADVANCE</AdminBadge>
+                ) : payment.bill ? (
+                  `${payment.bill.month}/${payment.bill.year}`
+                ) : (
+                  "—"
+                )}
               </td>
               <td className="px-4 py-3">
                 <AdminBadge variant="neutral" size="sm">
@@ -95,6 +113,15 @@ export default async function SocietyPaymentsPage({
               </td>
               <td className="px-4 py-3 text-xs font-semibold text-emerald-700">
                 ₹{Number(payment.amount).toLocaleString("en-IN")}
+              </td>
+              <td className="px-4 py-3 text-xs">
+                {Number(payment.excessAmount) > 0 ? (
+                  <AdminBadge variant="warning" size="sm">
+                    +₹{Number(payment.excessAmount).toLocaleString("en-IN")}
+                  </AdminBadge>
+                ) : (
+                  <span className="text-stone-400">—</span>
+                )}
               </td>
               <td className="px-4 py-3 text-xs text-stone-500">
                 {formatDateInAppTimeZone(payment.createdAt)}
