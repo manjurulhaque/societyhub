@@ -63,9 +63,9 @@ export function AdminModal({
 
       {/* Modal Card */}
       <div
-        className={`relative z-10 w-full overflow-hidden rounded-3xl border border-stone-200 bg-white p-6 shadow-2xl transition-all ${maxWidthClasses[maxWidth]}`}
+        className={`relative z-10 flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-3xl border border-stone-200 bg-white p-6 shadow-2xl transition-all ${maxWidthClasses[maxWidth]}`}
       >
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex shrink-0 items-start justify-between gap-4">
           <div>
             <h3 className="text-lg font-semibold tracking-tight text-stone-950">
               {title}
@@ -92,10 +92,10 @@ export function AdminModal({
           </button>
         </div>
 
-        <div className="mt-4">{children}</div>
+        <div className="mt-4 flex-1 overflow-y-auto pr-1">{children}</div>
 
         {footer ? (
-          <div className="mt-6 flex items-center justify-end gap-3 border-t border-stone-100 pt-4">
+          <div className="mt-6 flex shrink-0 items-center justify-end gap-3 border-t border-stone-100 pt-4">
             {footer}
           </div>
         ) : null}

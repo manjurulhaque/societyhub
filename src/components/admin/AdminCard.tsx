@@ -24,7 +24,7 @@ export function AdminCard({
       className={`overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm ${className}`.trim()}
     >
       {title || action || description ? (
-        <div className="flex flex-col gap-1 border-b border-stone-100 px-6 py-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-1 border-b border-stone-100 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
           <div>
             {typeof title === "string" ? (
               <h3 className="text-base font-semibold text-stone-900">{title}</h3>
@@ -39,10 +39,10 @@ export function AdminCard({
         </div>
       ) : null}
 
-      <div className={`p-6 ${contentClassName}`.trim()}>{children}</div>
+      <div className={`p-4 sm:p-6 ${contentClassName}`.trim()}>{children}</div>
 
       {footer ? (
-        <div className="border-t border-stone-100 bg-stone-50/50 px-6 py-3 text-xs text-stone-500">
+        <div className="border-t border-stone-100 bg-stone-50/50 px-4 py-3 sm:px-6 text-xs text-stone-500">
           {footer}
         </div>
       ) : null}

@@ -3,6 +3,7 @@ import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { getAdmin } from "@/lib/auth/getAdmin"
 import { CurrentIpDisplay } from "./CurrentIpDisplay"
+import { MobileSidebar } from "@/components/admin"
 
 export default async function ProtectedAdminLayout({
   children,
@@ -20,48 +21,60 @@ export default async function ProtectedAdminLayout({
     redirect("/")
   }
 
-  return (
-    <div className="min-h-screen flex">
-      <aside className="w-64 bg-white border-r p-6 space-y-6">
-        <div>
-          <Link href="/admin/profile" className="group block">
-            <h2 className="font-bold text-lg text-stone-900 group-hover:text-stone-700 transition">Admin Panel</h2>
-            <p className="text-xs text-gray-500 mt-1 break-all group-hover:text-stone-700 transition">{admin.email}</p>
-            <p className="text-xs text-blue-600 font-medium">{admin.role}</p>
-          </Link>
-          <p className="text-xs text-gray-500 mt-3">Current IP</p>
-          <CurrentIpDisplay initialIp={requestIp.value} initialSource={requestIp.source} />
+  const sidebarContent = (
+    <>
+      <div>
+        <Link href="/admin/profile" className="group block">
+          <h2 className="font-bold text-lg text-stone-900 group-hover:text-stone-700 transition">Admin Panel</h2>
+          <p className="text-xs text-gray-500 mt-1 break-all group-hover:text-stone-700 transition">{admin.email}</p>
+          <p className="text-xs text-blue-600 font-medium">{admin.role}</p>
+        </Link>
+        <p className="text-xs text-gray-500 mt-3">Current IP</p>
+        <CurrentIpDisplay initialIp={requestIp.value} initialSource={requestIp.source} />
+      </div>
+
+      <nav className="flex flex-col space-y-3 text-sm">
+        <SidebarLink href="/admin/dashboard">Dashboard</SidebarLink>
+        <SidebarLink href="/admin/societies">Societies</SidebarLink>
+        <SidebarLink href="/admin/blocks">Blocks</SidebarLink>
+        <SidebarLink href="/admin/flats">Flats</SidebarLink>
+        <SidebarLink href="/admin/people">People</SidebarLink>
+        <SidebarLink href="/admin/members">Members</SidebarLink>
+        <SidebarLink href="/admin/users">Users</SidebarLink>
+        <SidebarLink href="/admin/bills">Bills</SidebarLink>
+        <SidebarLink href="/admin/payments">Payments</SidebarLink>
+        <SidebarLink href="/admin/expenses">Expenses & Payables</SidebarLink>
+        <SidebarLink href="/admin/accounts">Bank & Cash Accounts</SidebarLink>
+        <SidebarLink href="/admin/investments">Investments & FDs</SidebarLink>
+        <SidebarLink href="/admin/registers">Statutory Registers</SidebarLink>
+        <SidebarLink href="/admin/amenities">Amenities & Bookings</SidebarLink>
+        <SidebarLink href="/admin/reports">Reports</SidebarLink>
+        <SidebarLink href="/admin/profile">Account Settings</SidebarLink>
+
+        <div className="pt-6 border-t mt-6">
+          <form action="/admin/logout" method="POST">
+            <button
+              type="submit"
+              className="w-full text-left text-red-600 hover:text-red-800 transition"
+            >
+              Logout
+            </button>
+          </form>
         </div>
+      </nav>
+    </>
+  )
 
-        <nav className="flex flex-col space-y-3 text-sm">
-          <SidebarLink href="/admin/dashboard">Dashboard</SidebarLink>
-          <SidebarLink href="/admin/societies">Societies</SidebarLink>
-          <SidebarLink href="/admin/blocks">Blocks</SidebarLink>
-          <SidebarLink href="/admin/flats">Flats</SidebarLink>
-          <SidebarLink href="/admin/people">People</SidebarLink>
-          <SidebarLink href="/admin/members">Members</SidebarLink>
-          <SidebarLink href="/admin/users">Users</SidebarLink>
-          <SidebarLink href="/admin/bills">Bills</SidebarLink>
-          <SidebarLink href="/admin/payments">Payments</SidebarLink>
-          <SidebarLink href="/admin/expenses">Expenses & Payables</SidebarLink>
-          <SidebarLink href="/admin/accounts">Bank & Cash Accounts</SidebarLink>
-          <SidebarLink href="/admin/investments">Investments & FDs</SidebarLink>
-          <SidebarLink href="/admin/registers">Statutory Registers</SidebarLink>
-          <SidebarLink href="/admin/amenities">Amenities & Bookings</SidebarLink>
-          <SidebarLink href="/admin/reports">Reports</SidebarLink>
-          <SidebarLink href="/admin/profile">Account Settings</SidebarLink>
+  return (
+    <div className="min-h-screen flex flex-col lg:flex-row">
+      {/* Mobile Sidebar Drawer */}
+      <MobileSidebar title="Admin Panel" subtitle={admin.email}>
+        <div className="space-y-6">{sidebarContent}</div>
+      </MobileSidebar>
 
-          <div className="pt-6 border-t mt-6">
-            <form action="/admin/logout" method="POST">
-              <button
-                type="submit"
-                className="w-full text-left text-red-600 hover:text-red-800 transition"
-              >
-                Logout
-              </button>
-            </form>
-          </div>
-        </nav>
+      {/* Desktop Sidebar — hidden on mobile */}
+      <aside className="hidden lg:flex w-64 shrink-0 bg-white border-r p-6 space-y-6 flex-col">
+        {sidebarContent}
       </aside>
 
       <main className="flex-1 bg-gray-50">{children}</main>

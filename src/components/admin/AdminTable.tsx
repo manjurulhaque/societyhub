@@ -13,7 +13,7 @@ export function AdminTable({ headers, rows }: AdminTableProps) {
           <thead className="bg-stone-50 text-stone-700">
             <tr>
               {headers.map((header) => (
-                <th key={header} className="px-4 py-3 font-semibold">
+                <th key={header} className="whitespace-nowrap px-4 py-3 font-semibold text-xs sm:text-sm">
                   {header}
                 </th>
               ))}

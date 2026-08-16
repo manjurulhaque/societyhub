@@ -25,18 +25,19 @@ export function AdminTabs({
   className = "",
 }: AdminTabsProps) {
   return (
-    <div
-      className={`inline-flex flex-wrap items-center gap-1 rounded-2xl border border-stone-200 bg-stone-100 p-1.5 ${className}`.trim()}
-      role="tablist"
-    >
-      {items.map((tab) => {
-        const isActive = tab.id === activeId
+    <div className={`max-w-full overflow-x-auto pb-1 sm:pb-0 ${className}`.trim()}>
+      <div
+        className="inline-flex min-w-full sm:min-w-0 items-center gap-1 rounded-2xl border border-stone-200 bg-stone-100 p-1.5"
+        role="tablist"
+      >
+        {items.map((tab) => {
+          const isActive = tab.id === activeId
 
-        const tabClasses = `inline-flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-medium transition-all ${
-          isActive
-            ? "bg-white text-stone-950 shadow-sm"
-            : "text-stone-600 hover:text-stone-900 hover:bg-stone-200/60"
-        }`
+          const tabClasses = `inline-flex shrink-0 whitespace-nowrap items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-medium transition-all ${
+            isActive
+              ? "bg-white text-stone-950 shadow-sm"
+              : "text-stone-600 hover:text-stone-900 hover:bg-stone-200/60"
+          }`
 
         const content = (
           <>
@@ -84,5 +85,6 @@ export function AdminTabs({
         )
       })}
     </div>
+  </div>
   )
 }

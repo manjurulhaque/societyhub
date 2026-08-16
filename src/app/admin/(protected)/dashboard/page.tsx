@@ -116,7 +116,7 @@ export default async function DashboardPage() {
     totalBilled === 0 ? 0 : Math.min(100, Math.round((totalCollected / totalBilled) * 100))
 
   return (
-    <div className="mx-auto max-w-7xl space-y-8 px-6 py-8 md:px-8">
+    <div className="mx-auto max-w-7xl space-y-8 px-4 py-6 sm:px-6 sm:py-8 md:px-8">
       {/* Header */}
       <AdminPageHeader
         eyebrow="Platform Administration"
