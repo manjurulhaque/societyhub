@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import {
   AdminCard,
   AdminInput,
@@ -9,6 +11,20 @@ import {
   AdminBadge,
   AdminAlert,
 } from "@/components/admin"
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form"
+import {
+  updateEmailSchema,
+  updatePasswordSchema,
+  type UpdateEmailInput,
+  type UpdatePasswordInput,
+} from "@/lib/validations/auth"
 
 type ProfileSettingsFormProps = {
   initialUser: {
@@ -25,20 +41,31 @@ export function ProfileSettingsForm({ initialUser }: ProfileSettingsFormProps) {
 
   // Email form state
   const [currentEmail, setCurrentEmail] = useState(initialUser.email)
-  const [newEmail, setNewEmail] = useState("")
   const [emailLoading, setEmailLoading] = useState(false)
   const [emailSuccess, setEmailSuccess] = useState<string | null>(null)
   const [emailError, setEmailError] = useState<string | null>(null)
 
   // Password form state
-  const [newPassword, setNewPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
   const [passwordLoading, setPasswordLoading] = useState(false)
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string | null>(null)
 
-  async function handleEmailUpdate(e: React.FormEvent) {
-    e.preventDefault()
+  const emailForm = useForm<UpdateEmailInput>({
+    resolver: zodResolver(updateEmailSchema),
+    defaultValues: {
+      newEmail: "",
+    },
+  })
+
+  const passwordForm = useForm<UpdatePasswordInput>({
+    resolver: zodResolver(updatePasswordSchema),
+    defaultValues: {
+      newPassword: "",
+      confirmPassword: "",
+    },
+  })
+
+  async function onEmailSubmit(values: UpdateEmailInput) {
     setEmailLoading(true)
     setEmailSuccess(null)
     setEmailError(null)
@@ -49,7 +76,7 @@ export function ProfileSettingsForm({ initialUser }: ProfileSettingsFormProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "update_email",
-          newEmail: newEmail.trim().toLowerCase(),
+          newEmail: values.newEmail.trim().toLowerCase(),
         }),
       })
 
@@ -61,8 +88,8 @@ export function ProfileSettingsForm({ initialUser }: ProfileSettingsFormProps) {
         return
       }
 
-      setCurrentEmail(newEmail.trim().toLowerCase())
-      setNewEmail("")
+      setCurrentEmail(values.newEmail.trim().toLowerCase())
+      emailForm.reset()
       setEmailSuccess(
         "Your email address has been updated successfully. Please use your new email for subsequent sign-ins."
       )
@@ -74,23 +101,10 @@ export function ProfileSettingsForm({ initialUser }: ProfileSettingsFormProps) {
     }
   }
 
-  async function handlePasswordUpdate(e: React.FormEvent) {
-    e.preventDefault()
+  async function onPasswordSubmit(values: UpdatePasswordInput) {
     setPasswordLoading(true)
     setPasswordSuccess(null)
     setPasswordError(null)
-
-    if (newPassword.length < 6) {
-      setPasswordError("Password must be at least 6 characters long.")
-      setPasswordLoading(false)
-      return
-    }
-
-    if (newPassword !== confirmPassword) {
-      setPasswordError("Passwords do not match. Please re-type.")
-      setPasswordLoading(false)
-      return
-    }
 
     try {
       const res = await fetch("/api/auth/update-profile", {
@@ -98,7 +112,7 @@ export function ProfileSettingsForm({ initialUser }: ProfileSettingsFormProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "update_password",
-          newPassword,
+          newPassword: values.newPassword,
         }),
       })
 
@@ -110,8 +124,7 @@ export function ProfileSettingsForm({ initialUser }: ProfileSettingsFormProps) {
         return
       }
 
-      setNewPassword("")
-      setConfirmPassword("")
+      passwordForm.reset()
       setPasswordSuccess("Your password has been changed successfully.")
     } catch {
       setPasswordError("An unexpected network error occurred. Please try again.")
@@ -180,43 +193,49 @@ export function ProfileSettingsForm({ initialUser }: ProfileSettingsFormProps) {
           title="Change Email Address"
           description="Update the email address used for login and notifications"
         >
-          <form onSubmit={handleEmailUpdate} className="space-y-4">
-            {emailSuccess ? (
-              <AdminAlert variant="success">{emailSuccess}</AdminAlert>
-            ) : null}
+          <Form {...emailForm}>
+            <form onSubmit={emailForm.handleSubmit(onEmailSubmit)} className="space-y-4">
+              {emailSuccess ? (
+                <AdminAlert variant="success">{emailSuccess}</AdminAlert>
+              ) : null}
 
-            {emailError ? (
-              <AdminAlert variant="danger">{emailError}</AdminAlert>
-            ) : null}
+              {emailError ? (
+                <AdminAlert variant="danger">{emailError}</AdminAlert>
+              ) : null}
 
-            <div>
-              <label
-                htmlFor="newEmail"
-                className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5"
-              >
-                New Email Address
-              </label>
-              <AdminInput
-                id="newEmail"
-                type="email"
-                required
-                placeholder="new.email@example.com"
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
+              <FormField
+                control={emailForm.control}
+                name="newEmail"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-semibold uppercase tracking-wider text-stone-700">
+                      New Email Address
+                    </FormLabel>
+                    <FormControl>
+                      <AdminInput
+                        id="newEmail"
+                        type="email"
+                        placeholder="new.email@example.com"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )}
               />
-            </div>
 
-            <div className="pt-2">
-              <AdminButton
-                type="submit"
-                variant="primary"
-                isLoading={emailLoading}
-                disabled={!newEmail || emailLoading}
-              >
-                {emailLoading ? "Updating..." : "Update Email Address"}
-              </AdminButton>
-            </div>
-          </form>
+              <div className="pt-2">
+                <AdminButton
+                  type="submit"
+                  variant="primary"
+                  isLoading={emailLoading}
+                  disabled={emailLoading}
+                >
+                  {emailLoading ? "Updating..." : "Update Email Address"}
+                </AdminButton>
+              </div>
+            </form>
+          </Form>
         </AdminCard>
 
         {/* Change Password Card */}
@@ -224,60 +243,70 @@ export function ProfileSettingsForm({ initialUser }: ProfileSettingsFormProps) {
           title="Change Password"
           description="Ensure your account stays secure by using a strong password"
         >
-          <form onSubmit={handlePasswordUpdate} className="space-y-4">
-            {passwordSuccess ? (
-              <AdminAlert variant="success">{passwordSuccess}</AdminAlert>
-            ) : null}
+          <Form {...passwordForm}>
+            <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
+              {passwordSuccess ? (
+                <AdminAlert variant="success">{passwordSuccess}</AdminAlert>
+              ) : null}
 
-            {passwordError ? (
-              <AdminAlert variant="danger">{passwordError}</AdminAlert>
-            ) : null}
+              {passwordError ? (
+                <AdminAlert variant="danger">{passwordError}</AdminAlert>
+              ) : null}
 
-            <div>
-              <label
-                htmlFor="newPassword"
-                className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5"
-              >
-                New Password
-              </label>
-              <AdminInput
-                id="newPassword"
-                type="password"
-                required
-                placeholder="Minimum 6 characters"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
+              <FormField
+                control={passwordForm.control}
+                name="newPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-semibold uppercase tracking-wider text-stone-700">
+                      New Password
+                    </FormLabel>
+                    <FormControl>
+                      <AdminInput
+                        id="newPassword"
+                        type="password"
+                        placeholder="Minimum 6 characters"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )}
               />
-            </div>
 
-            <div>
-              <label
-                htmlFor="confirmPassword"
-                className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5"
-              >
-                Confirm New Password
-              </label>
-              <AdminInput
-                id="confirmPassword"
-                type="password"
-                required
-                placeholder="Re-enter new password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+              <FormField
+                control={passwordForm.control}
+                name="confirmPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-semibold uppercase tracking-wider text-stone-700">
+                      Confirm New Password
+                    </FormLabel>
+                    <FormControl>
+                      <AdminInput
+                        id="confirmPassword"
+                        type="password"
+                        placeholder="Re-enter new password"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )}
               />
-            </div>
 
-            <div className="pt-2">
-              <AdminButton
-                type="submit"
-                variant="primary"
-                isLoading={passwordLoading}
-                disabled={!newPassword || !confirmPassword || passwordLoading}
-              >
-                {passwordLoading ? "Updating..." : "Update Password"}
-              </AdminButton>
-            </div>
-          </form>
+              <div className="pt-2">
+                <AdminButton
+                  type="submit"
+                  variant="primary"
+                  isLoading={passwordLoading}
+                  disabled={passwordLoading}
+                >
+                  {passwordLoading ? "Updating..." : "Update Password"}
+                </AdminButton>
+              </div>
+            </form>
+          </Form>
         </AdminCard>
       </div>
     </div>
