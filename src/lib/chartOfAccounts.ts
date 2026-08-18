@@ -112,11 +112,11 @@ export const STANDARD_CHART_OF_ACCOUNTS: StandardAccountNode[] = [
     ],
   },
   {
-    name: "Utility & Security Deposits Paid",
+    name: "Utility, Security Deposits & Advances Paid",
     code: "1400",
     group: LedgerGroup.ASSET,
     balanceType: BalanceType.DEBIT,
-    description: "Deposits held with electricity boards, water boards, and authorities",
+    description: "Deposits held with electricity boards, water boards, GST ITC, and vendor advances",
     subLedgers: [
       {
         name: "Electricity Board Meter Deposit",
@@ -131,6 +131,27 @@ export const STANDARD_CHART_OF_ACCOUNTS: StandardAccountNode[] = [
         group: LedgerGroup.ASSET,
         balanceType: BalanceType.DEBIT,
         description: "Security deposit with municipal water authority",
+      },
+      {
+        name: "GST Input Tax Credit (ITC Receivable)",
+        code: "1430",
+        group: LedgerGroup.ASSET,
+        balanceType: BalanceType.DEBIT,
+        description: "GST input credit on vendor bills & AMCs available for offset",
+      },
+      {
+        name: "Prepaid Expenses & Annual AMCs",
+        code: "1440",
+        group: LedgerGroup.ASSET,
+        balanceType: BalanceType.DEBIT,
+        description: "Prepaid insurance premiums and annual maintenance contracts spanning periods",
+      },
+      {
+        name: "Vendor & Contractor Advances Paid",
+        code: "1450",
+        group: LedgerGroup.ASSET,
+        balanceType: BalanceType.DEBIT,
+        description: "Mobilization advances paid to contractors for repair or capital works",
       },
     ],
   },
@@ -243,7 +264,7 @@ export const STANDARD_CHART_OF_ACCOUNTS: StandardAccountNode[] = [
     code: "2300",
     group: LedgerGroup.LIABILITY,
     balanceType: BalanceType.CREDIT,
-    description: "TDS, GST, and statutory taxes payable to the government",
+    description: "TDS, GST, municipal taxes, and statutory withholdings payable to the government",
     subLedgers: [
       {
         name: "TDS Payable (Section 194C/194J)",
@@ -257,6 +278,20 @@ export const STANDARD_CHART_OF_ACCOUNTS: StandardAccountNode[] = [
         group: LedgerGroup.LIABILITY,
         balanceType: BalanceType.CREDIT,
       },
+      {
+        name: "Property & Municipal Taxes Payable",
+        code: "2330",
+        group: LedgerGroup.LIABILITY,
+        balanceType: BalanceType.CREDIT,
+        description: "Assessed municipal property taxes & local body levies due",
+      },
+      {
+        name: "Labour Welfare & Building Cess Payable",
+        code: "2340",
+        group: LedgerGroup.LIABILITY,
+        balanceType: BalanceType.CREDIT,
+        description: "Statutory construction/repair cess withholdings",
+      },
     ],
   },
   {
@@ -264,7 +299,7 @@ export const STANDARD_CHART_OF_ACCOUNTS: StandardAccountNode[] = [
     code: "2400",
     group: LedgerGroup.LIABILITY,
     balanceType: BalanceType.CREDIT,
-    description: "Provisions for unpaid utilities and year-end audit fees",
+    description: "Provisions for unpaid utilities, contractor retention, and year-end audit fees",
     subLedgers: [
       {
         name: "Common Electricity Bill Accrued",
@@ -283,6 +318,13 @@ export const STANDARD_CHART_OF_ACCOUNTS: StandardAccountNode[] = [
         code: "2430",
         group: LedgerGroup.LIABILITY,
         balanceType: BalanceType.CREDIT,
+      },
+      {
+        name: "Contractor Retention & Security Deposits Held",
+        code: "2440",
+        group: LedgerGroup.LIABILITY,
+        balanceType: BalanceType.CREDIT,
+        description: "Retention money / earnest deposit held from contractors during defect liability",
       },
     ],
   },
@@ -317,6 +359,20 @@ export const STANDARD_CHART_OF_ACCOUNTS: StandardAccountNode[] = [
     group: LedgerGroup.EQUITY,
     balanceType: BalanceType.CREDIT,
     description: "Accumulated transfer premiums, entrance fees, and donations",
+  },
+  {
+    name: "Cooperative Education & Training Fund",
+    code: "3410",
+    group: LedgerGroup.EQUITY,
+    balanceType: BalanceType.CREDIT,
+    description: "Statutory member and committee education & training fund",
+  },
+  {
+    name: "Common Good & Community Welfare Fund",
+    code: "3420",
+    group: LedgerGroup.EQUITY,
+    balanceType: BalanceType.CREDIT,
+    description: "Earmarked reserve for resident amenities, sports, and welfare",
   },
   {
     name: "Accumulated Surplus / Deficit",
@@ -395,7 +451,7 @@ export const STANDARD_CHART_OF_ACCOUNTS: StandardAccountNode[] = [
     code: "4400",
     group: LedgerGroup.INCOME,
     balanceType: BalanceType.CREDIT,
-    description: "Transfer fees, move-in fees, hall booking, and penalty interest",
+    description: "Transfer fees, move-in fees, solar credits, hall booking, and penalty interest",
     subLedgers: [
       {
         name: "Flat Transfer Premium Fees",
@@ -420,6 +476,27 @@ export const STANDARD_CHART_OF_ACCOUNTS: StandardAccountNode[] = [
         code: "4440",
         group: LedgerGroup.INCOME,
         balanceType: BalanceType.CREDIT,
+      },
+      {
+        name: "Solar Net-Metering & Feed-in Rebates",
+        code: "4450",
+        group: LedgerGroup.INCOME,
+        balanceType: BalanceType.CREDIT,
+        description: "Power export credit and feed-in tariff adjustments from rooftop solar",
+      },
+      {
+        name: "Mobile Tower & Hoarding Advertising Rent",
+        code: "4460",
+        group: LedgerGroup.INCOME,
+        balanceType: BalanceType.CREDIT,
+        description: "Rooftop antenna, mobile tower, or billboard commercial rental",
+      },
+      {
+        name: "NOC & Clearance Documentation Charges",
+        code: "4470",
+        group: LedgerGroup.INCOME,
+        balanceType: BalanceType.CREDIT,
+        description: "Bank loan NOC, gift deed NOC, or clearance certificate fees",
       },
     ],
   },
@@ -513,7 +590,7 @@ export const STANDARD_CHART_OF_ACCOUNTS: StandardAccountNode[] = [
     code: "5300",
     group: LedgerGroup.EXPENSE,
     balanceType: BalanceType.DEBIT,
-    description: "Lifts, DG, fire systems, pumps, and general repairs",
+    description: "Lifts, DG, fire systems, pumps, insurance, solar, and general repairs",
     subLedgers: [
       {
         name: "Lift AMC & Breakdown Repairs",
@@ -545,6 +622,27 @@ export const STANDARD_CHART_OF_ACCOUNTS: StandardAccountNode[] = [
         group: LedgerGroup.EXPENSE,
         balanceType: BalanceType.DEBIT,
       },
+      {
+        name: "Building Fire & Structural Insurance Premium",
+        code: "5360",
+        group: LedgerGroup.EXPENSE,
+        balanceType: BalanceType.DEBIT,
+        description: "Comprehensive structural, fire, earthquake, and third-party liability insurance",
+      },
+      {
+        name: "Solar Rooftop Plant Maintenance & Cleaning",
+        code: "5370",
+        group: LedgerGroup.EXPENSE,
+        balanceType: BalanceType.DEBIT,
+        description: "Inverter servicing and solar panel cleaning AMC",
+      },
+      {
+        name: "Intercom, Telecom & Security Systems AMC",
+        code: "5380",
+        group: LedgerGroup.EXPENSE,
+        balanceType: BalanceType.DEBIT,
+        description: "Intercom cabling, boom barrier, CCTV, and access control AMC",
+      },
     ],
   },
   {
@@ -552,7 +650,7 @@ export const STANDARD_CHART_OF_ACCOUNTS: StandardAccountNode[] = [
     code: "5400",
     group: LedgerGroup.EXPENSE,
     balanceType: BalanceType.DEBIT,
-    description: "Staff salaries, office stationery, software, and AGM expenses",
+    description: "Staff salaries, office stationery, software, festivals, and AGM expenses",
     subLedgers: [
       {
         name: "Society Manager & Staff Salaries",
@@ -577,6 +675,20 @@ export const STANDARD_CHART_OF_ACCOUNTS: StandardAccountNode[] = [
         code: "5440",
         group: LedgerGroup.EXPENSE,
         balanceType: BalanceType.DEBIT,
+      },
+      {
+        name: "Festival & Community Celebration Expenses",
+        code: "5450",
+        group: LedgerGroup.EXPENSE,
+        balanceType: BalanceType.DEBIT,
+        description: "Independence Day, Republic Day, cultural events, and festival celebrations",
+      },
+      {
+        name: "Bank Stamp Duty & Franking Charges",
+        code: "5460",
+        group: LedgerGroup.EXPENSE,
+        balanceType: BalanceType.DEBIT,
+        description: "Stamp duty, agreement franking, and documentation charges",
       },
     ],
   },
