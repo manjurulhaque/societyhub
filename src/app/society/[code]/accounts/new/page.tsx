@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { prisma } from "@/lib/prisma"
-import type { AccountType } from "@/generated/prisma/client"
+import type { AccountType, LedgerGroup, BalanceType } from "@/generated/prisma/client"
 
 export default async function NewSocietyAccountPage({
   params,
@@ -61,7 +61,45 @@ export default async function NewSocietyAccountPage({
       },
     })
 
+    // Auto-sync / link a corresponding sub-ledger under "Cash & Bank Balances" in Chart of Accounts
+    const parentCashBank = await prisma.ledger.findFirst({
+      where: {
+        societyId: society.id,
+        OR: [
+          { code: "1100" },
+          { name: { contains: "Cash & Bank", mode: "insensitive" } },
+        ],
+      },
+    })
+
+    const existingLedger = await prisma.ledger.findUnique({
+      where: {
+        societyId_name: {
+          societyId: society.id,
+          name,
+        },
+      },
+    })
+
+    if (!existingLedger) {
+      await prisma.ledger.create({
+        data: {
+          societyId: society.id,
+          name,
+          group: "ASSET" as LedgerGroup,
+          balanceType: "DEBIT" as BalanceType,
+          openingBalance: validOpening,
+          parentLedgerId: parentCashBank?.id ?? null,
+          description: accountType === "BANK"
+            ? `Bank Account - ${bankName ?? ""} (A/C: ${accountNumber ?? ""})`
+            : "Cash / Imprest Float Account",
+          isSystem: false,
+        },
+      })
+    }
+
     revalidatePath(`/society/${code}/accounts`)
+    revalidatePath(`/society/${code}/ledgers`)
     revalidatePath("/admin/accounts")
     redirect(`/society/${code}/accounts`)
   }

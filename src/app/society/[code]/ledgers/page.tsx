@@ -4,6 +4,7 @@ import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { prisma } from "@/lib/prisma"
 import { seedSocietyChartOfAccounts } from "@/lib/chartOfAccounts"
 import type { LedgerGroup, BalanceType } from "@/generated/prisma/client"
+import { LedgerExplorer } from "./LedgerExplorer"
 
 export default async function SocietyLedgersPage({
   params,
@@ -19,7 +20,7 @@ export default async function SocietyLedgersPage({
 
   const { society } = context
 
-  let ledgers = await prisma.ledger.findMany({
+  const rawLedgers = await prisma.ledger.findMany({
     where: {
       societyId: society.id,
       isActive: true,
@@ -37,12 +38,30 @@ export default async function SocietyLedgersPage({
     },
   })
 
-  // Group into standard accounting buckets
-  const assets = ledgers.filter((l) => l.group === "ASSET")
-  const liabilities = ledgers.filter((l) => l.group === "LIABILITY")
-  const income = ledgers.filter((l) => l.group === "INCOME")
-  const expenses = ledgers.filter((l) => l.group === "EXPENSE")
-  const equity = ledgers.filter((l) => l.group === "EQUITY")
+  // Format ledgers for client explorer component
+  const ledgers = rawLedgers.map((l) => ({
+    id: l.id,
+    name: l.name,
+    code: l.code,
+    group: l.group as "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" | "EQUITY",
+    description: l.description,
+    balanceType: l.balanceType as "DEBIT" | "CREDIT",
+    openingBalance: Number(l.openingBalance),
+    isSystem: l.isSystem,
+    parentLedger: l.parentLedger,
+  }))
+
+  // Group counts for KPI overview
+  const assetsCount = ledgers.filter((l) => l.group === "ASSET").length
+  const liabilitiesCount = ledgers.filter((l) => l.group === "LIABILITY").length
+  const incomeCount = ledgers.filter((l) => l.group === "INCOME").length
+  const expensesCount = ledgers.filter((l) => l.group === "EXPENSE").length
+  const equityCount = ledgers.filter((l) => l.group === "EQUITY").length
+
+  // Potential parent ledgers (primary heads or heads with 4-digit codes)
+  const potentialParents = rawLedgers.filter(
+    (l) => !l.parentLedgerId || (l.code && l.code.endsWith("00"))
+  )
 
   async function handleSeedChart() {
     "use server"
@@ -80,32 +99,32 @@ export default async function SocietyLedgersPage({
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-700">Assets</p>
-          <p className="mt-1 text-2xl font-bold text-stone-950">{assets.length}</p>
-          <p className="text-[10px] text-stone-400">Bank, Cash, Receivables</p>
+          <p className="mt-1 text-2xl font-bold text-stone-950">{assetsCount}</p>
+          <p className="text-[10px] text-stone-400">Bank, Cash, Receivables, ITC</p>
         </div>
 
         <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-purple-700">Liabilities</p>
-          <p className="mt-1 text-2xl font-bold text-stone-950">{liabilities.length}</p>
-          <p className="text-[10px] text-stone-400">Creditors, Caution Deposits</p>
+          <p className="mt-1 text-2xl font-bold text-stone-950">{liabilitiesCount}</p>
+          <p className="text-[10px] text-stone-400">Creditors, Taxes, Caution Deposits</p>
         </div>
 
         <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">Income</p>
-          <p className="mt-1 text-2xl font-bold text-stone-950">{income.length}</p>
-          <p className="text-[10px] text-stone-400">Maintenance, Non-Occupancy</p>
+          <p className="mt-1 text-2xl font-bold text-stone-950">{incomeCount}</p>
+          <p className="text-[10px] text-stone-400">Maintenance, Solar, Rentals</p>
         </div>
 
         <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-rose-700">Expenses</p>
-          <p className="mt-1 text-2xl font-bold text-stone-950">{expenses.length}</p>
-          <p className="text-[10px] text-stone-400">Security, AMCs, Common Power</p>
+          <p className="mt-1 text-2xl font-bold text-stone-950">{expensesCount}</p>
+          <p className="text-[10px] text-stone-400">Security, AMCs, Insurance, Power</p>
         </div>
 
         <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">Equity</p>
-          <p className="mt-1 text-2xl font-bold text-stone-950">{equity.length}</p>
-          <p className="text-[10px] text-stone-400">Corpus & Sinking Reserves</p>
+          <p className="mt-1 text-2xl font-bold text-stone-950">{equityCount}</p>
+          <p className="text-[10px] text-stone-400">Corpus, Sinking & Welfare Reserves</p>
         </div>
       </div>
 
@@ -115,145 +134,114 @@ export default async function SocietyLedgersPage({
           + Create Custom Ledger
         </h2>
         <p className="text-xs text-stone-500 mb-5">
-          Add specific expense, revenue, or balance sheet heads unique to your society.
+          Add specific expense, revenue, asset, or liability heads tailored to your society.
         </p>
 
-        <form action={createLedger} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <form action={createLedger} className="space-y-4">
           <input type="hidden" name="societyId" value={society.id} />
           <input type="hidden" name="code" value={code} />
 
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1">
-              Ledger Name *
-            </label>
-            <input
-              type="text"
-              name="name"
-              required
-              placeholder="e.g. Solar Rooftop Subsidies"
-              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
-            />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1">
+                Ledger Name *
+              </label>
+              <input
+                type="text"
+                name="name"
+                required
+                placeholder="e.g. EV Charging Station Income"
+                className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1">
+                Ledger Code (Optional)
+              </label>
+              <input
+                type="text"
+                name="ledgerCode"
+                placeholder="e.g. 4480"
+                className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs font-mono text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1">
+                Accounting Group *
+              </label>
+              <select
+                name="group"
+                defaultValue="EXPENSE"
+                className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
+              >
+                <option value="EXPENSE">Expense (Debit nature)</option>
+                <option value="INCOME">Income (Credit nature)</option>
+                <option value="ASSET">Asset (Debit nature)</option>
+                <option value="LIABILITY">Liability (Credit nature)</option>
+                <option value="EQUITY">Equity / Reserve (Credit nature)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1">
+                Parent Classification (Optional)
+              </label>
+              <select
+                name="parentLedgerId"
+                defaultValue=""
+                className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
+              >
+                <option value="">— Primary / Top-Level Head —</option>
+                {potentialParents.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    [{p.group}] {p.code ? `${p.code} - ` : ""}{p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1">
+                Opening Balance (₹)
+              </label>
+              <input
+                type="number"
+                name="openingBalance"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs font-mono text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1">
+                Description (Optional)
+              </label>
+              <input
+                type="text"
+                name="description"
+                placeholder="Brief purpose or classification note"
+                className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1">
-              Ledger Code (Optional)
-            </label>
-            <input
-              type="text"
-              name="ledgerCode"
-              placeholder="e.g. 4085"
-              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs font-mono text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1">
-              Group *
-            </label>
-            <select
-              name="group"
-              defaultValue="EXPENSE"
-              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
-            >
-              <option value="ASSET">Asset (Debit balance)</option>
-              <option value="LIABILITY">Liability (Credit balance)</option>
-              <option value="INCOME">Income (Credit balance)</option>
-              <option value="EXPENSE">Expense (Debit balance)</option>
-              <option value="EQUITY">Equity (Credit balance)</option>
-            </select>
-          </div>
-
-          <div className="flex items-end">
+          <div className="flex justify-end pt-2">
             <button
               type="submit"
-              className="w-full rounded-xl bg-stone-950 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-stone-800"
+              className="inline-flex items-center justify-center rounded-xl bg-stone-950 px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-stone-800"
             >
-              Save Ledger Head
+              Save Custom Ledger Head
             </button>
           </div>
         </form>
       </div>
 
-      {/* Ledger Tables by Group */}
-      <div className="space-y-6">
-        <LedgerGroupTable title="Income Heads (Revenue)" color="emerald" groupLedgers={income} />
-        <LedgerGroupTable title="Expense Heads (Expenditures)" color="rose" groupLedgers={expenses} />
-        <LedgerGroupTable title="Assets (Current & Fixed)" color="blue" groupLedgers={assets} />
-        <LedgerGroupTable title="Liabilities & Caution Deposits" color="purple" groupLedgers={liabilities} />
-        <LedgerGroupTable title="Equity & Capital Reserves" color="amber" groupLedgers={equity} />
-      </div>
-    </div>
-  )
-}
-
-function LedgerGroupTable({
-  title,
-  color,
-  groupLedgers,
-}: {
-  title: string
-  color: string
-  groupLedgers: any[]
-}) {
-  return (
-    <div className="rounded-2xl border border-stone-200 bg-white shadow-sm overflow-hidden">
-      <div className="border-b border-stone-200 bg-stone-50/70 px-6 py-3.5 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-stone-950">{title}</h3>
-        <span className="text-xs font-semibold text-stone-500">{groupLedgers.length} ledgers</span>
-      </div>
-
-      {groupLedgers.length === 0 ? (
-        <div className="p-8 text-center text-xs text-stone-400">
-          No ledgers under this category.
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-xs">
-            <thead className="border-b border-stone-100 bg-stone-50/30 text-[10px] font-semibold uppercase tracking-wider text-stone-500">
-              <tr>
-                <th className="px-4 py-2.5">Code</th>
-                <th className="px-4 py-2.5">Ledger Name</th>
-                <th className="px-4 py-2.5">Parent Classification</th>
-                <th className="px-4 py-2.5">Nature</th>
-                <th className="px-4 py-2.5">Type</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {groupLedgers.map((l) => (
-                <tr key={l.id} className="hover:bg-stone-50/60 transition">
-                  <td className="px-4 py-3 font-mono font-bold text-stone-700">
-                    {l.code || "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="font-semibold text-stone-950 block">{l.name}</span>
-                    {l.description ? (
-                      <span className="text-[10px] text-stone-500">{l.description}</span>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3 text-stone-600">
-                    {l.parentLedger?.name || <span className="text-stone-400">— Primary Head —</span>}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-[11px] font-medium text-stone-700">
-                    {l.balanceType}
-                  </td>
-                  <td className="px-4 py-3">
-                    {l.isSystem ? (
-                      <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[9px] font-bold text-stone-600">
-                        STANDARD
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-bold text-blue-700 border border-blue-200">
-                        CUSTOM
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* Interactive Ledger Explorer & Tables */}
+      <LedgerExplorer ledgers={ledgers} />
     </div>
   )
 }
@@ -266,10 +254,16 @@ async function createLedger(formData: FormData) {
   const name = formData.get("name")?.toString().trim()
   const ledgerCode = formData.get("ledgerCode")?.toString().trim() || null
   const group = formData.get("group")?.toString().trim() || "EXPENSE"
+  const parentLedgerId = formData.get("parentLedgerId")?.toString().trim() || null
+  const description = formData.get("description")?.toString().trim() || null
+  const rawOpeningBalance = formData.get("openingBalance")?.toString().trim()
 
   if (!societyId || !name) {
     throw new Error("Society and ledger name are required")
   }
+
+  const openingBalance = rawOpeningBalance ? parseFloat(rawOpeningBalance) : 0
+  const validOpening = !isNaN(openingBalance) ? openingBalance : 0
 
   const balanceType: BalanceType =
     group === "ASSET" || group === "EXPENSE" ? "DEBIT" : "CREDIT"
@@ -281,6 +275,9 @@ async function createLedger(formData: FormData) {
       code: ledgerCode,
       group: group as LedgerGroup,
       balanceType,
+      parentLedgerId: parentLedgerId || null,
+      openingBalance: validOpening,
+      description,
       isSystem: false,
     },
   })
