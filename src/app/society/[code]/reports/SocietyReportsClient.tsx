@@ -29,6 +29,7 @@ import {
   AdminModal,
 } from "@/components/admin"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { generateReportPDF } from "@/lib/pdf/reportPdfGenerator"
 
 const CHART_COLORS = [
   "#059669",
@@ -583,6 +584,209 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
     document.body.removeChild(link)
   }
 
+  // Direct 1-Click PDF Download
+  const handleDownloadPDF = () => {
+    let reportTitle = "Official Society Report"
+    let subtitle = ""
+    let headers: string[] = []
+    let rows: (string | number)[][] = []
+    let filename = `${data.society.name.toLowerCase().replace(/\s+/g, "_")}_report.pdf`
+    let orientation: "portrait" | "landscape" = "portrait"
+
+    if (activeTab === "overview") {
+      reportTitle = "Financial Overview & Key Performance Indicators"
+      subtitle = `Summary of Billings, Realized Collections, Operational Expenses, and Reserve Funds`
+      headers = ["Metric / KPI Description", "Amount / Count", "Notes & Recovery Status"]
+      rows = [
+        ["Total Maintenance Demands Billed", `${sym}${data.summary.totalBilled.toLocaleString("en-IN")}`, `${data.summary.totalBillsCount} invoices issued`],
+        ["Total Collections Realized", `${sym}${data.summary.totalCollected.toLocaleString("en-IN")}`, `${data.summary.totalPaymentsCount} payment receipts`],
+        ["Total Outstanding Arrears", `${sym}${data.summary.totalOutstanding.toLocaleString("en-IN")}`, `${data.summary.defaultersCount} units with dues (${data.summary.defaulterRate}%)`],
+        ["Collection Recovery Efficiency", `${data.summary.collectionRate}%`, data.summary.collectionRate >= 80 ? "Healthy recovery" : "Needs attention"],
+        ["Total Operational Expenses", `${sym}${data.summary.totalExpenses.toLocaleString("en-IN")}`, `${data.summary.totalExpensesCount} expense vouchers`],
+        ["Net Operating Surplus / (Deficit)", `${sym}${data.summary.netOperatingSurplus.toLocaleString("en-IN")}`, data.summary.netOperatingSurplus >= 0 ? "Operating Surplus" : "Operating Deficit"],
+        ["Liquid Cash & Bank Balances", `${sym}${data.summary.liquidCashAndBank.toLocaleString("en-IN")}`, "Operational bank float"],
+        ["Fixed Term Deposits (Reserves)", `${sym}${data.summary.totalFixedDeposits.toLocaleString("en-IN")}`, "Sinking & capital reserves"],
+        ["Total Society Reserves", `${sym}${data.summary.totalReserves.toLocaleString("en-IN")}`, "Liquid + Term deposits"],
+      ]
+      filename = `${data.society.name.toLowerCase().replace(/\s+/g, "_")}_financial_overview.pdf`
+    } else if (activeTab === "defaulters") {
+      reportTitle = "Defaulters & Arrears Aging Register"
+      subtitle = `Itemized overdue assessment breakdown per housing unit (${filteredDefaulters.length} units)`
+      headers = ["Flat", "Block", "Primary Resident / Owner", "Phone", "Unpaid Bills", "Principal (₹)", "Late Fee (₹)", "Total Overdue (₹)", "Aging Severity", "Voting Rights"]
+      rows = filteredDefaulters.map((d) => [
+        d.flatNumber,
+        d.blockName,
+        d.residentName,
+        d.residentPhone || "—",
+        d.unpaidBillsCount,
+        d.unpaidPrincipal.toLocaleString("en-IN"),
+        d.unpaidLateFees.toLocaleString("en-IN"),
+        d.totalOverdue.toLocaleString("en-IN"),
+        d.agingBucket === "OVER_90" ? ">90 Days" : d.agingBucket === "DAYS_61_90" ? "61-90 Days" : d.agingBucket === "DAYS_31_60" ? "31-60 Days" : "0-30 Days",
+        d.isVotingDisqualified ? "DISQUALIFIED" : "ELIGIBLE",
+      ])
+      orientation = "landscape"
+      filename = `${data.society.name.toLowerCase().replace(/\s+/g, "_")}_defaulters_aging_report.pdf`
+    } else if (activeTab === "balance_sheet") {
+      reportTitle = "Statement of Financial Position (Balance Sheet)"
+      subtitle = `Audited summary of Society Assets vs Liabilities and Statutory Capital Reserves`
+      headers = ["Category", "Account / Ledger Head", "Amount (₹)"]
+      rows = [
+        ["Assets", "Liquid Bank & Cash Balances", data.balanceSheet.assets.liquidBankCash.toLocaleString("en-IN")],
+        ["Assets", "Maintenance Arrears Receivable (Sundry Debtors)", data.balanceSheet.assets.maintenanceArrears.toLocaleString("en-IN")],
+        ["Assets", "Fixed Deposits (Sinking / Term Reserves)", data.balanceSheet.assets.fixedDeposits.toLocaleString("en-IN")],
+        ["Assets", "Fixed Capital Assets (Book Value)", data.balanceSheet.assets.fixedAssetsBookValue.toLocaleString("en-IN")],
+        ["Assets Total", "TOTAL ASSETS", `${sym}${data.balanceSheet.assets.totalAssets.toLocaleString("en-IN")}`],
+        ["Liabilities & Funds", "Member Security & Fit-out Deposits Held", data.balanceSheet.liabilities.memberDepositsHeld.toLocaleString("en-IN")],
+        ["Liabilities & Funds", "Vendor Payables (Sundry Creditors)", data.balanceSheet.liabilities.vendorPayables.toLocaleString("en-IN")],
+        ["Liabilities & Funds", "Advance Collections (Unearned Revenue)", data.balanceSheet.liabilities.advanceCollections.toLocaleString("en-IN")],
+        ["Liabilities & Funds", "Statutory Sinking, Repair & General Reserves", data.balanceSheet.liabilities.sinkingAndGeneralReserves.toLocaleString("en-IN")],
+        ["Liabilities Total", "TOTAL LIABILITIES & FUNDS", `${sym}${data.balanceSheet.liabilities.totalLiabilitiesAndFunds.toLocaleString("en-IN")}`],
+      ]
+      filename = `${data.society.name.toLowerCase().replace(/\s+/g, "_")}_balance_sheet.pdf`
+    } else if (activeTab === "budget_variance") {
+      reportTitle = "Budget vs. Actual Expenditure Variance Report"
+      subtitle = `Comparison of annual allocated budgetary caps against actual disbursements`
+      headers = ["Budget Plan", "Expenditure Head", "Allocated (₹)", "Spent (₹)", "Remaining (₹)", "Utilization %", "Status"]
+      rows = data.budgetVariance.map((b) => [
+        b.budgetName,
+        b.headName,
+        b.allocatedAmount.toLocaleString("en-IN"),
+        b.utilizedAmount.toLocaleString("en-IN"),
+        b.remainingAmount.toLocaleString("en-IN"),
+        `${b.utilizationRate}%`,
+        b.status === "ON_TRACK" ? "Under Budget" : b.status === "WARNING" ? "Nearing Cap" : "Over Budget",
+      ])
+      filename = `${data.society.name.toLowerCase().replace(/\s+/g, "_")}_budget_variance_report.pdf`
+    } else if (activeTab === "statutory") {
+      if (statutorySubTab === "shares") {
+        reportTitle = "Form 'I' Register of Members & Share Capital"
+        subtitle = `Statutory share allotment ledger under Cooperative Housing Societies Act`
+        headers = ["Certificate #", "Flat & Block", "Member Name", "Shares Count", "Distinctive Nos", "Face Value (₹)", "Admission Date", "Status"]
+        rows = data.statutory.shares.map((s) => [
+          s.certificateNumber,
+          `${s.flatNumber} (${s.blockName})`,
+          s.memberName,
+          s.sharesCount,
+          s.distinctiveNumbers,
+          s.faceValueTotal.toLocaleString("en-IN"),
+          formatDateInAppTimeZone(s.issueDate),
+          s.status,
+        ])
+        filename = `${data.society.name.toLowerCase().replace(/\s+/g, "_")}_form_I_shares_register.pdf`
+      } else {
+        reportTitle = "Form 'J' Register of Active Members & AGM/SGM Voting Rights"
+        subtitle = `Electoral roll of eligible voters vs disqualified members (arrears >90 days)`
+        headers = ["Flat & Block", "Member Name", "Occupancy", "Outstanding Dues (₹)", "Voting Rights Status", "Remarks / Legal Grounds"]
+        rows = data.statutory.votingList.map((v) => [
+          `${v.flatNumber} (${v.blockName})`,
+          v.memberName,
+          v.occupancyStatus,
+          v.outstandingDues.toLocaleString("en-IN"),
+          v.isEligible ? "ELIGIBLE VOTER" : "DISQUALIFIED",
+          v.disqualificationReason || "Clear for AGM/SGM voting",
+        ])
+        filename = `${data.society.name.toLowerCase().replace(/\s+/g, "_")}_form_J_voting_electoral_roll.pdf`
+      }
+    } else if (activeTab === "vendors") {
+      reportTitle = "Vendor Payables & Outstanding Aging Report"
+      subtitle = `Operational liabilities, pending contractor bills, and TDS audit`
+      headers = ["Vendor Name", "Company", "Contact", "Total Billed (₹)", "Total Paid (₹)", "Outstanding Due (₹)", "TDS Deducted (₹)", "Pending Bills", "Aging Bucket"]
+      rows = data.vendorAging.map((v) => [
+        v.vendorName,
+        v.companyName || "—",
+        v.phone || "—",
+        v.totalBilledAmount.toLocaleString("en-IN"),
+        v.totalPaidAmount.toLocaleString("en-IN"),
+        v.outstandingDue.toLocaleString("en-IN"),
+        v.tdsDeducted.toLocaleString("en-IN"),
+        v.pendingBillsCount,
+        v.agingBucket === "OVER_60" ? ">60 Days" : v.agingBucket === "DAYS_31_60" ? "31-60 Days" : "0-30 Days",
+      ])
+      orientation = "landscape"
+      filename = `${data.society.name.toLowerCase().replace(/\s+/g, "_")}_vendor_payables_aging.pdf`
+    } else if (activeTab === "cheques") {
+      reportTitle = "Bank Cheque & Clearance Register"
+      subtitle = `Inward member receipts and outward vendor payment instruments`
+      headers = ["Cheque #", "Direction", "Party Name", "Bank Name", "Amount (₹)", "Cheque Date", "Status", "Remarks / Clearance"]
+      rows = filteredCheques.map((c) => [
+        c.chequeNumber,
+        c.direction,
+        c.partyName,
+        c.bankName || "—",
+        c.amount.toLocaleString("en-IN"),
+        formatDateInAppTimeZone(c.chequeDate),
+        c.status,
+        c.bouncedReason ? `Bounced: ${c.bouncedReason}` : c.clearedOn ? `Cleared: ${formatDateInAppTimeZone(c.clearedOn)}` : "—",
+      ])
+      filename = `${data.society.name.toLowerCase().replace(/\s+/g, "_")}_cheque_register.pdf`
+    } else if (activeTab === "monthly") {
+      reportTitle = "Month-on-Month Invoicing & Collection Performance Report"
+      subtitle = `Chronological audit of monthly demands, collection realizations, and operating cashflow`
+      headers = ["Billing Period", "Invoices Issued", "Billed Demand (₹)", "Payments Received", "Collections Realized (₹)", "Recovery Rate %", "Expenses (₹)", "Net Cashflow (₹)"]
+      rows = data.monthlyTrends.map((m) => [
+        m.label,
+        m.billedCount,
+        m.billedAmount.toLocaleString("en-IN"),
+        m.collectedCount,
+        m.collectedAmount.toLocaleString("en-IN"),
+        `${m.collectionRate}%`,
+        m.expenseAmount.toLocaleString("en-IN"),
+        m.netCashflow.toLocaleString("en-IN"),
+      ])
+      filename = `${data.society.name.toLowerCase().replace(/\s+/g, "_")}_monthly_trends_audit.pdf`
+    } else if (activeTab === "pnl") {
+      reportTitle = "Statement of Income & Expenditure (P&L Audit)"
+      subtitle = `Categorized operational revenues and expenditures with net surplus / deficit`
+      headers = ["Section", "Head / Category", "Transaction Count", "Amount (₹)"]
+      rows = [
+        ...data.pnl.incomeHeads.map((h) => ["Income", h.category, h.count, h.amount.toLocaleString("en-IN")]),
+        ["Income Total", "TOTAL INCOME", "", `${sym}${data.pnl.totalIncome.toLocaleString("en-IN")}`],
+        ...data.pnl.expenseHeads.map((h) => ["Expenditure", h.category, h.count, h.amount.toLocaleString("en-IN")]),
+        ["Expenditure Total", "TOTAL EXPENDITURE", "", `${sym}${data.pnl.totalExpense.toLocaleString("en-IN")}`],
+        ["Net Result", "OPERATING SURPLUS / (DEFICIT)", "", `${sym}${data.pnl.netSurplus.toLocaleString("en-IN")}`],
+      ]
+      filename = `${data.society.name.toLowerCase().replace(/\s+/g, "_")}_income_expenditure_statement.pdf`
+    } else if (activeTab === "units") {
+      reportTitle = "Unit-by-Unit Maintenance & Dues Ledger"
+      subtitle = `Comprehensive ledger of demands, payments, and balances across flats (${filteredUnitLedger.length} units)`
+      headers = ["Flat #", "Block", "Resident / Owner", "Occupancy", "Invoices", "Billed (₹)", "Paid (₹)", "Outstanding (₹)", "Advance (₹)", "Status"]
+      rows = filteredUnitLedger.map((u) => [
+        u.flatNumber,
+        u.blockName,
+        u.residentName,
+        u.occupancyStatus,
+        u.totalInvoicesCount,
+        u.totalBilledAmount.toLocaleString("en-IN"),
+        u.totalPaidAmount.toLocaleString("en-IN"),
+        u.outstandingAmount.toLocaleString("en-IN"),
+        u.advanceAmount.toLocaleString("en-IN"),
+        u.accountStatus,
+      ])
+      orientation = "landscape"
+      filename = `${data.society.name.toLowerCase().replace(/\s+/g, "_")}_unit_ledger_report.pdf`
+    }
+
+    generateReportPDF({
+      society: {
+        name: data.society.name,
+        address: data.society.address,
+        city: data.society.city,
+        state: data.society.state,
+        pincode: data.society.pincode,
+        registrationNumber: data.society.registrationNumber,
+        panNumber: data.society.panNumber,
+        currencySymbol: sym,
+      },
+      reportTitle,
+      subtitle,
+      headers,
+      rows,
+      filename,
+      orientation,
+    })
+  }
+
   const handlePrint = () => {
     window.print()
   }
@@ -673,6 +877,27 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
             </div>
 
             <AdminButton
+              variant="primary"
+              size="sm"
+              onClick={handleDownloadPDF}
+            >
+              <svg
+                className="mr-1.5 h-4 w-4 text-white"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
+              Download PDF
+            </AdminButton>
+
+            <AdminButton
               variant="outline"
               size="sm"
               onClick={() => {
@@ -721,7 +946,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                   d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
                 />
               </svg>
-              Print
+              Print / Letterhead
             </AdminButton>
           </div>
         </div>

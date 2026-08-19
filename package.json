@@ -11,7 +11,6 @@
     "lint": "eslint",
     "security:check": "eslint && next build"
   },
-
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
     "@prisma/adapter-pg": "^7.9.1",
@@ -27,6 +26,8 @@
     "csv-parser": "^3.2.1",
     "date-fns": "^4.4.0",
     "input-otp": "^1.4.2",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^1.31.0",
     "next": "^16.3.1",
     "next-themes": "^0.4.6",
