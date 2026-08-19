@@ -2,6 +2,9 @@ import { notFound } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { prisma } from "@/lib/prisma"
 import { AdminPageHeader, AdminTable, AdminBadge, AdminCard } from "@/components/admin"
+import { CommitteeMembersClient, type CommitteeMemberItem } from "./CommitteeMembersClient"
+import { EXECUTIVE_ROLES } from "@/lib/auth/requireAuth"
+import type { SocietyRole } from "@/generated/prisma/client"
 
 export default async function SocietyMembersPage({
   params,
@@ -15,9 +18,10 @@ export default async function SocietyMembersPage({
     notFound()
   }
 
-  const { society } = context
+  const { society, designation, isSuperAdmin } = context
+  const canManageMembers = isSuperAdmin || EXECUTIVE_ROLES.includes(designation as SocietyRole)
 
-  const [committeeMembers, residents] = await Promise.all([
+  const [rawCommitteeMembers, availableRolesData, residents] = await Promise.all([
     prisma.societyMember.findMany({
       where: { societyId: society.id },
       include: {
@@ -28,8 +32,39 @@ export default async function SocietyMembersPage({
             appRole: true,
           },
         },
+        customRoles: {
+          include: {
+            role: {
+              select: {
+                id: true,
+                name: true,
+                isSystem: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { createdAt: "asc" },
+    }),
+
+    prisma.role.findMany({
+      where: {
+        OR: [
+          { societyId: null },
+          { societyId: society.id },
+        ],
+      },
+      include: {
+        _count: {
+          select: {
+            rolePermissions: true,
+          },
+        },
+      },
+      orderBy: [
+        { isSystem: "desc" },
+        { name: "asc" },
+      ],
     }),
 
     prisma.person.findMany({
@@ -55,50 +90,47 @@ export default async function SocietyMembersPage({
     }),
   ])
 
+  const committeeMembers: CommitteeMemberItem[] = rawCommitteeMembers.map((m) => ({
+    id: m.id,
+    userId: m.user.id,
+    email: m.user.email,
+    designation: m.designation,
+    appRole: m.user.appRole,
+    createdAt: m.createdAt.toISOString(),
+    customRoles: m.customRoles.map((cr) => ({
+      id: cr.role.id,
+      name: cr.role.name,
+      isSystem: cr.role.isSystem,
+    })),
+  }))
+
+  const availableRoles = availableRolesData.map((r) => ({
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    isSystem: r.isSystem,
+    permissionCount: r._count.rolePermissions,
+  }))
+
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-6 py-8 md:px-8">
       <AdminPageHeader
-        eyebrow="Directory"
+        eyebrow="Directory & Access"
         title="Members & Residents"
-        description={`Manage committee roles and view resident directory for ${society.name}.`}
+        description={`Manage committee roles, operational staff assignments, and resident directory for ${society.name}.`}
       />
 
-      {/* Committee Members */}
+      {/* Committee Members & Staff */}
       <AdminCard
-        title="Management Committee & Staff"
-        description="Users authorized to manage and administer this society"
+        title="Managing Committee & Staff"
+        description="Users authorized to manage, disburse funds, or administer operations for this society"
       >
-        {committeeMembers.length === 0 ? (
-          <p className="py-4 text-center text-xs text-stone-500">
-            No committee members assigned yet.
-          </p>
-        ) : (
-          <AdminTable
-            headers={["User / Email", "Designation", "Platform Role", "Assigned On"]}
-            rows={committeeMembers.map((m) => (
-              <tr key={m.id} className="border-t border-stone-100 hover:bg-stone-50/60">
-                <td className="px-4 py-3 text-xs font-semibold text-stone-950">
-                  {m.user.email}
-                </td>
-                <td className="px-4 py-3">
-                  <AdminBadge variant="purple" size="sm" dot>
-                    {m.designation}
-                  </AdminBadge>
-                </td>
-                <td className="px-4 py-3 text-xs text-stone-600">
-                  {m.user.appRole}
-                </td>
-                <td className="px-4 py-3 text-xs text-stone-500">
-                  {new Date(m.createdAt).toLocaleDateString("en-IN", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                </td>
-              </tr>
-            ))}
-          />
-        )}
+        <CommitteeMembersClient
+          societyCode={code}
+          members={committeeMembers}
+          availableRoles={availableRoles}
+          canManageMembers={canManageMembers}
+        />
       </AdminCard>
 
       {/* Residents Directory */}
@@ -121,7 +153,7 @@ export default async function SocietyMembersPage({
               const primaryRole = r.flats[0]?.role || "RESIDENT"
 
               return (
-                <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/60">
+                <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/60 transition-colors">
                   <td className="px-4 py-3 text-xs font-semibold text-stone-950">
                     {r.name}
                   </td>
@@ -153,3 +185,4 @@ export default async function SocietyMembersPage({
     </div>
   )
 }
+
