@@ -8,8 +8,10 @@
     "build": "next build",
     "postinstall": "prisma generate",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "security:check": "eslint && next build"
   },
+
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
     "@prisma/adapter-pg": "^7.9.1",
