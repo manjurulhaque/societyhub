@@ -60,6 +60,8 @@ export default async function SocietyReportsPage({
     monthlyBills,
     monthlyPayments,
     monthlyExpenses,
+    oneTimeCollectionsRaw,
+    memberDepositsDetailed,
   ] = await Promise.all([
     prisma.society.findUnique({
       where: { id: societyId },
@@ -257,6 +259,42 @@ export default async function SocietyReportsPage({
         expenseDate: true,
         amount: true,
       },
+    }),
+
+    prisma.oneTimeCollection.findMany({
+      where: { societyId },
+      include: {
+        allocations: {
+          include: {
+            flat: {
+              select: {
+                id: true,
+                number: true,
+                area: true,
+                block: { select: { name: true } },
+                people: {
+                  where: { toDate: null },
+                  include: { person: true },
+                  orderBy: { isPrimary: "desc" },
+                },
+              },
+            },
+            installments: {
+              orderBy: { installmentNumber: "asc" },
+            },
+          },
+        },
+      },
+      orderBy: { startDate: "desc" },
+    }),
+
+    prisma.memberDeposit.findMany({
+      where: { societyId },
+      include: {
+        flat: { select: { number: true, block: { select: { name: true } } } },
+        person: { select: { name: true, phone: true } },
+      },
+      orderBy: { receivedOn: "desc" },
     }),
   ])
 
@@ -712,6 +750,117 @@ export default async function SocietyReportsPage({
     count: e.count,
   }))
 
+  const oneTimeCampaigns: SocietyReportData["oneTimeFunds"]["campaigns"] = oneTimeCollectionsRaw.map(
+    (c) => {
+      let totalAllocated = 0
+      let totalCollected = 0
+      let totalDue = 0
+
+      const allocations = c.allocations.map((a) => {
+        const flatPerson =
+          a.flat.people.find((p) => p.isPrimary)?.person || a.flat.people[0]?.person
+        const totalAmt = Number(a.totalAmount ?? 0)
+        const paidAmt = Number(a.paidAmount ?? 0)
+        const balAmt = Number(a.balanceAmount ?? Math.max(0, totalAmt - paidAmt))
+
+        totalAllocated += totalAmt
+        totalCollected += paidAmt
+        totalDue += balAmt
+
+        const clearedCount = a.installments.filter((i) => i.status === "PAID").length
+
+        return {
+          id: a.id,
+          flatId: a.flat.id,
+          flatNumber: a.flat.number,
+          blockName: a.flat.block.name,
+          residentName: flatPerson?.name || "Unassigned",
+          area: a.flat.area ? Number(a.flat.area) : null,
+          totalAmount: totalAmt,
+          paidAmount: paidAmt,
+          balanceAmount: balAmt,
+          status: a.status,
+          installmentsCount: a.installments.length,
+          clearedInstallmentsCount: clearedCount,
+        }
+      })
+
+      const targetAmt = Number(c.totalTargetAmount ?? totalAllocated)
+      const rate = targetAmt > 0 ? Math.min(100, Math.round((totalCollected / targetAmt) * 100)) : 0
+
+      return {
+        id: c.id,
+        title: c.title,
+        description: c.description,
+        totalTargetAmount: targetAmt,
+        totalAllocatedAmount: totalAllocated,
+        totalCollectedAmount: totalCollected,
+        totalOutstandingAmount: totalDue,
+        realizationRate: rate,
+        calculationType: c.calculationType,
+        ratePerSqft: c.ratePerSqft ? Number(c.ratePerSqft) : null,
+        fixedAmountPerFlat: c.fixedAmountPerFlat ? Number(c.fixedAmountPerFlat) : null,
+        paymentPlan: c.paymentPlan,
+        numberOfInstallments: c.numberOfInstallments,
+        startDate: c.startDate.toISOString(),
+        dueDate: c.dueDate ? c.dueDate.toISOString() : null,
+        status: c.status,
+        approvedInMeeting: c.approvedInMeeting,
+        remarks: c.remarks,
+        allocations,
+      }
+    }
+  )
+
+  const totalTargetedAllCampaigns = oneTimeCampaigns.reduce(
+    (sum, c) => sum + c.totalTargetAmount,
+    0
+  )
+  const totalCollectedAllCampaigns = oneTimeCampaigns.reduce(
+    (sum, c) => sum + c.totalCollectedAmount,
+    0
+  )
+  const totalOutstandingAllCampaigns = oneTimeCampaigns.reduce(
+    (sum, c) => sum + c.totalOutstandingAmount,
+    0
+  )
+
+  const totalCorpusDeposits = memberDepositsDetailed
+    .filter((d) => d.status === "HELD" && d.depositType === "CORPUS")
+    .reduce((sum, d) => sum + Number(d.amount ?? 0), 0)
+
+  const totalSecurityDeposits = memberDepositsDetailed
+    .filter((d) => d.status === "HELD" && (d.depositType === "SECURITY" || d.depositType === "FIT_OUT"))
+    .reduce((sum, d) => sum + Number(d.amount ?? 0), 0)
+
+  const memberDeposits: SocietyReportData["oneTimeFunds"]["deposits"] = memberDepositsDetailed.map(
+    (d) => ({
+      id: d.id,
+      flatNumber: d.flat.number,
+      blockName: d.flat.block.name,
+      memberName: d.person?.name || "Member",
+      phone: d.person?.phone || null,
+      depositType: d.depositType,
+      amount: Number(d.amount ?? 0),
+      status: d.status,
+      receivedOn: d.receivedOn.toISOString(),
+      refundedOn: d.refundedOn ? d.refundedOn.toISOString() : null,
+      reference: d.reference,
+      remarks: d.remarks,
+    })
+  )
+
+  const oneTimeFunds: SocietyReportData["oneTimeFunds"] = {
+    campaigns: oneTimeCampaigns,
+    deposits: memberDeposits,
+    totalTargetedAllCampaigns,
+    totalCollectedAllCampaigns,
+    totalOutstandingAllCampaigns,
+    totalDepositsHeld: totalMemberDepositsHeld,
+    totalCorpusDeposits,
+    totalSecurityDeposits,
+  }
+
   const reportData: SocietyReportData = {
     society: {
       id: society.id,
@@ -849,6 +998,7 @@ export default async function SocietyReportsPage({
       bounceCharges: Number(c.bounceCharges ?? 0),
     })),
     unitLedger,
+    oneTimeFunds,
     blocks: Array.from(blocksSet).sort(),
     financialYears: financialYearsRaw.map((fy) => ({
       id: fy.id,

@@ -290,6 +290,62 @@ export type SocietyReportData = {
     advanceAmount: number
     accountStatus: "CLEAR" | "PENDING" | "OVERDUE" | "ADVANCE" | "NO_BILLS"
   }[]
+  oneTimeFunds: {
+    campaigns: {
+      id: string
+      title: string
+      description: string | null
+      totalTargetAmount: number
+      totalAllocatedAmount: number
+      totalCollectedAmount: number
+      totalOutstandingAmount: number
+      realizationRate: number
+      calculationType: string
+      ratePerSqft: number | null
+      fixedAmountPerFlat: number | null
+      paymentPlan: string
+      numberOfInstallments: number
+      startDate: string
+      dueDate: string | null
+      status: string
+      approvedInMeeting: string | null
+      remarks: string | null
+      allocations: {
+        id: string
+        flatId: string
+        flatNumber: string
+        blockName: string
+        residentName: string
+        area: number | null
+        totalAmount: number
+        paidAmount: number
+        balanceAmount: number
+        status: string
+        installmentsCount: number
+        clearedInstallmentsCount: number
+      }[]
+    }[]
+    deposits: {
+      id: string
+      flatNumber: string
+      blockName: string
+      memberName: string
+      phone: string | null
+      depositType: string
+      amount: number
+      status: string
+      receivedOn: string
+      refundedOn: string | null
+      reference: string | null
+      remarks: string | null
+    }[]
+    totalTargetedAllCampaigns: number
+    totalCollectedAllCampaigns: number
+    totalOutstandingAllCampaigns: number
+    totalDepositsHeld: number
+    totalCorpusDeposits: number
+    totalSecurityDeposits: number
+  }
   blocks: string[]
   financialYears: {
     id: string
@@ -322,12 +378,63 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
   // Statutory Sub-Tab State
   const [statutorySubTab, setStatutorySubTab] = useState<"shares" | "voting" | "nominations" | "liens">("shares")
 
+  // One-Time Funds State
+  const [oneTimeSubTab, setOneTimeSubTab] = useState<"campaigns" | "deposits">("campaigns")
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>(
+    data.oneTimeFunds.campaigns[0]?.id || "ALL"
+  )
+  const [oneTimeSearch, setOneTimeSearch] = useState("")
+  const [oneTimeBlock, setOneTimeBlock] = useState("ALL")
+  const [oneTimeStatus, setOneTimeStatus] = useState("ALL")
+
   // Cheques Filter State
   const [chequeDirectionFilter, setChequeDirectionFilter] = useState<"ALL" | "INWARD" | "OUTWARD">("ALL")
   const [chequeStatusFilter, setChequeStatusFilter] = useState<string>("ALL")
 
   const societyCode = data.society.code || data.society.id
   const sym = data.society.currencySymbol || "₹"
+
+  // Active selected campaign
+  const activeCampaign = useMemo(() => {
+    if (selectedCampaignId === "ALL") return null
+    return data.oneTimeFunds.campaigns.find((c) => c.id === selectedCampaignId) || data.oneTimeFunds.campaigns[0] || null
+  }, [data.oneTimeFunds.campaigns, selectedCampaignId])
+
+  // Filtered One-Time Fund Allocations
+  const filteredOneTimeAllocations = useMemo(() => {
+    const allocationsToFilter = activeCampaign
+      ? activeCampaign.allocations
+      : data.oneTimeFunds.campaigns.flatMap((c) => c.allocations)
+
+    return allocationsToFilter.filter((a) => {
+      if (oneTimeBlock !== "ALL" && a.blockName !== oneTimeBlock) return false
+      if (oneTimeStatus !== "ALL" && a.status !== oneTimeStatus) return false
+      if (oneTimeSearch.trim()) {
+        const q = oneTimeSearch.toLowerCase().trim()
+        const matchFlat = a.flatNumber.toLowerCase().includes(q)
+        const matchName = a.residentName.toLowerCase().includes(q)
+        const matchBlock = a.blockName.toLowerCase().includes(q)
+        if (!matchFlat && !matchName && !matchBlock) return false
+      }
+      return true
+    })
+  }, [activeCampaign, data.oneTimeFunds.campaigns, oneTimeBlock, oneTimeStatus, oneTimeSearch])
+
+  // Filtered Member Deposits
+  const filteredMemberDeposits = useMemo(() => {
+    return data.oneTimeFunds.deposits.filter((d) => {
+      if (oneTimeBlock !== "ALL" && d.blockName !== oneTimeBlock) return false
+      if (oneTimeStatus !== "ALL" && d.depositType !== oneTimeStatus) return false
+      if (oneTimeSearch.trim()) {
+        const q = oneTimeSearch.toLowerCase().trim()
+        const matchFlat = d.flatNumber.toLowerCase().includes(q)
+        const matchName = d.memberName.toLowerCase().includes(q)
+        const matchPhone = d.phone?.toLowerCase().includes(q)
+        if (!matchFlat && !matchName && !matchPhone) return false
+      }
+      return true
+    })
+  }, [data.oneTimeFunds.deposits, oneTimeBlock, oneTimeStatus, oneTimeSearch])
 
   // Filtered Defaulters
   const filteredDefaulters = useMemo(() => {
@@ -400,7 +507,59 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
     let rows: (string | number)[][] = []
     const filename = `${data.society.name.toLowerCase().replace(/\s+/g, "_")}_${reportType}_report.csv`
 
-    if (reportType === "defaulters") {
+    if (reportType === "one_time_funds") {
+      if (oneTimeSubTab === "campaigns") {
+        headers = [
+          "Campaign Scheme",
+          "Flat Number",
+          "Block",
+          "Resident / Owner",
+          "Area (sq.ft)",
+          "Allocated Demand (₹)",
+          "Amount Paid (₹)",
+          "Balance Due (₹)",
+          "Payment Status",
+          "Installments Progress",
+        ]
+        rows = filteredOneTimeAllocations.map((a) => [
+          `"${activeCampaign?.title || "Special Assessment"}"`,
+          a.flatNumber,
+          a.blockName,
+          `"${a.residentName.replace(/"/g, '""')}"`,
+          a.area || "—",
+          a.totalAmount,
+          a.paidAmount,
+          a.balanceAmount,
+          a.status,
+          `${a.clearedInstallmentsCount} / ${a.installmentsCount || 1}`,
+        ])
+      } else {
+        headers = [
+          "Flat Number",
+          "Block",
+          "Member / Occupant",
+          "Phone",
+          "Deposit Type",
+          "Amount (₹)",
+          "Status",
+          "Received Date",
+          "Refunded Date",
+          "Reference",
+        ]
+        rows = filteredMemberDeposits.map((d) => [
+          d.flatNumber,
+          d.blockName,
+          `"${d.memberName.replace(/"/g, '""')}"`,
+          d.phone || "",
+          d.depositType,
+          d.amount,
+          d.status,
+          formatDateInAppTimeZone(d.receivedOn),
+          d.refundedOn ? formatDateInAppTimeZone(d.refundedOn) : "",
+          d.reference || "",
+        ])
+      }
+    } else if (reportType === "defaulters") {
       headers = [
         "Flat Number",
         "Block",
@@ -593,7 +752,43 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
     let filename = `${data.society.name.toLowerCase().replace(/\s+/g, "_")}_report.pdf`
     let orientation: "portrait" | "landscape" = "portrait"
 
-    if (activeTab === "overview") {
+    if (activeTab === "one_time_funds") {
+      if (oneTimeSubTab === "campaigns") {
+        reportTitle = `One-Time Fund & Special Assessment Report: ${activeCampaign?.title || "All Schemes"}`
+        subtitle = `Target: ${sym}${(activeCampaign?.totalTargetAmount || data.oneTimeFunds.totalTargetedAllCampaigns).toLocaleString("en-IN")} | Collected: ${sym}${(activeCampaign?.totalCollectedAmount || data.oneTimeFunds.totalCollectedAllCampaigns).toLocaleString("en-IN")} (${activeCampaign?.realizationRate || 0}% Recovery)`
+        headers = ["Flat #", "Block", "Resident / Owner", "Area (sqft)", "Demanded (₹)", "Paid (₹)", "Due (₹)", "Status", "Installments"]
+        rows = filteredOneTimeAllocations.map((a) => [
+          a.flatNumber,
+          a.blockName,
+          a.residentName,
+          a.area || "—",
+          a.totalAmount.toLocaleString("en-IN"),
+          a.paidAmount.toLocaleString("en-IN"),
+          a.balanceAmount.toLocaleString("en-IN"),
+          a.status,
+          `${a.clearedInstallmentsCount}/${a.installmentsCount || 1}`,
+        ])
+        orientation = "landscape"
+        filename = `${data.society.name.toLowerCase().replace(/\s+/g, "_")}_special_assessment_fund.pdf`
+      } else {
+        reportTitle = "Member Deposits & Statutory Corpus Funds Register"
+        subtitle = `Audit of Initial Corpus Funds, Security Deposits, and Fit-Out Caution Balances (${filteredMemberDeposits.length} deposits)`
+        headers = ["Flat #", "Block", "Member / Resident", "Phone", "Deposit Type", "Amount (₹)", "Received Date", "Status", "Reference"]
+        rows = filteredMemberDeposits.map((d) => [
+          d.flatNumber,
+          d.blockName,
+          d.memberName,
+          d.phone || "—",
+          d.depositType,
+          d.amount.toLocaleString("en-IN"),
+          formatDateInAppTimeZone(d.receivedOn),
+          d.status,
+          d.reference || "—",
+        ])
+        orientation = "landscape"
+        filename = `${data.society.name.toLowerCase().replace(/\s+/g, "_")}_member_deposits_corpus_ledger.pdf`
+      }
+    } else if (activeTab === "overview") {
       reportTitle = "Financial Overview & Key Performance Indicators"
       subtitle = `Summary of Billings, Realized Collections, Operational Expenses, and Reserve Funds`
       headers = ["Metric / KPI Description", "Amount / Count", "Notes & Recovery Status"]
@@ -840,6 +1035,11 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
           <AdminTabs
             items={[
               { id: "overview", label: "Analytics & Overview" },
+              {
+                id: "one_time_funds",
+                label: "One-Time Funds & Special Assessments",
+                count: data.oneTimeFunds.campaigns.length,
+              },
               { id: "balance_sheet", label: "Balance Sheet" },
               { id: "budget_variance", label: "Budget Variance" },
               {
@@ -901,7 +1101,8 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
               variant="outline"
               size="sm"
               onClick={() => {
-                if (activeTab === "defaulters") handleExportCSV("defaulters")
+                if (activeTab === "one_time_funds") handleExportCSV("one_time_funds")
+                else if (activeTab === "defaulters") handleExportCSV("defaulters")
                 else if (activeTab === "balance_sheet") handleExportCSV("balance_sheet")
                 else if (activeTab === "budget_variance") handleExportCSV("budget_variance")
                 else if (activeTab === "statutory") {
@@ -1041,6 +1242,437 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
           }
         />
       </div>
+
+      {/* ========================================== */}
+      {/* TAB: ONE-TIME COLLECTED FUNDS & SPECIAL ASSESSMENTS */}
+      {/* ========================================== */}
+      {activeTab === "one_time_funds" && (
+        <div className="space-y-6">
+          {/* Sub-Tab Navigation */}
+          <div className="flex items-center gap-2 border-b border-stone-200 pb-2">
+            <button
+              type="button"
+              onClick={() => setOneTimeSubTab("campaigns")}
+              className={`rounded-xl px-3.5 py-1.5 text-xs font-medium transition-all ${
+                oneTimeSubTab === "campaigns"
+                  ? "bg-stone-900 text-white"
+                  : "text-stone-600 hover:bg-stone-100"
+              }`}
+            >
+              Special Assessment Schemes ({data.oneTimeFunds.campaigns.length})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setOneTimeSubTab("deposits")}
+              className={`rounded-xl px-3.5 py-1.5 text-xs font-medium transition-all ${
+                oneTimeSubTab === "deposits"
+                  ? "bg-stone-900 text-white"
+                  : "text-stone-600 hover:bg-stone-100"
+              }`}
+            >
+              Member Deposits &amp; Corpus Fund ({data.oneTimeFunds.deposits.length})
+            </button>
+          </div>
+
+          {/* Quick Metrics for One-Time Funds */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-stone-700">
+                  Total Target Capital
+                </span>
+                <AdminBadge variant="neutral" size="sm">Goal</AdminBadge>
+              </div>
+              <p className="mt-2 text-2xl font-black text-stone-950">
+                {sym}{data.oneTimeFunds.totalTargetedAllCampaigns.toLocaleString("en-IN")}
+              </p>
+              <p className="text-xs text-stone-500 mt-1">
+                Across {data.oneTimeFunds.campaigns.length} special fund scheme(s)
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">
+                  Collections Realized
+                </span>
+                <AdminBadge variant="success" size="sm">Collected</AdminBadge>
+              </div>
+              <p className="mt-2 text-2xl font-black text-emerald-950">
+                {sym}{data.oneTimeFunds.totalCollectedAllCampaigns.toLocaleString("en-IN")}
+              </p>
+              <p className="text-xs text-emerald-700 mt-1 font-medium">
+                {data.oneTimeFunds.totalTargetedAllCampaigns > 0
+                  ? `${Math.round(
+                      (data.oneTimeFunds.totalCollectedAllCampaigns /
+                        data.oneTimeFunds.totalTargetedAllCampaigns) *
+                        100
+                    )}% realization efficiency`
+                  : "No targeted campaigns"}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-rose-800">
+                  Outstanding Receivables
+                </span>
+                <AdminBadge variant="danger" size="sm">Pending</AdminBadge>
+              </div>
+              <p className="mt-2 text-2xl font-black text-rose-950">
+                {sym}{data.oneTimeFunds.totalOutstandingAllCampaigns.toLocaleString("en-IN")}
+              </p>
+              <p className="text-xs text-rose-700 mt-1 font-medium">
+                Pending realization from members
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-indigo-200 bg-indigo-50/80 p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-indigo-800">
+                  Deposits &amp; Corpus Held
+                </span>
+                <AdminBadge variant="neutral" size="sm">Liabilities</AdminBadge>
+              </div>
+              <p className="mt-2 text-2xl font-black text-indigo-950">
+                {sym}{data.oneTimeFunds.totalDepositsHeld.toLocaleString("en-IN")}
+              </p>
+              <p className="text-xs text-indigo-700 mt-1 font-medium">
+                Corpus: {sym}{data.oneTimeFunds.totalCorpusDeposits.toLocaleString("en-IN")} | Security: {sym}{data.oneTimeFunds.totalSecurityDeposits.toLocaleString("en-IN")}
+              </p>
+            </div>
+          </div>
+
+          {/* Sub-Tab 1: Special Assessment Fund Schemes */}
+          {oneTimeSubTab === "campaigns" && (
+            <div className="space-y-6">
+              {data.oneTimeFunds.campaigns.length === 0 ? (
+                <AdminCard
+                  title="No Special Assessment Schemes Recorded"
+                  description="No one-time capital collection campaigns or special assessment schemes have been created yet."
+                >
+                  <div className="py-8 text-center text-xs text-stone-500">
+                    Create special assessment schemes (e.g. Painting, Lift Replacement, Solar Plant) in the Billing / Assessment section.
+                  </div>
+                </AdminCard>
+              ) : (
+                <>
+                  {/* Campaign Selector & Overview Card */}
+                  <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm space-y-6">
+                    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-stone-100 pb-4">
+                      <div>
+                        <span className="text-xs font-bold uppercase tracking-wider text-stone-500">
+                          Select Special Assessment Fund
+                        </span>
+                        <div className="mt-1.5 w-72">
+                          <AdminSelect
+                            value={selectedCampaignId}
+                            onChange={(e) => setSelectedCampaignId(e.target.value)}
+                            options={data.oneTimeFunds.campaigns.map((c) => ({
+                              value: c.id,
+                              label: `${c.title} (${c.realizationRate}%)`,
+                            }))}
+                          />
+                        </div>
+                      </div>
+
+                      {activeCampaign && (
+                        <div className="flex items-center gap-2">
+                          <AdminBadge
+                            variant={activeCampaign.status === "COMPLETED" ? "success" : "warning"}
+                            size="md"
+                            dot
+                          >
+                            Scheme Status: {activeCampaign.status}
+                          </AdminBadge>
+                          <AdminBadge variant="neutral" size="md">
+                            Plan: {activeCampaign.paymentPlan.replace(/_/g, " ")} ({activeCampaign.numberOfInstallments} Installment{activeCampaign.numberOfInstallments > 1 ? "s" : ""})
+                          </AdminBadge>
+                        </div>
+                      )}
+                    </div>
+
+                    {activeCampaign && (
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div>
+                            <h3 className="text-lg font-black text-stone-950">
+                              {activeCampaign.title}
+                            </h3>
+                            {activeCampaign.description && (
+                              <p className="text-xs text-stone-600 mt-1 max-w-2xl">
+                                {activeCampaign.description}
+                              </p>
+                            )}
+                            {activeCampaign.approvedInMeeting && (
+                              <p className="text-[11px] text-stone-500 mt-1.5">
+                                📋 <strong>Meeting Approval:</strong> {activeCampaign.approvedInMeeting}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="text-right">
+                            <span className="text-xs text-stone-500">Target Scheme Goal</span>
+                            <p className="text-xl font-black text-stone-950">
+                              {sym}{activeCampaign.totalTargetAmount.toLocaleString("en-IN")}
+                            </p>
+                            <p className="text-xs font-semibold text-emerald-700 mt-0.5">
+                              Realized: {sym}{activeCampaign.totalCollectedAmount.toLocaleString("en-IN")} ({activeCampaign.realizationRate}%)
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Realization Progress Bar */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs font-semibold text-stone-700">
+                            <span>Collection Realization Progress</span>
+                            <span>{activeCampaign.realizationRate}% Realized</span>
+                          </div>
+                          <div className="h-3 w-full rounded-full bg-stone-100 overflow-hidden">
+                            <div
+                              className="h-full bg-emerald-600 rounded-full transition-all"
+                              style={{ width: `${Math.min(100, activeCampaign.realizationRate)}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-stone-400">
+                            <span>Start: {formatDateInAppTimeZone(activeCampaign.startDate)}</span>
+                            {activeCampaign.dueDate && (
+                              <span>Due By: {formatDateInAppTimeZone(activeCampaign.dueDate)}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Filter Toolbar for Unit Contributions */}
+                  <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
+                    <div className="w-full sm:w-72">
+                      <AdminSearchBar
+                        placeholder="Search flat number, resident..."
+                        value={oneTimeSearch}
+                        onChange={(e) => setOneTimeSearch(e.target.value)}
+                        onClear={() => setOneTimeSearch("")}
+                      />
+                    </div>
+
+                    <div className="w-40">
+                      <AdminSelect
+                        value={oneTimeBlock}
+                        onChange={(e) => setOneTimeBlock(e.target.value)}
+                        options={[
+                          { value: "ALL", label: "All Blocks" },
+                          ...data.blocks.map((b) => ({ value: b, label: `Block ${b}` })),
+                        ]}
+                      />
+                    </div>
+
+                    <div className="w-44">
+                      <AdminSelect
+                        value={oneTimeStatus}
+                        onChange={(e) => setOneTimeStatus(e.target.value)}
+                        options={[
+                          { value: "ALL", label: "All Statuses" },
+                          { value: "PAID", label: "Paid / Cleared" },
+                          { value: "PARTIALLY_PAID", label: "Partially Paid" },
+                          { value: "PENDING", label: "Pending" },
+                          { value: "OVERDUE", label: "Overdue" },
+                        ]}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Unit Contributions Table */}
+                  <AdminCard
+                    title={`Unit-by-Unit Contribution Register (${filteredOneTimeAllocations.length} Units)`}
+                    description={`Detailed member assessment demands, amounts paid, and pending balances for ${activeCampaign?.title || "Special Assessment"}`}
+                  >
+                    {filteredOneTimeAllocations.length === 0 ? (
+                      <p className="py-6 text-center text-xs text-stone-500">
+                        No unit allocations match the current filters.
+                      </p>
+                    ) : (
+                      <AdminTable
+                        headers={[
+                          "Flat & Block",
+                          "Resident / Owner",
+                          "Area (sqft)",
+                          "Allocated Share",
+                          "Amount Paid",
+                          "Balance Due",
+                          "Installments",
+                          "Status",
+                        ]}
+                        rows={filteredOneTimeAllocations.map((a) => (
+                          <tr key={a.id} className="border-t border-stone-100 hover:bg-stone-50/60">
+                            <td className="px-4 py-3.5 text-xs font-bold text-stone-950">
+                              {a.flatNumber} <span className="text-stone-500 font-normal">({a.blockName})</span>
+                            </td>
+                            <td className="px-4 py-3.5 text-xs text-stone-800 font-medium">
+                              {a.residentName}
+                            </td>
+                            <td className="px-4 py-3.5 text-xs text-stone-600">
+                              {a.area ? `${a.area} sqft` : "—"}
+                            </td>
+                            <td className="px-4 py-3.5 text-xs font-semibold text-stone-900">
+                              {sym}{a.totalAmount.toLocaleString("en-IN")}
+                            </td>
+                            <td className="px-4 py-3.5 text-xs font-bold text-emerald-700">
+                              {sym}{a.paidAmount.toLocaleString("en-IN")}
+                            </td>
+                            <td className="px-4 py-3.5 text-xs font-black">
+                              {a.balanceAmount > 0 ? (
+                                <span className="text-rose-700">{sym}{a.balanceAmount.toLocaleString("en-IN")}</span>
+                              ) : (
+                                <span className="text-stone-400">₹0</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3.5 text-xs text-stone-600 font-medium">
+                              {a.clearedInstallmentsCount} / {a.installmentsCount || 1}
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <AdminBadge
+                                variant={
+                                  a.status === "PAID"
+                                    ? "success"
+                                    : a.status === "PARTIALLY_PAID"
+                                      ? "warning"
+                                      : "danger"
+                                }
+                                size="sm"
+                                dot
+                              >
+                                {a.status.replace(/_/g, " ")}
+                              </AdminBadge>
+                            </td>
+                          </tr>
+                        ))}
+                      />
+                    )}
+                  </AdminCard>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Sub-Tab 2: Member Deposits & Corpus Fund Ledger */}
+          {oneTimeSubTab === "deposits" && (
+            <div className="space-y-6">
+              <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
+                <div className="w-full sm:w-72">
+                  <AdminSearchBar
+                    placeholder="Search flat number, member..."
+                    value={oneTimeSearch}
+                    onChange={(e) => setOneTimeSearch(e.target.value)}
+                    onClear={() => setOneTimeSearch("")}
+                  />
+                </div>
+
+                <div className="w-40">
+                  <AdminSelect
+                    value={oneTimeBlock}
+                    onChange={(e) => setOneTimeBlock(e.target.value)}
+                    options={[
+                      { value: "ALL", label: "All Blocks" },
+                      ...data.blocks.map((b) => ({ value: b, label: `Block ${b}` })),
+                    ]}
+                  />
+                </div>
+
+                <div className="w-44">
+                  <AdminSelect
+                    value={oneTimeStatus}
+                    onChange={(e) => setOneTimeStatus(e.target.value)}
+                    options={[
+                      { value: "ALL", label: "All Deposit Types" },
+                      { value: "CORPUS", label: "Corpus Fund" },
+                      { value: "SECURITY", label: "Security Deposit" },
+                      { value: "FIT_OUT", label: "Fit-Out Deposit" },
+                      { value: "OTHER", label: "Other Deposit" },
+                    ]}
+                  />
+                </div>
+              </div>
+
+              <AdminCard
+                title={`Member Deposits & Corpus Fund Register (${filteredMemberDeposits.length} Records)`}
+                description="Statutory audit of refundable caution deposits, renovation fit-out floats, and initial member corpus capital"
+              >
+                {filteredMemberDeposits.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-stone-500">
+                    No member deposits or corpus fund records found.
+                  </p>
+                ) : (
+                  <AdminTable
+                    headers={[
+                      "Flat & Block",
+                      "Member Name",
+                      "Contact",
+                      "Deposit Type",
+                      "Amount",
+                      "Status",
+                      "Received Date",
+                      "Remarks / Reference",
+                    ]}
+                    rows={filteredMemberDeposits.map((d) => (
+                      <tr key={d.id} className="border-t border-stone-100 hover:bg-stone-50/60">
+                        <td className="px-4 py-3.5 text-xs font-bold text-stone-950">
+                          {d.flatNumber} <span className="text-stone-500 font-normal">({d.blockName})</span>
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-stone-800 font-medium">
+                          {d.memberName}
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-stone-600">
+                          {d.phone || "—"}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <AdminBadge
+                            variant={
+                              d.depositType === "CORPUS"
+                                ? "success"
+                                : d.depositType === "SECURITY"
+                                  ? "neutral"
+                                  : "warning"
+                            }
+                            size="sm"
+                          >
+                            {d.depositType.replace(/_/g, " ")}
+                          </AdminBadge>
+                        </td>
+                        <td className="px-4 py-3.5 text-xs font-black text-stone-950">
+                          {sym}{d.amount.toLocaleString("en-IN")}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <AdminBadge
+                            variant={
+                              d.status === "HELD"
+                                ? "success"
+                                : d.status === "REFUNDED"
+                                  ? "neutral"
+                                  : "danger"
+                            }
+                            size="sm"
+                            dot
+                          >
+                            {d.status}
+                          </AdminBadge>
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-stone-500">
+                          {formatDateInAppTimeZone(d.receivedOn)}
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-stone-500">
+                          {d.remarks || d.reference || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  />
+                )}
+              </AdminCard>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ========================================== */}
       {/* TAB 1: ANALYTICS & OVERVIEW (WITH CHARTS) */}
