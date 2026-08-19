@@ -292,6 +292,7 @@ export default async function SocietyPettyCashPage({
 
 import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
 
 async function createPettyEntry(formData: FormData) {
   "use server"
@@ -302,14 +303,14 @@ async function createPettyEntry(formData: FormData) {
   const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
   const verifiedSocietyId = authContext.society.id
 
-
   const accountId = formData.get("accountId")?.toString().trim()
   const type = formData.get("type")?.toString().trim() || "EXPENSE"
   const rawAmount = formData.get("amount")?.toString().trim()
   const entryDateStr = formData.get("entryDate")?.toString().trim()
-  const payee = formData.get("payee")?.toString().trim()
-  const purpose = formData.get("purpose")?.toString().trim()
-  const billReference = formData.get("billReference")?.toString().trim() || null
+  const payee = sanitizeText(formData.get("payee")?.toString())
+  const purpose = sanitizeText(formData.get("purpose")?.toString())
+  const billReference = formData.get("billReference") ? sanitizeText(formData.get("billReference")?.toString()) : null
+
 
   if (!accountId || !rawAmount || !entryDateStr || !payee || !purpose) {
     throw new Error("All required fields must be provided")

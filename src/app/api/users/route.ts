@@ -35,7 +35,10 @@ export async function GET(req: NextRequest) {
         updatedAt: true,
       },
     })
-    return NextResponse.json(users)
+    return NextResponse.json(users, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate, private" },
+    })
+
   } catch (error: unknown) {
     const isError = error instanceof Error
     const status = isError && error.name === "UnauthorizedError" ? 401 : isError && error.name === "ForbiddenError" ? 403 : 500

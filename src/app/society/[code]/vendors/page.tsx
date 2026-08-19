@@ -251,6 +251,7 @@ export default async function SocietyVendorsPage({
 
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
 
 async function createVendor(formData: FormData) {
   "use server"
@@ -261,16 +262,16 @@ async function createVendor(formData: FormData) {
   const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
   const verifiedSocietyId = authContext.society.id
 
-
-  const name = formData.get("name")?.toString().trim()
-  const companyName = formData.get("companyName")?.toString().trim() || null
+  const name = sanitizeText(formData.get("name")?.toString())
+  const companyName = formData.get("companyName") ? sanitizeText(formData.get("companyName")?.toString()) : null
   const phone = formData.get("phone")?.toString().trim() || null
-  const email = formData.get("email")?.toString().trim() || null
+  const email = formData.get("email")?.toString().trim().toLowerCase() || null
   const gstin = formData.get("gstin")?.toString().trim().toUpperCase() || null
   const panNumber = formData.get("panNumber")?.toString().trim().toUpperCase() || null
   const bankAccount = formData.get("bankAccount")?.toString().trim() || null
   const ifscCode = formData.get("ifscCode")?.toString().trim().toUpperCase() || null
-  const address = formData.get("address")?.toString().trim() || null
+  const address = formData.get("address") ? sanitizeText(formData.get("address")?.toString()) : null
+
 
   if (!name) {
     throw new Error("Vendor name is required")

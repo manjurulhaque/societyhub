@@ -5,7 +5,13 @@ export async function GET() {
   const user = await getCurrentUser()
 
   if (!user) {
-    return NextResponse.json({ authenticated: false }, { status: 401 })
+    return NextResponse.json(
+      { authenticated: false },
+      {
+        status: 401,
+        headers: { "Cache-Control": "no-store, no-cache, must-revalidate, private" },
+      }
+    )
   }
 
   let redirectUrl = "/"
@@ -20,14 +26,20 @@ export async function GET() {
     redirectUrl = "/dashboard"
   }
 
-  return NextResponse.json({
-    authenticated: true,
-    user: {
-      id: user.id,
-      email: user.email,
-      appRole: user.appRole,
-      memberships: user.memberships,
+  return NextResponse.json(
+    {
+      authenticated: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        appRole: user.appRole,
+        memberships: user.memberships,
+      },
+      redirectUrl,
     },
-    redirectUrl,
-  })
+    {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate, private" },
+    }
+  )
 }
+

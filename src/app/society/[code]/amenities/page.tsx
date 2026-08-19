@@ -294,6 +294,7 @@ export default async function SocietyAmenitiesPage({
 
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
 
 async function createAmenity(formData: FormData) {
   "use server"
@@ -304,13 +305,13 @@ async function createAmenity(formData: FormData) {
   const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
   const verifiedSocietyId = authContext.society.id
 
-
-  const name = formData.get("name")?.toString().trim()
+  const name = sanitizeText(formData.get("name")?.toString())
   const type = formData.get("type")?.toString().trim() || "CLUBHOUSE"
   const rawRent = formData.get("defaultRent")?.toString().trim()
   const rawDeposit = formData.get("defaultDeposit")?.toString().trim()
   const rawCapacity = formData.get("capacity")?.toString().trim()
-  const description = formData.get("description")?.toString().trim() || null
+  const description = formData.get("description") ? sanitizeText(formData.get("description")?.toString()) : null
+
 
   if (!name) {
     throw new Error("Amenity name is required")

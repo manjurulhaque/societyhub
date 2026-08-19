@@ -282,6 +282,7 @@ export default async function SocietyNominationsPage({
 
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
 
 async function fileNomination(formData: FormData) {
   "use server"
@@ -292,14 +293,14 @@ async function fileNomination(formData: FormData) {
   const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
   const verifiedSocietyId = authContext.society.id
 
-
   const flatId = formData.get("flatId")?.toString().trim()
   const personId = formData.get("personId")?.toString().trim()
-  const nomineeName = formData.get("nomineeName")?.toString().trim()
-  const relationship = formData.get("relationship")?.toString().trim()
+  const nomineeName = sanitizeText(formData.get("nomineeName")?.toString())
+  const relationship = sanitizeText(formData.get("relationship")?.toString())
   const rawShare = formData.get("percentageShare")?.toString().trim()
   const rawDob = formData.get("nomineeDob")?.toString().trim()
-  const guardianName = formData.get("guardianName")?.toString().trim() || null
+  const guardianName = formData.get("guardianName") ? sanitizeText(formData.get("guardianName")?.toString()) : null
+
 
   if (!flatId || !personId || !nomineeName || !relationship || !rawShare) {
     throw new Error("Flat, member, nominee name, relationship, and share percentage are required")

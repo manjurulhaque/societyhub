@@ -5,6 +5,7 @@ import { redirect } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
 import { prisma } from "@/lib/prisma"
 import type { PaymentMode, ExpenseStatus } from "@/generated/prisma/client"
 
@@ -45,7 +46,7 @@ export default async function NewSocietyExpensePage({
     const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
     const verifiedSocietyId = authContext.society.id
 
-    const title = formData.get("title")?.toString().trim()
+    const title = sanitizeText(formData.get("title")?.toString())
     const categoryId = formData.get("categoryId")?.toString().trim()
     const vendorId = formData.get("vendorId")?.toString().trim() || null
     const rawAmount = formData.get("amount")?.toString().trim()
@@ -56,7 +57,7 @@ export default async function NewSocietyExpensePage({
     const mode = formData.get("mode")?.toString().trim() || "BANK"
     const invoiceNumber = formData.get("invoiceNumber")?.toString().trim() || null
     const reference = formData.get("reference")?.toString().trim() || null
-    const description = formData.get("description")?.toString().trim() || null
+    const description = formData.get("description") ? sanitizeText(formData.get("description")?.toString()) : null
 
     if (!title || !categoryId || !rawAmount || !expenseDateStr) {
       throw new Error("Title, category, amount, and expense date are required")

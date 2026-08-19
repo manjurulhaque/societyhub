@@ -297,6 +297,7 @@ export default async function SocietyMortgagesPage({
 
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
 
 async function recordLien(formData: FormData) {
   "use server"
@@ -307,14 +308,14 @@ async function recordLien(formData: FormData) {
   const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
   const verifiedSocietyId = authContext.society.id
 
-
   const flatId = formData.get("flatId")?.toString().trim()
   const personId = formData.get("personId")?.toString().trim()
-  const bankName = formData.get("bankName")?.toString().trim()
-  const branchName = formData.get("branchName")?.toString().trim() || null
+  const bankName = sanitizeText(formData.get("bankName")?.toString())
+  const branchName = formData.get("branchName") ? sanitizeText(formData.get("branchName")?.toString()) : null
   const loanAccountNumber = formData.get("loanAccountNumber")?.toString().trim() || null
   const rawAmount = formData.get("sanctionAmount")?.toString().trim()
-  const nocReference = formData.get("nocReference")?.toString().trim() || null
+  const nocReference = formData.get("nocReference") ? sanitizeText(formData.get("nocReference")?.toString()) : null
+
 
   if (!flatId || !personId || !bankName) {
     throw new Error("Flat, borrower, and bank name are required")

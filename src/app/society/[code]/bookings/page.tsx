@@ -392,6 +392,7 @@ export default async function SocietyBookingsPage({
 
 import { requireSocietyAccess, requireCommitteeAccess, FINANCIAL_ROLES, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
 import type { SocietyRole } from "@/generated/prisma/client"
 
 async function createBooking(formData: FormData) {
@@ -406,8 +407,9 @@ async function createBooking(formData: FormData) {
   const amenityId = formData.get("amenityId")?.toString().trim()
   const flatId = formData.get("flatId")?.toString().trim()
   const personId = formData.get("personId")?.toString().trim()
-  const eventTitle = formData.get("eventTitle")?.toString().trim()
+  const eventTitle = formData.get("eventTitle") ? sanitizeText(formData.get("eventTitle")?.toString()) : null
   const bookingDateStr = formData.get("bookingDate")?.toString().trim()
+
   const rawRent = formData.get("rentAmount")?.toString().trim()
   const rawDeposit = formData.get("depositAmount")?.toString().trim()
   const paymentMode = formData.get("paymentMode")?.toString().trim() || "UPI"
