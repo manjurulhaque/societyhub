@@ -2,11 +2,30 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function updateSession(request: NextRequest) {
+  // CSRF Defense: For state-mutating methods, verify Origin matches host
+  const method = request.method.toUpperCase()
+  if (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") {
+    const origin = request.headers.get("origin")
+    const host = request.headers.get("host") || request.nextUrl.host
+
+    if (origin) {
+      try {
+        const originHost = new URL(origin).host
+        if (originHost !== host) {
+          return new NextResponse("Forbidden: Cross-origin request rejected.", { status: 403 })
+        }
+      } catch {
+        return new NextResponse("Forbidden: Invalid origin header.", { status: 403 })
+      }
+    }
+  }
+
   let response = NextResponse.next({
     request: {
       headers: request.headers,
     },
   })
+
 
   // Set standard hardened security headers
   response.headers.set("X-Frame-Options", "DENY")

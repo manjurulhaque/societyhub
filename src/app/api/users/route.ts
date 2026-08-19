@@ -1,15 +1,29 @@
 import { prisma } from "@/lib/prisma"
 import { requireSuperAdmin } from "@/lib/auth/requireAuth"
+import { checkRateLimit } from "@/lib/rateLimit"
 import { z } from "zod"
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 
 const createUserSchema = z.object({
   email: z.string().email("A valid email address is required").toLowerCase().trim(),
 })
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    await requireSuperAdmin()
+    const admin = await requireSuperAdmin()
+
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1"
+    const limit = checkRateLimit(`api:users:get:${admin.id || ip}`, {
+      maxRequests: 30,
+      windowSeconds: 60,
+    })
+
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please slow down." },
+        { status: 429 }
+      )
+    }
 
     const users = await prisma.user.findMany({
       orderBy: { createdAt: "desc" },
@@ -32,9 +46,23 @@ export async function GET() {
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    await requireSuperAdmin()
+    const admin = await requireSuperAdmin()
+
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1"
+    const limit = checkRateLimit(`api:users:post:${admin.id || ip}`, {
+      maxRequests: 10,
+      windowSeconds: 60,
+    })
+
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded. Please wait a moment before creating more accounts." },
+        { status: 429 }
+      )
+    }
+
 
     const body = await req.json()
     const parsed = createUserSchema.safeParse(body)
