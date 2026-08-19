@@ -172,8 +172,9 @@ export default async function SocietyExpensesPage({
 
         {expenses.length === 0 ? (
           <div className="p-12 text-center text-xs text-stone-500">
-            No expenses recorded yet. Click "+ Record Expense" to post your first voucher.
+            No expenses recorded yet. Click &quot;+ Record Expense&quot; to post your first voucher.
           </div>
+
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-xs">

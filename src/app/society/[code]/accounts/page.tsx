@@ -121,8 +121,9 @@ export default async function SocietyAccountsPage({
           <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50/50 p-12 text-center">
             <h3 className="text-sm font-semibold text-stone-900">No accounts configured</h3>
             <p className="mt-1 text-xs text-stone-500">
-              Add your society's primary operational bank account or cash ledger.
+              Add your society&apos;s primary operational bank account or cash ledger.
             </p>
+
             <div className="mt-5">
               <Link
                 href={`/society/${code}/accounts/new`}

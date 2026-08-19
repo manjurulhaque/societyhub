@@ -263,8 +263,13 @@ export default async function NewAdminExpensePage() {
   )
 }
 
+import { requireSuperAdmin } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+
 async function createExpense(formData: FormData) {
   "use server"
+
+  const admin = await requireSuperAdmin()
 
   const societyId = formData.get("societyId")?.toString().trim()
   const title = formData.get("title")?.toString().trim()
@@ -293,7 +298,17 @@ async function createExpense(formData: FormData) {
   const tdsAmount = rawTds ? parseFloat(rawTds) : 0
 
   await prisma.$transaction(async (tx) => {
-    await tx.expense.create({
+    // Validate account belongs to this society if specified
+    if (accountId) {
+      const account = await tx.account.findFirst({
+        where: { id: accountId, societyId },
+      })
+      if (!account) {
+        throw new Error("Specified account does not belong to the selected society")
+      }
+    }
+
+    const expense = await tx.expense.create({
       data: {
         societyId,
         title,
@@ -320,6 +335,16 @@ async function createExpense(formData: FormData) {
         },
       })
     }
+
+    await recordAuditLog({
+      societyId,
+      userId: admin.id,
+      action: "CREATE",
+      entity: "Expense",
+      entityId: expense.id,
+      description: `Super Admin ${admin.email} recorded expense ₹${amount} (${title})`,
+      newData: { title, amount, categoryId, accountId },
+    })
   })
 
   revalidatePath("/admin/expenses")
@@ -328,3 +353,4 @@ async function createExpense(formData: FormData) {
   revalidatePath(`/society/${societyId}/accounts`)
   redirect("/admin/expenses")
 }
+

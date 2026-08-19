@@ -3,7 +3,8 @@ import { revalidatePath } from "next/cache"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { prisma } from "@/lib/prisma"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
-import type { ChequeDirection, ChequeStatus } from "@/generated/prisma/client"
+import type { ChequeDirection } from "@/generated/prisma/client"
+
 
 export default async function SocietyChequesPage({
   params,
@@ -366,11 +367,18 @@ export default async function SocietyChequesPage({
   )
 }
 
+import { requireSocietyAccess } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+
 async function createCheque(formData: FormData) {
   "use server"
 
-  const societyId = formData.get("societyId")?.toString().trim()
   const code = formData.get("code")?.toString().trim()
+  if (!code) throw new Error("Society code is required")
+
+  const authContext = await requireSocietyAccess(code)
+  const verifiedSocietyId = authContext.society.id
+
   const chequeNumber = formData.get("chequeNumber")?.toString().trim()
   const chequeDateStr = formData.get("chequeDate")?.toString().trim()
   const direction = formData.get("direction")?.toString().trim() || "INWARD"
@@ -379,8 +387,16 @@ async function createCheque(formData: FormData) {
   const accountId = formData.get("accountId")?.toString().trim()
   const rawAmount = formData.get("amount")?.toString().trim()
 
-  if (!societyId || !chequeNumber || !chequeDateStr || !partyName || !accountId || !rawAmount) {
+  if (!chequeNumber || !chequeDateStr || !partyName || !accountId || !rawAmount) {
     throw new Error("All required fields must be filled")
+  }
+
+  // Validate account belongs to this society
+  const account = await prisma.account.findFirst({
+    where: { id: accountId, societyId: verifiedSocietyId },
+  })
+  if (!account) {
+    throw new Error("Specified bank account not found in this society")
   }
 
   const amount = parseFloat(rawAmount)
@@ -388,9 +404,9 @@ async function createCheque(formData: FormData) {
     throw new Error("Invalid cheque amount")
   }
 
-  await prisma.chequeRegister.create({
+  const cheque = await prisma.chequeRegister.create({
     data: {
-      societyId,
+      societyId: verifiedSocietyId,
       accountId,
       chequeNumber,
       chequeDate: new Date(chequeDateStr),
@@ -402,6 +418,16 @@ async function createCheque(formData: FormData) {
     },
   })
 
+  await recordAuditLog({
+    societyId: verifiedSocietyId,
+    userId: authContext.user.id,
+    action: "CREATE",
+    entity: "ChequeRegister",
+    entityId: cheque.id,
+    description: `${authContext.user.email} registered ${direction} cheque #${chequeNumber} for ₹${amount} (${partyName})`,
+    newData: { chequeNumber, direction, amount, partyName, accountId },
+  })
+
   revalidatePath(`/society/${code}/cheques`)
   revalidatePath(`/society/${code}/accounts`)
 }
@@ -409,15 +435,23 @@ async function createCheque(formData: FormData) {
 async function updateChequeStatus(formData: FormData) {
   "use server"
 
+  const code = formData.get("code")?.toString().trim()
   const chequeId = formData.get("chequeId")?.toString().trim()
   const nextStatus = formData.get("nextStatus")?.toString().trim()
-  const code = formData.get("code")?.toString().trim()
 
-  if (!chequeId || !nextStatus) return
+  if (!code || !chequeId || !nextStatus) return
 
-  const cheque = await prisma.chequeRegister.findUniqueOrThrow({
-    where: { id: chequeId },
+  const authContext = await requireSocietyAccess(code)
+  const verifiedSocietyId = authContext.society.id
+
+  // Verify cheque belongs to this society (IDOR prevention)
+  const cheque = await prisma.chequeRegister.findFirst({
+    where: { id: chequeId, societyId: verifiedSocietyId },
   })
+
+  if (!cheque) {
+    throw new Error("Cheque record not found for this society")
+  }
 
   const now = new Date()
 
@@ -464,6 +498,18 @@ async function updateChequeStatus(formData: FormData) {
     })
   }
 
+  await recordAuditLog({
+    societyId: verifiedSocietyId,
+    userId: authContext.user.id,
+    action: "STATUS_CHANGE",
+    entity: "ChequeRegister",
+    entityId: chequeId,
+    description: `${authContext.user.email} changed status of cheque #${cheque.chequeNumber} to ${nextStatus}`,
+    oldData: { status: cheque.status },
+    newData: { status: nextStatus },
+  })
+
   revalidatePath(`/society/${code}/cheques`)
   revalidatePath(`/society/${code}/accounts`)
 }
+

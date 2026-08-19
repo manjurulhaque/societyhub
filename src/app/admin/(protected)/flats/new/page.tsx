@@ -190,8 +190,13 @@ export default async function NewFlatPage() {
   )
 }
 
+import { requireSuperAdmin } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+
 async function createFlat(formData: FormData) {
   "use server"
+
+  const admin = await requireSuperAdmin()
 
   const blockId = formData.get("blockId")?.toString().trim()
   const number = formData.get("number")?.toString().trim()
@@ -206,10 +211,19 @@ async function createFlat(formData: FormData) {
     throw new Error("Block and flat number are required")
   }
 
+  const block = await prisma.block.findUnique({
+    where: { id: blockId },
+    select: { id: true, societyId: true, name: true },
+  })
+
+  if (!block) {
+    throw new Error("Block not found")
+  }
+
   const floor = rawFloor ? parseInt(rawFloor, 10) : null
   const area = rawArea ? parseFloat(rawArea) : null
 
-  await prisma.flat.create({
+  const flat = await prisma.flat.create({
     data: {
       blockId,
       number,
@@ -222,7 +236,18 @@ async function createFlat(formData: FormData) {
     },
   })
 
+  await recordAuditLog({
+    societyId: block.societyId,
+    userId: admin.id,
+    action: "CREATE",
+    entity: "Flat",
+    entityId: flat.id,
+    description: `Super Admin ${admin.email} created flat ${number} in block ${block.name}`,
+    newData: { number, blockId, unitType, status },
+  })
+
   revalidatePath("/admin/flats")
   revalidatePath("/admin/blocks")
   redirect("/admin/flats")
 }
+

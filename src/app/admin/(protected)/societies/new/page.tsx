@@ -2,7 +2,9 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
+import type { SocietyType } from "@/generated/prisma/client"
 import { generateUniqueSocietyCode } from "@/lib/society"
+
 import { seedSocietyChartOfAccounts } from "@/lib/chartOfAccounts"
 import {
   AdminPageHeader,
@@ -290,8 +292,13 @@ export default function NewSocietyPage() {
   )
 }
 
+import { requireSuperAdmin } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+
 async function createSociety(formData: FormData) {
   "use server"
+
+  const admin = await requireSuperAdmin()
 
   const name = formData.get("name")?.toString().trim()
   const rawCode = formData.get("code")?.toString().trim().toUpperCase() || null
@@ -330,7 +337,8 @@ async function createSociety(formData: FormData) {
     data: {
       name,
       code,
-      societyType: societyType as any,
+      societyType: societyType as SocietyType,
+
       phone,
       email,
       address,
@@ -358,6 +366,17 @@ async function createSociety(formData: FormData) {
   // Auto-seed standard Chart of Accounts for the society
   await seedSocietyChartOfAccounts(society.id)
 
+  await recordAuditLog({
+    societyId: society.id,
+    userId: admin.id,
+    action: "CREATE",
+    entity: "Society",
+    entityId: society.id,
+    description: `Super Admin ${admin.email} created new society ${society.name} (${society.code})`,
+    newData: { name: society.name, code: society.code },
+  })
+
   revalidatePath("/admin/societies")
   redirect(`/admin/societies/${society.id}`)
 }
+

@@ -119,8 +119,13 @@ export default async function NewMemberPage() {
   )
 }
 
+import { requireSuperAdmin } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+
 async function createMember(formData: FormData) {
   "use server"
+
+  const admin = await requireSuperAdmin()
 
   const societyId = formData.get("societyId")?.toString().trim()
   const userId = formData.get("userId")?.toString().trim()
@@ -130,7 +135,7 @@ async function createMember(formData: FormData) {
     throw new Error("Society, user, and designation are required")
   }
 
-  await prisma.societyMember.upsert({
+  const member = await prisma.societyMember.upsert({
     where: {
       societyId_userId: {
         societyId,
@@ -147,7 +152,18 @@ async function createMember(formData: FormData) {
     },
   })
 
+  await recordAuditLog({
+    societyId,
+    userId: admin.id,
+    action: "UPDATE",
+    entity: "SocietyMember",
+    entityId: member.id,
+    description: `Super Admin ${admin.email} assigned designation ${designation} to user ${userId}`,
+    newData: { societyId, userId, designation },
+  })
+
   revalidatePath("/admin/members")
   revalidatePath(`/admin/societies/${societyId}`)
   redirect("/admin/members")
 }
+

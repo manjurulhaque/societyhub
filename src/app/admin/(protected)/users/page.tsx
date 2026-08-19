@@ -1,14 +1,15 @@
 import Link from "next/link"
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
+import type { AppRole } from "@/generated/prisma/client"
 import {
   AdminPageHeader,
   AdminTable,
   AdminBadge,
   AdminStatCard,
-  AdminButton,
   AdminEmptyState,
 } from "@/components/admin"
+
 import { formatDateInAppTimeZone } from "@/lib/datetime"
 
 export default async function UsersPage() {
@@ -222,23 +223,59 @@ export default async function UsersPage() {
   )
 }
 
+import { requireSuperAdmin } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+
 async function toggleUserRole(formData: FormData) {
   "use server"
+
+  const admin = await requireSuperAdmin()
 
   const userId = formData.get("userId")?.toString().trim()
   const nextRole = formData.get("nextRole")?.toString().trim()
 
-  if (!userId || !nextRole) {
-    throw new Error("User ID and role are required")
+  if (!userId || !nextRole || (nextRole !== "SUPER_ADMIN" && nextRole !== "USER")) {
+    throw new Error("Valid user ID and role are required")
+  }
+
+  // Prevent super admin from accidentally removing their own super admin access if they are the only one
+  if (userId === admin.id && nextRole !== "SUPER_ADMIN") {
+    const superAdminCount = await prisma.user.count({
+      where: { appRole: "SUPER_ADMIN", isActive: true, deletedAt: null },
+    })
+    if (superAdminCount <= 1) {
+      throw new Error("Cannot demote the only remaining Super Admin.")
+    }
+  }
+
+  const targetUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, appRole: true },
+  })
+
+  if (!targetUser) {
+    throw new Error("Target user not found")
   }
 
   await prisma.user.update({
     where: { id: userId },
     data: {
-      appRole: nextRole as any,
+      appRole: nextRole as AppRole,
     },
+
+  })
+
+  await recordAuditLog({
+    userId: admin.id,
+    action: "STATUS_CHANGE",
+    entity: "User",
+    entityId: userId,
+    description: `Super Admin ${admin.email} changed role of ${targetUser.email} from ${targetUser.appRole} to ${nextRole}`,
+    oldData: { appRole: targetUser.appRole },
+    newData: { appRole: nextRole },
   })
 
   revalidatePath("/admin/users")
   revalidatePath("/admin/dashboard")
 }
+

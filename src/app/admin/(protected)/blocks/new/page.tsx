@@ -86,8 +86,13 @@ export default async function NewBlockPage() {
   )
 }
 
+import { requireSuperAdmin } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+
 async function createBlock(formData: FormData) {
   "use server"
+
+  const admin = await requireSuperAdmin()
 
   const societyId = formData.get("societyId")?.toString().trim()
   const name = formData.get("name")?.toString().trim()
@@ -96,14 +101,25 @@ async function createBlock(formData: FormData) {
     throw new Error("Society and block name are required")
   }
 
-  await prisma.block.create({
+  const block = await prisma.block.create({
     data: {
       societyId,
       name,
     },
   })
 
+  await recordAuditLog({
+    societyId,
+    userId: admin.id,
+    action: "CREATE",
+    entity: "Block",
+    entityId: block.id,
+    description: `Super Admin ${admin.email} created block ${name}`,
+    newData: { name, societyId },
+  })
+
   revalidatePath("/admin/blocks")
   revalidatePath("/admin/societies")
   redirect("/admin/blocks")
 }
+

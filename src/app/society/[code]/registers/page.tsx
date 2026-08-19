@@ -50,7 +50,7 @@ export default async function SocietyRegistersHubPage({
           <div>
             <div className="flex items-center justify-between">
               <span className="rounded-full bg-blue-50 px-3 py-1 font-mono text-xs font-bold text-blue-700 border border-blue-200">
-                "I" REGISTER
+                &quot;I&quot; REGISTER
               </span>
               <span className="text-xs font-bold text-stone-900">
                 {sharesCount} Certificates
@@ -79,7 +79,7 @@ export default async function SocietyRegistersHubPage({
           <div>
             <div className="flex items-center justify-between">
               <span className="rounded-full bg-emerald-50 px-3 py-1 font-mono text-xs font-bold text-emerald-700 border border-emerald-200">
-                "J" REGISTER (FORM X)
+                &quot;J&quot; REGISTER (FORM X)
               </span>
               <span className="text-xs font-bold text-stone-900">
                 {nominationsCount} Active
@@ -108,8 +108,9 @@ export default async function SocietyRegistersHubPage({
           <div>
             <div className="flex items-center justify-between">
               <span className="rounded-full bg-purple-50 px-3 py-1 font-mono text-xs font-bold text-purple-700 border border-purple-200">
-                "M" REGISTER
+                &quot;M&quot; REGISTER
               </span>
+
               <span className="text-xs font-bold text-stone-900">
                 {mortgagesCount} Active Liens
               </span>

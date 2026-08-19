@@ -3,8 +3,11 @@ import { notFound } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
+import { requireSocietyAccess } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
 import { prisma } from "@/lib/prisma"
 import type { AccountType, LedgerGroup, BalanceType } from "@/generated/prisma/client"
+
 
 export default async function NewSocietyAccountPage({
   params,
@@ -22,6 +25,9 @@ export default async function NewSocietyAccountPage({
 
   async function createSocietyAccount(formData: FormData) {
     "use server"
+
+    const authContext = await requireSocietyAccess(code)
+    const verifiedSocietyId = authContext.society.id
 
     const name = formData.get("name")?.toString().trim()
     const accountType = formData.get("accountType")?.toString().trim() || "BANK"
@@ -41,14 +47,14 @@ export default async function NewSocietyAccountPage({
 
     if (isDefault) {
       await prisma.account.updateMany({
-        where: { societyId: society.id },
+        where: { societyId: verifiedSocietyId },
         data: { isDefault: false },
       })
     }
 
-    await prisma.account.create({
+    const account = await prisma.account.create({
       data: {
-        societyId: society.id,
+        societyId: verifiedSocietyId,
         name,
         accountType: accountType as AccountType,
         bankName,
@@ -64,7 +70,7 @@ export default async function NewSocietyAccountPage({
     // Auto-sync / link a corresponding sub-ledger under "Cash & Bank Balances" in Chart of Accounts
     const parentCashBank = await prisma.ledger.findFirst({
       where: {
-        societyId: society.id,
+        societyId: verifiedSocietyId,
         OR: [
           { code: "1100" },
           { name: { contains: "Cash & Bank", mode: "insensitive" } },
@@ -75,7 +81,7 @@ export default async function NewSocietyAccountPage({
     const existingLedger = await prisma.ledger.findUnique({
       where: {
         societyId_name: {
-          societyId: society.id,
+          societyId: verifiedSocietyId,
           name,
         },
       },
@@ -84,7 +90,7 @@ export default async function NewSocietyAccountPage({
     if (!existingLedger) {
       await prisma.ledger.create({
         data: {
-          societyId: society.id,
+          societyId: verifiedSocietyId,
           name,
           group: "ASSET" as LedgerGroup,
           balanceType: "DEBIT" as BalanceType,
@@ -98,11 +104,22 @@ export default async function NewSocietyAccountPage({
       })
     }
 
+    await recordAuditLog({
+      societyId: verifiedSocietyId,
+      userId: authContext.user.id,
+      action: "CREATE",
+      entity: "Account",
+      entityId: account.id,
+      description: `${authContext.user.email} added account ${name} (${accountType})`,
+      newData: { name, accountType, bankName, accountNumber, validOpening },
+    })
+
     revalidatePath(`/society/${code}/accounts`)
     revalidatePath(`/society/${code}/ledgers`)
     revalidatePath("/admin/accounts")
     redirect(`/society/${code}/accounts`)
   }
+
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">

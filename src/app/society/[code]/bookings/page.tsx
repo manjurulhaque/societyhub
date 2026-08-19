@@ -388,11 +388,18 @@ export default async function SocietyBookingsPage({
   )
 }
 
+import { requireSocietyAccess } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+
 async function createBooking(formData: FormData) {
   "use server"
 
-  const societyId = formData.get("societyId")?.toString().trim()
   const code = formData.get("code")?.toString().trim()
+  if (!code) throw new Error("Society code is required")
+
+  const authContext = await requireSocietyAccess(code)
+  const verifiedSocietyId = authContext.society.id
+
   const amenityId = formData.get("amenityId")?.toString().trim()
   const flatId = formData.get("flatId")?.toString().trim()
   const personId = formData.get("personId")?.toString().trim()
@@ -403,16 +410,32 @@ async function createBooking(formData: FormData) {
   const paymentMode = formData.get("paymentMode")?.toString().trim() || "UPI"
   const remarks = formData.get("remarks")?.toString().trim() || null
 
-  if (!societyId || !amenityId || !flatId || !personId || !eventTitle || !bookingDateStr || !rawRent) {
+  if (!amenityId || !flatId || !personId || !eventTitle || !bookingDateStr || !rawRent) {
     throw new Error("All required booking fields must be filled")
+  }
+
+  // Validate amenity belongs to this society
+  const amenity = await prisma.amenity.findFirst({
+    where: { id: amenityId, societyId: verifiedSocietyId },
+  })
+  if (!amenity) {
+    throw new Error("Amenity not found for this society")
+  }
+
+  // Validate flat belongs to this society
+  const flat = await prisma.flat.findFirst({
+    where: { id: flatId, block: { societyId: verifiedSocietyId } },
+  })
+  if (!flat) {
+    throw new Error("Flat not found for this society")
   }
 
   const rentAmount = parseFloat(rawRent)
   const depositAmount = rawDeposit ? parseFloat(rawDeposit) : 0
 
-  await prisma.facilityBooking.create({
+  const booking = await prisma.facilityBooking.create({
     data: {
-      societyId,
+      societyId: verifiedSocietyId,
       amenityId,
       flatId,
       personId,
@@ -426,6 +449,16 @@ async function createBooking(formData: FormData) {
     },
   })
 
+  await recordAuditLog({
+    societyId: verifiedSocietyId,
+    userId: authContext.user.id,
+    action: "CREATE",
+    entity: "FacilityBooking",
+    entityId: booking.id,
+    description: `${authContext.user.email} created facility booking for ${eventTitle}`,
+    newData: { eventTitle, amenityId, flatId, rentAmount, depositAmount },
+  })
+
   revalidatePath(`/society/${code}/bookings`)
   revalidatePath(`/society/${code}/amenities`)
   revalidatePath("/admin/amenities")
@@ -434,10 +467,22 @@ async function createBooking(formData: FormData) {
 async function refundDeposit(formData: FormData) {
   "use server"
 
-  const bookingId = formData.get("bookingId")?.toString().trim()
   const code = formData.get("code")?.toString().trim()
+  const bookingId = formData.get("bookingId")?.toString().trim()
 
-  if (!bookingId) return
+  if (!code || !bookingId) return
+
+  const authContext = await requireSocietyAccess(code)
+  const verifiedSocietyId = authContext.society.id
+
+  // Verify booking belongs to this society (IDOR prevention)
+  const booking = await prisma.facilityBooking.findFirst({
+    where: { id: bookingId, societyId: verifiedSocietyId },
+  })
+
+  if (!booking) {
+    throw new Error("Booking record not found for this society")
+  }
 
   await prisma.facilityBooking.update({
     where: { id: bookingId },
@@ -447,6 +492,16 @@ async function refundDeposit(formData: FormData) {
     },
   })
 
+  await recordAuditLog({
+    societyId: verifiedSocietyId,
+    userId: authContext.user.id,
+    action: "UPDATE",
+    entity: "FacilityBooking",
+    entityId: bookingId,
+    description: `${authContext.user.email} marked deposit as refunded for booking ${booking.eventTitle}`,
+  })
+
   revalidatePath(`/society/${code}/bookings`)
   revalidatePath("/admin/amenities")
 }
+

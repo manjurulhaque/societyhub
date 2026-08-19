@@ -246,11 +246,18 @@ export default async function SocietyVendorsPage({
   )
 }
 
+import { requireSocietyAccess } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+
 async function createVendor(formData: FormData) {
   "use server"
 
-  const societyId = formData.get("societyId")?.toString().trim()
   const code = formData.get("code")?.toString().trim()
+  if (!code) throw new Error("Society code is required")
+
+  const authContext = await requireSocietyAccess(code)
+  const verifiedSocietyId = authContext.society.id
+
   const name = formData.get("name")?.toString().trim()
   const companyName = formData.get("companyName")?.toString().trim() || null
   const phone = formData.get("phone")?.toString().trim() || null
@@ -261,13 +268,13 @@ async function createVendor(formData: FormData) {
   const ifscCode = formData.get("ifscCode")?.toString().trim().toUpperCase() || null
   const address = formData.get("address")?.toString().trim() || null
 
-  if (!societyId || !name) {
+  if (!name) {
     throw new Error("Vendor name is required")
   }
 
-  await prisma.vendor.create({
+  const vendor = await prisma.vendor.create({
     data: {
-      societyId,
+      societyId: verifiedSocietyId,
       name,
       companyName,
       phone,
@@ -280,6 +287,17 @@ async function createVendor(formData: FormData) {
     },
   })
 
+  await recordAuditLog({
+    societyId: verifiedSocietyId,
+    userId: authContext.user.id,
+    action: "CREATE",
+    entity: "Vendor",
+    entityId: vendor.id,
+    description: `${authContext.user.email} added vendor ${name}${companyName ? ` (${companyName})` : ""}`,
+    newData: { name, companyName, phone, email, gstin },
+  })
+
   revalidatePath(`/society/${code}/vendors`)
   revalidatePath(`/society/${code}/expenses`)
 }
+

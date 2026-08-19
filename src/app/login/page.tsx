@@ -49,12 +49,20 @@ export default function LoginPage() {
         return
       }
 
-      // If a specific next parameter is provided, use it
-      if (nextParam && nextParam.startsWith("/")) {
+      // If a safe relative next parameter is provided, use it (prevent open redirect attacks)
+      const isSafeRelativeUrl =
+        nextParam &&
+        nextParam.startsWith("/") &&
+        !nextParam.startsWith("//") &&
+        !nextParam.startsWith("/\\") &&
+        !nextParam.includes("://")
+
+      if (isSafeRelativeUrl) {
         router.push(nextParam)
         router.refresh()
         return
       }
+
 
       // Determine redirect URL based on user role
       try {

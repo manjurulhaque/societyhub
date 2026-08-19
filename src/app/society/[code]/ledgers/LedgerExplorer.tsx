@@ -189,9 +189,10 @@ export function LedgerExplorer({ ledgers }: LedgerExplorerProps) {
           {/* Type Filter */}
           <select
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as any)}
+            onChange={(e) => setTypeFilter(e.target.value as "ALL" | "STANDARD" | "CUSTOM")}
             className="rounded-xl border border-stone-200 bg-stone-50 px-2.5 py-1.5 text-[11px] font-semibold text-stone-700 outline-none focus:border-stone-950 focus:bg-white"
           >
+
             <option value="ALL">All Types</option>
             <option value="STANDARD">Standard Seeded</option>
             <option value="CUSTOM">Custom Created</option>

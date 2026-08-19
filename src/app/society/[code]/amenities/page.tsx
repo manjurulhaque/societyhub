@@ -292,11 +292,18 @@ export default async function SocietyAmenitiesPage({
   )
 }
 
+import { requireSocietyAccess } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+
 async function createAmenity(formData: FormData) {
   "use server"
 
-  const societyId = formData.get("societyId")?.toString().trim()
   const code = formData.get("code")?.toString().trim()
+  if (!code) throw new Error("Society code is required")
+
+  const authContext = await requireSocietyAccess(code)
+  const verifiedSocietyId = authContext.society.id
+
   const name = formData.get("name")?.toString().trim()
   const type = formData.get("type")?.toString().trim() || "CLUBHOUSE"
   const rawRent = formData.get("defaultRent")?.toString().trim()
@@ -304,7 +311,7 @@ async function createAmenity(formData: FormData) {
   const rawCapacity = formData.get("capacity")?.toString().trim()
   const description = formData.get("description")?.toString().trim() || null
 
-  if (!societyId || !name) {
+  if (!name) {
     throw new Error("Amenity name is required")
   }
 
@@ -312,9 +319,9 @@ async function createAmenity(formData: FormData) {
   const defaultDeposit = rawDeposit ? parseFloat(rawDeposit) : 0
   const capacity = rawCapacity ? parseInt(rawCapacity, 10) : null
 
-  await prisma.amenity.create({
+  const amenity = await prisma.amenity.create({
     data: {
-      societyId,
+      societyId: verifiedSocietyId,
       name,
       type: type as AmenityType,
       defaultRent: !isNaN(defaultRent) ? defaultRent : 0,
@@ -324,7 +331,18 @@ async function createAmenity(formData: FormData) {
     },
   })
 
+  await recordAuditLog({
+    societyId: verifiedSocietyId,
+    userId: authContext.user.id,
+    action: "CREATE",
+    entity: "Amenity",
+    entityId: amenity.id,
+    description: `${authContext.user.email} created amenity ${name} (${type})`,
+    newData: { name, type, defaultRent, defaultDeposit, capacity },
+  })
+
   revalidatePath(`/society/${code}/amenities`)
   revalidatePath(`/society/${code}/bookings`)
   revalidatePath("/admin/amenities")
 }
+
