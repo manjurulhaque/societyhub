@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
+import { canApproveDataEntry, isManagerRole } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import {
   AdminPageHeader,
@@ -24,7 +25,9 @@ export default async function SocietyDashboardPage({
     notFound()
   }
 
-  const { society } = context
+  const { society, designation, isSuperAdmin } = context
+  const isApprover = canApproveDataEntry(designation, isSuperAdmin)
+  const isManager = isManagerRole(designation, isSuperAdmin)
   const societyId = society.id
   const societyCode = society.code || society.id
 
@@ -38,6 +41,7 @@ export default async function SocietyDashboardPage({
     recentBills,
     recentPayments,
     blocks,
+    pendingExpenseData,
   ] = await Promise.all([
     prisma.flat.count({
       where: { block: { societyId }, isActive: true, deletedAt: null },
@@ -114,7 +118,16 @@ export default async function SocietyDashboardPage({
         },
       },
     }),
+
+    prisma.expense.aggregate({
+      where: { societyId, status: "PENDING" },
+      _count: { _all: true },
+      _sum: { amount: true },
+    }),
   ])
+
+  const pendingCount = pendingExpenseData._count._all
+  const pendingAmount = Number(pendingExpenseData._sum.amount ?? 0)
 
   const totalBilled = Number(billTotal._sum.amount ?? 0)
   const totalCollected = Number(paymentTotal._sum.amount ?? 0)
@@ -140,6 +153,40 @@ export default async function SocietyDashboardPage({
           </div>
         }
       />
+
+      {/* Governance & Approvals Banner */}
+      {pendingCount > 0 && isApprover ? (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950 shadow-sm">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-200/80 text-amber-900 font-bold text-sm">
+              {pendingCount}
+            </div>
+            <div>
+              <p className="text-sm font-bold text-amber-950">
+                Action Required: {pendingCount} Manager Data Entry Voucher{pendingCount > 1 ? "s" : ""} Pending Approval
+              </p>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Totaling ₹{pendingAmount.toLocaleString("en-IN")}. As Hon. {designation}, your review and sign-off is required to disburse funds.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/society/${societyCode}/approvals`}
+            className="inline-flex items-center justify-center rounded-full bg-amber-900 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-amber-800 transition shrink-0"
+          >
+            Open Approvals Queue ({pendingCount}) →
+          </Link>
+        </div>
+      ) : isManager && pendingCount > 0 ? (
+        <div className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-100/80 p-4 text-stone-800 text-xs shadow-sm">
+          <svg className="h-5 w-5 shrink-0 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            You have <strong className="font-semibold text-stone-950">{pendingCount} voucher(s)</strong> awaiting Treasurer/Secretary approval.
+          </div>
+        </div>
+      ) : null}
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">

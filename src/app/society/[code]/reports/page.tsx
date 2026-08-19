@@ -89,7 +89,7 @@ export default async function SocietyReportsPage({
     }),
 
     prisma.expense.aggregate({
-      where: { societyId, status: "PAID" },
+      where: { societyId, status: { in: ["PAID", "APPROVED"] } },
       _sum: { amount: true },
       _count: { _all: true },
     }),
@@ -109,7 +109,7 @@ export default async function SocietyReportsPage({
     }),
 
     prisma.expense.findMany({
-      where: { societyId, status: "PAID" },
+      where: { societyId, status: { in: ["PAID", "APPROVED"] } },
       include: { category: { select: { name: true } } },
     }),
 
@@ -254,7 +254,7 @@ export default async function SocietyReportsPage({
     }),
 
     prisma.expense.findMany({
-      where: { societyId, status: "PAID" },
+      where: { societyId, status: { in: ["PAID", "APPROVED"] } },
       select: {
         expenseDate: true,
         amount: true,

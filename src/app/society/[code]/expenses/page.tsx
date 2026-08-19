@@ -1,8 +1,10 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
+import { canApproveDataEntry, isManagerRole } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { approveExpenseAction, rejectExpenseAction } from "./actions"
 
 const DEFAULT_CATEGORIES = [
   "Security Agency",
@@ -20,17 +22,22 @@ const DEFAULT_CATEGORIES = [
 
 export default async function SocietyExpensesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ code: string }>
+  searchParams?: Promise<{ status?: string }>
 }) {
   const { code } = await params
+  const { status: filterStatus } = (await searchParams) || {}
   const context = await getSocietyAdmin(code)
 
   if (!context) {
     notFound()
   }
 
-  const { society } = context
+  const { society, designation, isSuperAdmin } = context
+  const isApprover = canApproveDataEntry(designation, isSuperAdmin)
+  const isManager = isManagerRole(designation, isSuperAdmin)
 
   // Auto-provision standard expense categories if none exist
   const existingCategoriesCount = await prisma.expenseCategory.count({
@@ -50,7 +57,14 @@ export default async function SocietyExpensesPage({
 
   const [expenses, categories, vendors] = await Promise.all([
     prisma.expense.findMany({
-      where: { societyId: society.id },
+      where: {
+        societyId: society.id,
+        ...(filterStatus && filterStatus !== "ALL"
+          ? filterStatus === "PAID"
+            ? { status: { in: ["PAID", "APPROVED"] } }
+            : { status: filterStatus as "PENDING" | "REJECTED" }
+          : {}),
+      },
       orderBy: { expenseDate: "desc" },
       include: {
         category: {
@@ -76,9 +90,22 @@ export default async function SocietyExpensesPage({
     }),
   ])
 
-  const totalSpent = expenses.reduce((acc, e) => acc + Number(e.amount), 0)
-  const totalGst = expenses.reduce((acc, e) => acc + Number(e.gstAmount), 0)
-  const totalTds = expenses.reduce((acc, e) => acc + Number(e.tdsAmount), 0)
+  // Get total counts across all statuses
+  const allExpenses = await prisma.expense.findMany({
+    where: { societyId: society.id },
+    select: { amount: true, gstAmount: true, tdsAmount: true, status: true },
+  })
+
+  const pendingExpenses = allExpenses.filter((e) => e.status === "PENDING")
+  const paidExpenses = allExpenses.filter((e) => e.status === "PAID" || e.status === "APPROVED")
+  const rejectedExpenses = allExpenses.filter((e) => e.status === "REJECTED")
+
+  const totalSpent = paidExpenses.reduce((acc, e) => acc + Number(e.amount), 0)
+  const totalPendingAmount = pendingExpenses.reduce((acc, e) => acc + Number(e.amount), 0)
+  const totalGst = paidExpenses.reduce((acc, e) => acc + Number(e.gstAmount), 0)
+  const totalTds = paidExpenses.reduce((acc, e) => acc + Number(e.tdsAmount), 0)
+
+  const activeTab = filterStatus || "ALL"
 
   return (
     <div className="space-y-8">
@@ -97,6 +124,19 @@ export default async function SocietyExpensesPage({
         </div>
 
         <div className="flex items-center gap-2">
+          {pendingExpenses.length > 0 && isApprover ? (
+            <Link
+              href={`/society/${code}/approvals`}
+              className="inline-flex items-center justify-center rounded-full border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100"
+            >
+              <span className="mr-1.5 flex h-2 w-2 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+              </span>
+              Approvals Queue ({pendingExpenses.length})
+            </Link>
+          ) : null}
+
           <Link
             href={`/society/${code}/vendors`}
             className="inline-flex items-center justify-center rounded-full border border-stone-300 bg-white px-4 py-2.5 text-xs font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50"
@@ -112,17 +152,66 @@ export default async function SocietyExpensesPage({
         </div>
       </div>
 
+      {/* Pending Approval Notice Banner for Approvers */}
+      {pendingExpenses.length > 0 && isApprover ? (
+        <div className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50/90 p-4 text-amber-950 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-800 font-bold">
+              {pendingExpenses.length}
+            </div>
+            <div>
+              <p className="text-xs font-bold">
+                {pendingExpenses.length} Expense Voucher{pendingExpenses.length > 1 ? "s" : ""} Awaiting Approval
+              </p>
+              <p className="text-xs text-amber-800">
+                Submitted by Manager totaling ₹{totalPendingAmount.toLocaleString("en-IN")}. Review and approve below or in the Approvals Queue.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/society/${code}/approvals`}
+            className="rounded-full bg-amber-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-amber-800 transition shadow-xs"
+          >
+            Open Approvals →
+          </Link>
+        </div>
+      ) : null}
+
+      {/* Manager Status Notice */}
+      {isManager && pendingExpenses.length > 0 ? (
+        <div className="flex items-start gap-3 rounded-2xl border border-stone-200 bg-stone-100/70 p-4 text-stone-800 shadow-sm">
+          <svg className="h-5 w-5 shrink-0 text-stone-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="text-xs">
+            You have <strong className="font-semibold text-stone-900">{pendingExpenses.length} voucher(s)</strong> currently pending review by the Hon. Treasurer or Secretary. Once approved, payment accounts and financial reports will update automatically.
+          </p>
+        </div>
+      ) : null}
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
-            Total Expenditures
+            Realized Expenditures
           </p>
           <p className="mt-2 text-2xl font-bold text-rose-700">
             ₹{totalSpent.toLocaleString("en-IN")}
           </p>
           <p className="mt-1 text-xs text-stone-500">
-            {expenses.length} vouchers recorded
+            {paidExpenses.length} approved & disbursed vouchers
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-5 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wider text-amber-700">
+            Pending Approval
+          </p>
+          <p className="mt-2 text-2xl font-bold text-amber-800">
+            ₹{totalPendingAmount.toLocaleString("en-IN")}
+          </p>
+          <p className="mt-1 text-xs text-amber-700">
+            {pendingExpenses.length} voucher{pendingExpenses.length === 1 ? "" : "s"} submitted by Manager
           </p>
         </div>
 
@@ -134,19 +223,7 @@ export default async function SocietyExpensesPage({
             ₹{totalGst.toLocaleString("en-IN")}
           </p>
           <p className="mt-1 text-xs text-stone-500">
-            Eligible for GST input credit
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
-            TDS Withheld
-          </p>
-          <p className="mt-2 text-2xl font-bold text-amber-700">
-            ₹{totalTds.toLocaleString("en-IN")}
-          </p>
-          <p className="mt-1 text-xs text-stone-500">
-            Statutory withholding tax
+            TDS Withheld: ₹{totalTds.toLocaleString("en-IN")}
           </p>
         </div>
 
@@ -163,18 +240,69 @@ export default async function SocietyExpensesPage({
         </div>
       </div>
 
+      {/* Filter Tabs */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 pb-3">
+        <Link
+          href={`/society/${code}/expenses`}
+          className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+            activeTab === "ALL"
+              ? "bg-stone-950 text-white"
+              : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+          }`}
+        >
+          All Vouchers ({allExpenses.length})
+        </Link>
+        <Link
+          href={`/society/${code}/expenses?status=PENDING`}
+          className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+            activeTab === "PENDING"
+              ? "bg-amber-700 text-white"
+              : "bg-amber-100/70 text-amber-900 hover:bg-amber-200"
+          }`}
+        >
+          Pending Approval ({pendingExpenses.length})
+        </Link>
+        <Link
+          href={`/society/${code}/expenses?status=PAID`}
+          className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+            activeTab === "PAID"
+              ? "bg-emerald-700 text-white"
+              : "bg-emerald-100/70 text-emerald-900 hover:bg-emerald-200"
+          }`}
+        >
+          Approved & Paid ({paidExpenses.length})
+        </Link>
+        <Link
+          href={`/society/${code}/expenses?status=REJECTED`}
+          className={`rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+            activeTab === "REJECTED"
+              ? "bg-rose-700 text-white"
+              : "bg-rose-100/70 text-rose-900 hover:bg-rose-200"
+          }`}
+        >
+          Rejected ({rejectedExpenses.length})
+        </Link>
+      </div>
+
       {/* Expenses Ledger Table */}
       <div className="rounded-2xl border border-stone-200 bg-white shadow-sm overflow-hidden">
         <div className="border-b border-stone-200 bg-stone-50 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-stone-900">Expense Vouchers</h2>
+          <h2 className="text-sm font-bold text-stone-900">
+            {activeTab === "PENDING"
+              ? "Vouchers Awaiting Treasurer/Secretary Approval"
+              : activeTab === "PAID"
+                ? "Approved & Disbursed Vouchers"
+                : activeTab === "REJECTED"
+                  ? "Rejected Vouchers"
+                  : "All Expense Vouchers"}
+          </h2>
           <span className="text-xs text-stone-500">{expenses.length} records</span>
         </div>
 
         {expenses.length === 0 ? (
           <div className="p-12 text-center text-xs text-stone-500">
-            No expenses recorded yet. Click &quot;+ Record Expense&quot; to post your first voucher.
+            No expenses found matching the current filter.
           </div>
-
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-xs">
@@ -183,68 +311,135 @@ export default async function SocietyExpensesPage({
                   <th className="px-4 py-3">Expense Title & Date</th>
                   <th className="px-4 py-3">Category</th>
                   <th className="px-4 py-3">Vendor / Payee</th>
-                  <th className="px-4 py-3">Paid From</th>
+                  <th className="px-4 py-3">Payment Account</th>
                   <th className="px-4 py-3">Payment Mode</th>
                   <th className="px-4 py-3 text-right">Amount (₹)</th>
                   <th className="px-4 py-3 text-center">Status</th>
+                  {isApprover ? (
+                    <th className="px-4 py-3 text-center">Officer Action</th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {expenses.map((e) => (
-                  <tr key={e.id} className="hover:bg-stone-50/70 transition">
-                    <td className="px-4 py-3.5">
-                      <span className="font-bold text-stone-950 text-xs block">
-                        {e.title}
-                      </span>
-                      <div className="flex items-center gap-2 text-[10px] text-stone-500">
-                        <span>{formatDateInAppTimeZone(e.expenseDate)}</span>
-                        {e.invoiceNumber ? (
-                          <span className="font-mono text-stone-600">
-                            • Bill #{e.invoiceNumber}
-                          </span>
+                {expenses.map((e) => {
+                  const isPending = e.status === "PENDING"
+                  const isPaid = e.status === "PAID" || e.status === "APPROVED"
+                  const isRejected = e.status === "REJECTED"
+
+                  return (
+                    <tr
+                      key={e.id}
+                      className={`hover:bg-stone-50/70 transition ${
+                        isPending ? "bg-amber-50/30" : ""
+                      }`}
+                    >
+                      <td className="px-4 py-3.5">
+                        <span className="font-bold text-stone-950 text-xs block">
+                          {e.title}
+                        </span>
+                        <div className="flex items-center gap-2 text-[10px] text-stone-500">
+                          <span>{formatDateInAppTimeZone(e.expenseDate)}</span>
+                          {e.invoiceNumber ? (
+                            <span className="font-mono text-stone-600">
+                              • Bill #{e.invoiceNumber}
+                            </span>
+                          ) : null}
+                        </div>
+                        {e.description ? (
+                          <p className="mt-1 text-[10px] text-stone-500 line-clamp-1">
+                            {e.description}
+                          </p>
                         ) : null}
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="px-4 py-3.5">
-                      <span className="inline-flex rounded-full bg-stone-100 px-2.5 py-0.5 text-[10px] font-semibold text-stone-700">
-                        {e.category.name}
-                      </span>
-                    </td>
+                      <td className="px-4 py-3.5">
+                        <span className="inline-flex rounded-full bg-stone-100 px-2.5 py-0.5 text-[10px] font-semibold text-stone-700">
+                          {e.category.name}
+                        </span>
+                      </td>
 
-                    <td className="px-4 py-3.5 text-stone-800">
-                      <p className="font-semibold">
-                        {e.vendor?.companyName || e.vendor?.name || e.vendorName || "Direct"}
-                      </p>
-                      {e.reference ? (
-                        <p className="font-mono text-[10px] text-stone-500">
-                          Ref: {e.reference}
+                      <td className="px-4 py-3.5 text-stone-800">
+                        <p className="font-semibold">
+                          {e.vendor?.companyName || e.vendor?.name || e.vendorName || "Direct"}
                         </p>
+                        {e.reference ? (
+                          <p className="font-mono text-[10px] text-stone-500">
+                            Ref: {e.reference}
+                          </p>
+                        ) : null}
+                      </td>
+
+                      <td className="px-4 py-3.5 text-stone-600">
+                        {e.account?.name || "—"}
+                      </td>
+
+                      <td className="px-4 py-3.5">
+                        <span className="font-mono text-[11px] text-stone-700">
+                          {e.mode}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3.5 text-right font-bold text-stone-900">
+                        <span className={isPaid ? "text-rose-700" : isPending ? "text-amber-800" : "text-stone-500"}>
+                          ₹{Number(e.amount).toLocaleString("en-IN")}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3.5 text-center">
+                        {isPending ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-[10px] font-bold text-amber-800">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                            PENDING APPROVAL
+                          </span>
+                        ) : isPaid ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+                            APPROVED
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 border border-rose-200 px-2.5 py-0.5 text-[10px] font-bold text-rose-700">
+                            <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
+                            REJECTED
+                          </span>
+                        )}
+                      </td>
+
+                      {isApprover ? (
+                        <td className="px-4 py-3.5 text-center">
+                          {isPending ? (
+                            <div className="flex items-center justify-center gap-1.5">
+                              <form action={approveExpenseAction}>
+                                <input type="hidden" name="code" value={code} />
+                                <input type="hidden" name="expenseId" value={e.id} />
+                                <button
+                                  type="submit"
+                                  title="Approve & Disburse"
+                                  className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 transition shadow-xs"
+                                >
+                                  Approve
+                                </button>
+                              </form>
+
+                              <form action={rejectExpenseAction}>
+                                <input type="hidden" name="code" value={code} />
+                                <input type="hidden" name="expenseId" value={e.id} />
+                                <button
+                                  type="submit"
+                                  title="Reject voucher"
+                                  className="rounded-lg border border-stone-300 bg-white px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-50 transition"
+                                >
+                                  Reject
+                                </button>
+                              </form>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-stone-400">—</span>
+                          )}
+                        </td>
                       ) : null}
-                    </td>
-
-                    <td className="px-4 py-3.5 text-stone-600">
-                      {e.account?.name || "—"}
-                    </td>
-
-                    <td className="px-4 py-3.5">
-                      <span className="font-mono text-[11px] text-stone-700">
-                        {e.mode}
-                      </span>
-                    </td>
-
-                    <td className="px-4 py-3.5 text-right font-bold text-rose-700">
-                      ₹{Number(e.amount).toLocaleString("en-IN")}
-                    </td>
-
-                    <td className="px-4 py-3.5 text-center">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                        {e.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -253,3 +448,4 @@ export default async function SocietyExpensesPage({
     </div>
   )
 }
+
