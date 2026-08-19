@@ -3,7 +3,9 @@ import { notFound } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { prisma } from "@/lib/prisma"
+import { maskBankAccount } from "@/lib/masking"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
+
 
 export default async function SocietyMortgagesPage({
   params,
@@ -240,8 +242,9 @@ export default async function SocietyMortgagesPage({
                     </td>
 
                     <td className="px-4 py-3.5 font-mono font-medium text-stone-700">
-                      {l.loanAccountNumber || "—"}
+                      {l.loanAccountNumber ? maskBankAccount(l.loanAccountNumber) : "—"}
                     </td>
+
 
                     <td className="px-4 py-3.5 font-bold text-stone-950">
                       {l.sanctionAmount ? `₹${Number(l.sanctionAmount).toLocaleString("en-IN")}` : "—"}
@@ -292,7 +295,7 @@ export default async function SocietyMortgagesPage({
   )
 }
 
-import { requireSocietyAccess } from "@/lib/auth/requireAuth"
+import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
 
 async function recordLien(formData: FormData) {
@@ -301,8 +304,9 @@ async function recordLien(formData: FormData) {
   const code = formData.get("code")?.toString().trim()
   if (!code) throw new Error("Society code is required")
 
-  const authContext = await requireSocietyAccess(code)
+  const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
   const verifiedSocietyId = authContext.society.id
+
 
   const flatId = formData.get("flatId")?.toString().trim()
   const personId = formData.get("personId")?.toString().trim()
@@ -371,8 +375,9 @@ async function dischargeLien(formData: FormData) {
 
   if (!code || !lienId) return
 
-  const authContext = await requireSocietyAccess(code)
+  const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
   const verifiedSocietyId = authContext.society.id
+
 
   // Verify lien belongs to this society (IDOR prevention)
   const lien = await prisma.propertyLien.findFirst({

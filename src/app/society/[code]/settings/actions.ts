@@ -1,11 +1,10 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
+import { requireCommitteeAccess, EXECUTIVE_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
 import type { SocietyType, MaintenanceType } from "@/generated/prisma/client"
-
 
 export type UpdateSocietySettingsState = {
   success?: boolean
@@ -20,10 +19,11 @@ export async function updateSocietySettings(
   formData: FormData
 ): Promise<UpdateSocietySettingsState> {
   try {
-    const context = await getSocietyAdmin(societyCode)
-    if (!context || context.society.id !== societyId) {
-      return { error: "Unauthorized. You do not have permission to update settings for this society." }
+    const context = await requireCommitteeAccess(societyCode, EXECUTIVE_ROLES)
+    if (context.society.id !== societyId) {
+      return { error: "Tenant mismatch. The specified society does not match your active session." }
     }
+
 
     const name = formData.get("name")?.toString().trim()
     const rawCode = formData.get("code")?.toString().trim().toUpperCase() || null

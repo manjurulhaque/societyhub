@@ -367,7 +367,7 @@ export default async function SocietyChequesPage({
   )
 }
 
-import { requireSocietyAccess } from "@/lib/auth/requireAuth"
+import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
 
 async function createCheque(formData: FormData) {
@@ -376,7 +376,7 @@ async function createCheque(formData: FormData) {
   const code = formData.get("code")?.toString().trim()
   if (!code) throw new Error("Society code is required")
 
-  const authContext = await requireSocietyAccess(code)
+  const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
   const verifiedSocietyId = authContext.society.id
 
   const chequeNumber = formData.get("chequeNumber")?.toString().trim()
@@ -441,8 +441,9 @@ async function updateChequeStatus(formData: FormData) {
 
   if (!code || !chequeId || !nextStatus) return
 
-  const authContext = await requireSocietyAccess(code)
+  const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
   const verifiedSocietyId = authContext.society.id
+
 
   // Verify cheque belongs to this society (IDOR prevention)
   const cheque = await prisma.chequeRegister.findFirst({

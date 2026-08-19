@@ -314,7 +314,7 @@ export default async function SocietyMeetingsPage({
   )
 }
 
-import { requireSocietyAccess } from "@/lib/auth/requireAuth"
+import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
 
 async function recordMeeting(formData: FormData) {
@@ -323,8 +323,9 @@ async function recordMeeting(formData: FormData) {
   const code = formData.get("code")?.toString().trim()
   if (!code) throw new Error("Society code is required")
 
-  const authContext = await requireSocietyAccess(code)
+  const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
   const verifiedSocietyId = authContext.society.id
+
 
   const title = formData.get("title")?.toString().trim()
   const meetingType = formData.get("meetingType")?.toString().trim() || "MANAGING_COMMITTEE"

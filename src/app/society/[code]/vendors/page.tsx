@@ -2,6 +2,8 @@ import { notFound } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { prisma } from "@/lib/prisma"
+import { maskBankAccount, maskPan } from "@/lib/masking"
+
 
 export default async function SocietyVendorsPage({
   params,
@@ -222,15 +224,16 @@ export default async function SocietyVendorsPage({
 
                     <td className="px-4 py-3.5 font-mono text-[11px] text-stone-700">
                       {v.gstin ? <p>GST: {v.gstin}</p> : null}
-                      {v.panNumber ? <p>PAN: {v.panNumber}</p> : null}
+                      {v.panNumber ? <p>PAN: {maskPan(v.panNumber)}</p> : null}
                       {!v.gstin && !v.panNumber ? <span className="text-stone-400">—</span> : null}
                     </td>
 
                     <td className="px-4 py-3.5 font-mono text-[11px] text-stone-700">
-                      {v.bankAccount ? <p>A/C: {v.bankAccount}</p> : null}
+                      {v.bankAccount ? <p>A/C: {maskBankAccount(v.bankAccount)}</p> : null}
                       {v.ifscCode ? <p>IFSC: {v.ifscCode}</p> : null}
                       {!v.bankAccount && !v.ifscCode ? <span className="text-stone-400">—</span> : null}
                     </td>
+
 
                     <td className="px-4 py-3.5 text-right text-stone-600 font-semibold">
                       {v._count.expenses} expense payouts
@@ -246,7 +249,7 @@ export default async function SocietyVendorsPage({
   )
 }
 
-import { requireSocietyAccess } from "@/lib/auth/requireAuth"
+import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
 
 async function createVendor(formData: FormData) {
@@ -255,8 +258,9 @@ async function createVendor(formData: FormData) {
   const code = formData.get("code")?.toString().trim()
   if (!code) throw new Error("Society code is required")
 
-  const authContext = await requireSocietyAccess(code)
+  const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
   const verifiedSocietyId = authContext.society.id
+
 
   const name = formData.get("name")?.toString().trim()
   const companyName = formData.get("companyName")?.toString().trim() || null

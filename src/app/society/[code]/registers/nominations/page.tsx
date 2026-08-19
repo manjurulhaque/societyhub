@@ -280,7 +280,7 @@ export default async function SocietyNominationsPage({
   )
 }
 
-import { requireSocietyAccess } from "@/lib/auth/requireAuth"
+import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
 
 async function fileNomination(formData: FormData) {
@@ -289,8 +289,9 @@ async function fileNomination(formData: FormData) {
   const code = formData.get("code")?.toString().trim()
   if (!code) throw new Error("Society code is required")
 
-  const authContext = await requireSocietyAccess(code)
+  const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
   const verifiedSocietyId = authContext.society.id
+
 
   const flatId = formData.get("flatId")?.toString().trim()
   const personId = formData.get("personId")?.toString().trim()

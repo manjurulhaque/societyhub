@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
-import { requireSocietyAccess } from "@/lib/auth/requireAuth"
+import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
 import { prisma } from "@/lib/prisma"
 import type { PaymentMode, ExpenseStatus } from "@/generated/prisma/client"
@@ -42,7 +42,7 @@ export default async function NewSocietyExpensePage({
   async function createSocietyExpense(formData: FormData) {
     "use server"
 
-    const authContext = await requireSocietyAccess(code)
+    const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
     const verifiedSocietyId = authContext.society.id
 
     const title = formData.get("title")?.toString().trim()

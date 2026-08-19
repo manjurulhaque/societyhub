@@ -381,7 +381,7 @@ export default async function SocietyInvestmentsPage({
   )
 }
 
-import { requireSocietyAccess } from "@/lib/auth/requireAuth"
+import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
 
 async function bookFixedDeposit(formData: FormData) {
@@ -390,8 +390,9 @@ async function bookFixedDeposit(formData: FormData) {
   const code = formData.get("code")?.toString().trim()
   if (!code) throw new Error("Society code is required")
 
-  const authContext = await requireSocietyAccess(code)
+  const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
   const verifiedSocietyId = authContext.society.id
+
 
   const bankName = formData.get("bankName")?.toString().trim()
   const branch = formData.get("branch")?.toString().trim() || null
@@ -480,8 +481,9 @@ async function settleMaturity(formData: FormData) {
 
   if (!code || !fdId) return
 
-  const authContext = await requireSocietyAccess(code)
+  const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
   const verifiedSocietyId = authContext.society.id
+
 
   // Verify FD belongs to this society (IDOR prevention)
   const fd = await prisma.fixedDeposit.findFirst({

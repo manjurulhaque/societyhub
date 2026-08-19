@@ -38,8 +38,28 @@ export default function LoginPage() {
     setError(null)
 
     try {
+      const email = values.email.trim().toLowerCase()
+
+      // 1. Pre-flight brute-force check
+      try {
+        const limitRes = await fetch("/api/auth/login-limit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, action: "CHECK" }),
+        })
+        if (!limitRes.ok) {
+          const limitData = await limitRes.json()
+          setError(limitData.error || "Too many sign-in attempts. Please wait a few minutes.")
+          setLoading(false)
+          return
+        }
+      } catch {
+        // Fall through to authentication if rate limiter endpoint is unreachable
+      }
+
+      // 2. Perform Supabase password authentication
       const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: values.email.trim().toLowerCase(),
+        email,
         password: values.password,
       })
 
@@ -48,6 +68,7 @@ export default function LoginPage() {
         setLoading(false)
         return
       }
+
 
       // If a safe relative next parameter is provided, use it (prevent open redirect attacks)
       const isSafeRelativeUrl =

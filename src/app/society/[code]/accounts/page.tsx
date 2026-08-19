@@ -2,6 +2,8 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { prisma } from "@/lib/prisma"
+import { maskBankAccount } from "@/lib/masking"
+
 
 export default async function SocietyAccountsPage({
   params,
@@ -172,9 +174,10 @@ export default async function SocietyAccountsPage({
                       {acc.accountNumber ? (
                         <div className="flex justify-between text-stone-700">
                           <span className="text-stone-500">Account Number:</span>
-                          <span className="font-mono font-bold">{acc.accountNumber}</span>
+                          <span className="font-mono font-bold">{maskBankAccount(acc.accountNumber)}</span>
                         </div>
                       ) : null}
+
                       {acc.ifscCode ? (
                         <div className="flex justify-between text-stone-700">
                           <span className="text-stone-500">IFSC Code:</span>

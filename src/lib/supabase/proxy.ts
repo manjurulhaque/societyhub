@@ -21,6 +21,11 @@ export async function updateSession(request: NextRequest) {
     "Strict-Transport-Security",
     "max-age=31536000; includeSubDomains; preload"
   )
+  response.headers.set(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' blob: data: https://commons.wikimedia.org https://upload.wikimedia.org; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-ancestors 'none';"
+  )
+
 
 
   // Pass current pathname to Server Components

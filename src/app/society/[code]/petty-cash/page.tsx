@@ -290,7 +290,7 @@ export default async function SocietyPettyCashPage({
   )
 }
 
-import { requireSocietyAccess } from "@/lib/auth/requireAuth"
+import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
 
 async function createPettyEntry(formData: FormData) {
@@ -299,8 +299,9 @@ async function createPettyEntry(formData: FormData) {
   const code = formData.get("code")?.toString().trim()
   if (!code) throw new Error("Society code is required")
 
-  const authContext = await requireSocietyAccess(code)
+  const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
   const verifiedSocietyId = authContext.society.id
+
 
   const accountId = formData.get("accountId")?.toString().trim()
   const type = formData.get("type")?.toString().trim() || "EXPENSE"

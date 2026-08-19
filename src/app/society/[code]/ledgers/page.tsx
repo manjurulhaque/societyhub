@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
-import { requireSocietyAccess } from "@/lib/auth/requireAuth"
+import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
 import { prisma } from "@/lib/prisma"
+
 import { seedSocietyChartOfAccounts } from "@/lib/chartOfAccounts"
 import type { LedgerGroup, BalanceType } from "@/generated/prisma/client"
 
@@ -68,8 +69,9 @@ export default async function SocietyLedgersPage({
 
     async function handleSeedChart() {
       "use server"
-      const authContext = await requireSocietyAccess(code)
+      const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
       await seedSocietyChartOfAccounts(authContext.society.id)
+
 
       await recordAuditLog({
         societyId: authContext.society.id,
@@ -266,8 +268,9 @@ async function createLedger(formData: FormData) {
   const code = formData.get("code")?.toString().trim()
   if (!code) throw new Error("Society code is required")
 
-  const authContext = await requireSocietyAccess(code)
+  const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
   const verifiedSocietyId = authContext.society.id
+
 
   const name = formData.get("name")?.toString().trim()
   const ledgerCode = formData.get("ledgerCode")?.toString().trim() || null

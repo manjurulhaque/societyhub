@@ -1,6 +1,7 @@
 import { getAdmin } from "@/lib/auth/getAdmin"
 import { getSocietyAdmin, type SocietyAdminContext } from "@/lib/auth/getSocietyAdmin"
 import { getCurrentUser } from "@/lib/auth/getCurrentUser"
+import type { SocietyRole } from "@/generated/prisma/client"
 
 export class UnauthorizedError extends Error {
   constructor(message = "Unauthorized. Please log in to continue.") {
@@ -15,6 +16,38 @@ export class ForbiddenError extends Error {
     this.name = "ForbiddenError"
   }
 }
+
+/**
+ * Standard Managing Committee roles with operational authority
+ */
+export const COMMITTEE_ROLES: SocietyRole[] = [
+  "PRESIDENT",
+  "VICE_PRESIDENT",
+  "SECRETARY",
+  "JOINT_SECRETARY",
+  "TREASURER",
+  "MANAGER",
+  "ACCOUNTANT",
+]
+
+/**
+ * Roles with authority to disburse funds, manage accounts, and modify ledgers
+ */
+export const FINANCIAL_ROLES: SocietyRole[] = [
+  "PRESIDENT",
+  "TREASURER",
+  "ACCOUNTANT",
+  "MANAGER",
+]
+
+/**
+ * Executive officers for governance and high-impact statutory alterations
+ */
+export const EXECUTIVE_ROLES: SocietyRole[] = [
+  "PRESIDENT",
+  "SECRETARY",
+  "TREASURER",
+]
 
 /**
  * Enforces that the current authenticated user is a SUPER_ADMIN.
@@ -35,7 +68,7 @@ export async function requireSuperAdmin() {
 }
 
 /**
- * Enforces that the current authenticated user has administrative / management access
+ * Enforces that the current authenticated user has active membership or admin access
  * to the specified society (by code or ID).
  * Throws UnauthorizedError or ForbiddenError if check fails.
  * Returns the resolved SocietyAdminContext with tenant-scoped society details.
@@ -52,8 +85,34 @@ export async function requireSocietyAccess(societyCodeOrId: string): Promise<Soc
     if (!user) {
       throw new UnauthorizedError()
     }
-    throw new ForbiddenError("You do not have administrative access to this society.")
+    throw new ForbiddenError("You do not have access to this society.")
   }
 
   return context
 }
+
+/**
+ * Enforces that the current authenticated user belongs to the Managing Committee
+ * with one of the specified roles (or is a Super Admin).
+ * Throws ForbiddenError if user is a regular resident member or security guard.
+ */
+export async function requireCommitteeAccess(
+  societyCodeOrId: string,
+  allowedRoles: SocietyRole[] = COMMITTEE_ROLES
+): Promise<SocietyAdminContext> {
+  const context = await requireSocietyAccess(societyCodeOrId)
+
+  if (context.isSuperAdmin) {
+    return context
+  }
+
+  const designation = context.designation as SocietyRole
+  if (!allowedRoles.includes(designation)) {
+    throw new ForbiddenError(
+      `Permission denied: Committee role (${allowedRoles.join(", ")}) required for this operation.`
+    )
+  }
+
+  return context
+}
+

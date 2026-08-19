@@ -292,7 +292,7 @@ export default async function SocietyAmenitiesPage({
   )
 }
 
-import { requireSocietyAccess } from "@/lib/auth/requireAuth"
+import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
 
 async function createAmenity(formData: FormData) {
@@ -301,8 +301,9 @@ async function createAmenity(formData: FormData) {
   const code = formData.get("code")?.toString().trim()
   if (!code) throw new Error("Society code is required")
 
-  const authContext = await requireSocietyAccess(code)
+  const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
   const verifiedSocietyId = authContext.society.id
+
 
   const name = formData.get("name")?.toString().trim()
   const type = formData.get("type")?.toString().trim() || "CLUBHOUSE"
