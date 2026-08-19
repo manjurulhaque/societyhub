@@ -1,33 +1,44 @@
-import Link from "next/link"
 import { prisma } from "@/lib/prisma"
 import {
   AdminPageHeader,
-  AdminCard,
-  AdminBadge,
   AdminStatCard,
-  AdminTable,
-  AdminButton,
 } from "@/components/admin"
-import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { AdminReportsClient, type AdminReportData } from "./AdminReportsClient"
 
 export default async function ReportsPage() {
   const [
     billAggregate,
     paymentAggregate,
-    billsByCategory,
+    expenseAggregate,
+    billsByCategoryRaw,
+    paymentsByModeRaw,
     societiesWithFinancials,
-    recentPayments,
+    recentPaymentsRaw,
+    totalFlatsCount,
+    occupiedFlatsCount,
   ] = await Promise.all([
     prisma.bill.aggregate({
       _sum: { amount: true },
       _count: { _all: true },
     }),
     prisma.payment.aggregate({
+      where: { status: "SUCCESS" },
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+    prisma.expense.aggregate({
+      where: { status: "PAID" },
       _sum: { amount: true },
       _count: { _all: true },
     }),
     prisma.bill.groupBy({
       by: ["billType"],
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+    prisma.payment.groupBy({
+      by: ["mode"],
+      where: { status: "SUCCESS" },
       _sum: { amount: true },
       _count: { _all: true },
     }),
@@ -38,16 +49,33 @@ export default async function ReportsPage() {
         blocks: {
           select: {
             id: true,
-            _count: { select: { flats: true } },
+            flats: {
+              select: {
+                id: true,
+                status: true,
+                bills: {
+                  select: {
+                    amount: true,
+                    lateFeeAmount: true,
+                    payments: {
+                      where: { status: "SUCCESS" },
+                      select: { amount: true },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
         bills: {
           select: {
             amount: true,
+            lateFeeAmount: true,
             status: true,
           },
         },
         payments: {
+          where: { status: "SUCCESS" },
           select: {
             amount: true,
           },
@@ -62,8 +90,9 @@ export default async function ReportsPage() {
       },
     }),
     prisma.payment.findMany({
+      where: { status: "SUCCESS" },
       orderBy: { createdAt: "desc" },
-      take: 5,
+      take: 15,
       include: {
         society: {
           select: { id: true, name: true, code: true },
@@ -80,16 +109,134 @@ export default async function ReportsPage() {
         },
       },
     }),
+    prisma.flat.count({
+      where: { isActive: true, deletedAt: null },
+    }),
+    prisma.flat.count({
+      where: { status: "OCCUPIED", isActive: true, deletedAt: null },
+    }),
   ])
 
   const totalBilled = Number(billAggregate._sum.amount ?? 0)
   const totalCollected = Number(paymentAggregate._sum.amount ?? 0)
+  const totalExpenses = Number(expenseAggregate._sum.amount ?? 0)
   const totalOutstanding = Math.max(0, totalBilled - totalCollected)
   const collectionRate =
     totalBilled === 0 ? 0 : Math.min(100, Math.round((totalCollected / totalBilled) * 100))
 
+  const billsByCategory = billsByCategoryRaw.map((b) => {
+    const amount = Number(b._sum.amount ?? 0)
+    return {
+      billType: b.billType,
+      amount,
+      count: b._count._all,
+      percentage: totalBilled > 0 ? Math.round((amount / totalBilled) * 100) : 0,
+    }
+  })
+
+  const paymentsByMode = paymentsByModeRaw.map((p) => {
+    const amount = Number(p._sum.amount ?? 0)
+    return {
+      mode: p.mode,
+      amount,
+      count: p._count._all,
+      percentage: totalCollected > 0 ? Math.round((amount / totalCollected) * 100) : 0,
+    }
+  })
+
+  const societies: AdminReportData["societies"] = societiesWithFinancials.map((society) => {
+    const societyBilled = society.bills.reduce(
+      (acc, b) => acc + Number(b.amount ?? 0) + Number(b.lateFeeAmount ?? 0),
+      0
+    )
+    const societyCollected = society.payments.reduce(
+      (acc, p) => acc + Number(p.amount ?? 0),
+      0
+    )
+    const societyOutstanding = Math.max(0, societyBilled - societyCollected)
+    const societyRate =
+      societyBilled === 0
+        ? 0
+        : Math.min(100, Math.round((societyCollected / societyBilled) * 100))
+
+    let flatsCount = 0
+    let occupiedCount = 0
+    let defaultersCount = 0
+
+    for (const block of society.blocks) {
+      for (const flat of block.flats) {
+        flatsCount += 1
+        if (flat.status === "OCCUPIED") occupiedCount += 1
+
+        const flatBilled = flat.bills.reduce(
+          (sum, b) => sum + Number(b.amount ?? 0) + Number(b.lateFeeAmount ?? 0),
+          0
+        )
+        const flatPaid = flat.bills.reduce(
+          (sum, b) =>
+            sum + b.payments.reduce((psum, p) => psum + Number(p.amount ?? 0), 0),
+          0
+        )
+        if (flatBilled - flatPaid > 0) {
+          defaultersCount += 1
+        }
+      }
+    }
+
+    const riskTier: AdminReportData["societies"][0]["riskTier"] =
+      societyRate >= 80 ? "HEALTHY" : societyRate >= 50 ? "MODERATE" : "CRITICAL"
+
+    return {
+      id: society.id,
+      name: society.name,
+      code: society.code,
+      blocksCount: society._count.blocks,
+      flatsCount,
+      occupiedCount,
+      totalBilled: societyBilled,
+      totalCollected: societyCollected,
+      totalOutstanding: societyOutstanding,
+      collectionRate: societyRate,
+      defaultersCount,
+      riskTier,
+    }
+  })
+
+  const recentPayments = recentPaymentsRaw.map((p) => ({
+    id: p.id,
+    receiptNumber: p.receiptNumber,
+    societyId: p.society.id,
+    societyName: p.society.name,
+    societyCode: p.society.code,
+    residentName: p.paidBy?.name || "Resident",
+    flatNumber: p.bill?.flat?.number || null,
+    amount: Number(p.amount ?? 0),
+    mode: p.mode,
+    createdAt: p.createdAt.toISOString(),
+  }))
+
+  const reportData: AdminReportData = {
+    summary: {
+      totalBilled,
+      totalCollected,
+      totalOutstanding,
+      collectionRate,
+      totalInvoicesCount: billAggregate._count._all,
+      totalPaymentsCount: paymentAggregate._count._all,
+      totalExpenses,
+      totalExpensesCount: expenseAggregate._count._all,
+      totalSocieties: societiesWithFinancials.length,
+      totalFlats: totalFlatsCount,
+      totalOccupiedFlats: occupiedFlatsCount,
+    },
+    societies,
+    billsByCategory,
+    paymentsByMode,
+    recentPayments,
+  }
+
   return (
-    <div className="mx-auto max-w-7xl space-y-8 px-6 py-8 md:px-8">
+    <div className="mx-auto max-w-7xl space-y-8 px-4 py-6 sm:px-6 sm:py-8 md:px-8">
       {/* Header */}
       <AdminPageHeader
         eyebrow="Platform Analytics & Intelligence"
@@ -98,11 +245,11 @@ export default async function ReportsPage() {
       />
 
       {/* KPI Overview */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <AdminStatCard
-          title="Total Platform Billed"
+          title="Total Billed"
           value={`₹${totalBilled.toLocaleString("en-IN")}`}
-          subtitle={`${billAggregate._count._all} total invoices issued`}
+          subtitle={`${billAggregate._count._all} Total invoices issued`}
           icon={
             <svg className="h-5 w-5 text-stone-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
@@ -113,9 +260,9 @@ export default async function ReportsPage() {
         <AdminStatCard
           title="Total Collections"
           value={`₹${totalCollected.toLocaleString("en-IN")}`}
-          subtitle={`${paymentAggregate._count._all} receipts recorded`}
+          subtitle={`${paymentAggregate._count._all} Receipts recorded`}
           icon={
-            <svg className="h-5 w-5 text-stone-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="h-5 w-5 text-emerald-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           }
@@ -124,9 +271,9 @@ export default async function ReportsPage() {
         <AdminStatCard
           title="Outstanding Receivables"
           value={`₹${totalOutstanding.toLocaleString("en-IN")}`}
-          subtitle="Pending across all tenants"
+          subtitle="Pending across all societies"
           icon={
-            <svg className="h-5 w-5 text-stone-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="h-5 w-5 text-rose-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           }
@@ -146,207 +293,32 @@ export default async function ReportsPage() {
             </svg>
           }
         />
+
+        <AdminStatCard
+          title="Platform Expenses"
+          value={`₹${totalExpenses.toLocaleString("en-IN")}`}
+          subtitle={`${expenseAggregate._count._all} Total expense vouchers`}
+          icon={
+            <svg className="h-5 w-5 text-amber-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          }
+        />
+
+        <AdminStatCard
+          title="Total Housing Units"
+          value={totalFlatsCount}
+          subtitle={`${societiesWithFinancials.length} Societies (${occupiedFlatsCount} Occupied)`}
+          icon={
+            <svg className="h-5 w-5 text-indigo-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+          }
+        />
       </div>
 
-      {/* Society-by-Society Financial Health Table */}
-      <AdminCard
-        title="Society Financial Breakdown"
-        description="Per-organization collection efficiency, billed revenue, and outstanding balance breakdown"
-      >
-        {societiesWithFinancials.length === 0 ? (
-          <p className="py-6 text-center text-xs text-stone-500">
-            No societies currently onboarded.
-          </p>
-        ) : (
-          <AdminTable
-            headers={[
-              "Housing Society",
-              "Units & Blocks",
-              "Total Invoiced",
-              "Total Collected",
-              "Outstanding Balance",
-              "Collection Rate",
-              "Actions",
-            ]}
-            rows={societiesWithFinancials.map((society) => {
-              const societyBilled = society.bills.reduce(
-                (acc, b) => acc + Number(b.amount),
-                0
-              )
-              const societyCollected = society.payments.reduce(
-                (acc, p) => acc + Number(p.amount),
-                0
-              )
-              const societyOutstanding = Math.max(0, societyBilled - societyCollected)
-              const societyRate =
-                societyBilled === 0
-                  ? 0
-                  : Math.min(100, Math.round((societyCollected / societyBilled) * 100))
-
-              const totalFlats = society.blocks.reduce(
-                (acc, b) => acc + b._count.flats,
-                0
-              )
-
-              return (
-                <tr
-                  key={society.id}
-                  className="border-t border-stone-100 transition-colors hover:bg-stone-50/70"
-                >
-                  {/* Society Name */}
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-2">
-                      <Link
-                        href={`/admin/societies/${society.id}`}
-                        className="font-bold text-stone-950 text-sm hover:underline"
-                      >
-                        {society.name}
-                      </Link>
-                      {society.code ? (
-                        <AdminBadge variant="neutral" size="sm">
-                          {society.code}
-                        </AdminBadge>
-                      ) : null}
-                    </div>
-                  </td>
-
-                  {/* Units & Blocks */}
-                  <td className="px-4 py-3.5 text-xs text-stone-700">
-                    <span className="font-semibold">{totalFlats}</span> Flats in{" "}
-                    <span className="text-stone-500">{society._count.blocks} Blocks</span>
-                  </td>
-
-                  {/* Total Invoiced */}
-                  <td className="px-4 py-3.5 text-xs font-semibold text-stone-900">
-                    ₹{societyBilled.toLocaleString("en-IN")}
-                  </td>
-
-                  {/* Total Collected */}
-                  <td className="px-4 py-3.5 text-xs font-semibold text-emerald-700">
-                    ₹{societyCollected.toLocaleString("en-IN")}
-                  </td>
-
-                  {/* Outstanding */}
-                  <td className="px-4 py-3.5 text-xs font-semibold text-rose-700">
-                    ₹{societyOutstanding.toLocaleString("en-IN")}
-                  </td>
-
-                  {/* Rate */}
-                  <td className="px-4 py-3.5">
-                    <AdminBadge
-                      variant={
-                        societyRate >= 80
-                          ? "success"
-                          : societyRate >= 50
-                            ? "warning"
-                            : "danger"
-                      }
-                      size="sm"
-                      dot
-                    >
-                      {societyRate}%
-                    </AdminBadge>
-                  </td>
-
-                  {/* Actions */}
-                  <td className="px-4 py-3.5">
-                    <AdminButton
-                      href={`/society/${society.code || society.id}/reports`}
-                      variant="outline"
-                      size="xs"
-                    >
-                      Tenant Report ↗
-                    </AdminButton>
-                  </td>
-                </tr>
-              )
-            })}
-          />
-        )}
-      </AdminCard>
-
-      {/* Grid: Revenue Categories & Recent Collections */}
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        {/* Revenue Categories */}
-        <AdminCard
-          title="Revenue Assessment by Category"
-          description="Distribution of generated demands across assessment types"
-        >
-          {billsByCategory.length === 0 ? (
-            <p className="py-6 text-center text-xs text-stone-500">
-              No bills recorded yet.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {billsByCategory.map((cat) => {
-                const categoryAmount = Number(cat._sum.amount ?? 0)
-                const pct =
-                  totalBilled > 0 ? Math.round((categoryAmount / totalBilled) * 100) : 0
-
-                return (
-                  <div
-                    key={cat.billType}
-                    className="rounded-2xl border border-stone-100 bg-stone-50/60 p-3.5 space-y-1.5"
-                  >
-                    <div className="flex items-center justify-between text-xs font-semibold">
-                      <span className="text-stone-900">
-                        {cat.billType.replace(/_/g, " ")}
-                      </span>
-                      <span className="text-stone-950 font-bold">
-                        ₹{categoryAmount.toLocaleString("en-IN")} ({pct}%)
-                      </span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-stone-200 overflow-hidden">
-                      <div
-                        className="h-full bg-stone-900 rounded-full transition-all"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="text-[10px] text-stone-500">
-                      {cat._count._all} invoices generated
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </AdminCard>
-
-        {/* Recent Collections */}
-        <AdminCard
-          title="Latest Collection Receipts"
-          description="Most recent payment transactions across all societies"
-        >
-          {recentPayments.length === 0 ? (
-            <p className="py-6 text-center text-xs text-stone-500">
-              No payments recorded yet.
-            </p>
-          ) : (
-            <AdminTable
-              headers={["Receipt #", "Resident & Society", "Amount", "Date"]}
-              rows={recentPayments.map((p) => (
-                <tr key={p.id} className="border-t border-stone-100 hover:bg-stone-50/60">
-                  <td className="px-4 py-3 font-mono text-xs font-semibold text-stone-900">
-                    {p.receiptNumber || `#${p.id.slice(0, 8)}`}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-stone-800">
-                    <p className="font-medium">{p.paidBy?.name || "Resident"}</p>
-                    <p className="text-[11px] text-stone-500">
-                      {p.society.name} ({p.bill?.flat?.number ? `Flat ${p.bill.flat.number}` : "Unit"})
-                    </p>
-                  </td>
-                  <td className="px-4 py-3 text-xs font-bold text-emerald-700">
-                    ₹{Number(p.amount).toLocaleString("en-IN")}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-stone-500">
-                    {formatDateInAppTimeZone(p.createdAt)}
-                  </td>
-                </tr>
-              ))}
-            />
-          )}
-        </AdminCard>
-      </div>
+      {/* Interactive Client View */}
+      <AdminReportsClient data={reportData} />
     </div>
   )
 }
