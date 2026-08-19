@@ -298,6 +298,7 @@ export default async function SocietyMortgagesPage({
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
+import { encryptData } from "@/lib/crypto"
 
 async function recordLien(formData: FormData) {
   "use server"
@@ -312,9 +313,11 @@ async function recordLien(formData: FormData) {
   const personId = formData.get("personId")?.toString().trim()
   const bankName = sanitizeText(formData.get("bankName")?.toString())
   const branchName = formData.get("branchName") ? sanitizeText(formData.get("branchName")?.toString()) : null
-  const loanAccountNumber = formData.get("loanAccountNumber")?.toString().trim() || null
+  const rawLoanAcc = formData.get("loanAccountNumber")?.toString().trim() || null
+  const loanAccountNumber = rawLoanAcc ? encryptData(rawLoanAcc) : null
   const rawAmount = formData.get("sanctionAmount")?.toString().trim()
   const nocReference = formData.get("nocReference") ? sanitizeText(formData.get("nocReference")?.toString()) : null
+
 
 
   if (!flatId || !personId || !bankName) {

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
+import { encryptData } from "@/lib/crypto"
 import { prisma } from "@/lib/prisma"
 import type { AccountType, LedgerGroup, BalanceType } from "@/generated/prisma/client"
 
@@ -28,11 +29,11 @@ export default async function NewSocietyAccountPage({
     const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
     const verifiedSocietyId = authContext.society.id
 
-
     const name = formData.get("name")?.toString().trim()
     const accountType = formData.get("accountType")?.toString().trim() || "BANK"
     const bankName = formData.get("bankName")?.toString().trim() || null
-    const accountNumber = formData.get("accountNumber")?.toString().trim() || null
+    const rawAccountNumber = formData.get("accountNumber")?.toString().trim() || null
+    const accountNumber = rawAccountNumber ? encryptData(rawAccountNumber) : null
     const ifscCode = formData.get("ifscCode")?.toString().trim().toUpperCase() || null
     const branch = formData.get("branch")?.toString().trim() || null
     const rawOpeningBalance = formData.get("openingBalance")?.toString().trim()

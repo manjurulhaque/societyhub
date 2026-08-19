@@ -252,6 +252,7 @@ export default async function SocietyVendorsPage({
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
+import { encryptData } from "@/lib/crypto"
 
 async function createVendor(formData: FormData) {
   "use server"
@@ -267,8 +268,10 @@ async function createVendor(formData: FormData) {
   const phone = formData.get("phone")?.toString().trim() || null
   const email = formData.get("email")?.toString().trim().toLowerCase() || null
   const gstin = formData.get("gstin")?.toString().trim().toUpperCase() || null
-  const panNumber = formData.get("panNumber")?.toString().trim().toUpperCase() || null
-  const bankAccount = formData.get("bankAccount")?.toString().trim() || null
+  const rawPan = formData.get("panNumber")?.toString().trim().toUpperCase() || null
+  const panNumber = rawPan ? encryptData(rawPan) : null
+  const rawBankAccount = formData.get("bankAccount")?.toString().trim() || null
+  const bankAccount = rawBankAccount ? encryptData(rawBankAccount) : null
   const ifscCode = formData.get("ifscCode")?.toString().trim().toUpperCase() || null
   const address = formData.get("address") ? sanitizeText(formData.get("address")?.toString()) : null
 
@@ -291,6 +294,7 @@ async function createVendor(formData: FormData) {
       address,
     },
   })
+
 
   await recordAuditLog({
     societyId: verifiedSocietyId,
