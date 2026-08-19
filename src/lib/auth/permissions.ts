@@ -44,14 +44,61 @@ export async function ensurePermissionsSeeded(): Promise<void> {
   const allPermissions = await prisma.permission.findMany()
   const permMap = new Map(allPermissions.map((p) => [p.code, p.id]))
 
-  // 3. Seed default system roles (global template roles with societyId = null)
+  // 3. Clean up legacy/duplicate system roles (e.g. ESTATE_MANAGER replaced by MANAGER)
+  const validCodes = DEFAULT_ROLE_TEMPLATES.map((t) => t.code)
+
+  const legacySystemRoles = await prisma.role.findMany({
+    where: {
+      societyId: null,
+      isSystem: true,
+      code: { notIn: validCodes },
+    },
+    include: {
+      memberRoles: true,
+    },
+  })
+
+  for (const legacyRole of legacySystemRoles) {
+    if (legacyRole.code === "ESTATE_MANAGER") {
+      const managerRole = await prisma.role.findFirst({
+        where: { societyId: null, code: "MANAGER" },
+      })
+      if (managerRole) {
+        for (const mr of legacyRole.memberRoles) {
+          await prisma.societyMemberRole.upsert({
+            where: {
+              societyMemberId_roleId: {
+                societyMemberId: mr.societyMemberId,
+                roleId: managerRole.id,
+              },
+            },
+            update: {},
+            create: {
+              societyMemberId: mr.societyMemberId,
+              roleId: managerRole.id,
+            },
+          })
+        }
+      }
+    }
+    await prisma.role.delete({
+      where: { id: legacyRole.id },
+    })
+  }
+
+  // 4. Seed and deduplicate default system roles (global template roles with societyId = null)
   for (const tpl of DEFAULT_ROLE_TEMPLATES) {
-    let role = await prisma.role.findFirst({
+    const existingRoles = await prisma.role.findMany({
       where: {
         societyId: null,
-        code: tpl.code,
+        OR: [
+          { code: tpl.code },
+          { name: tpl.name, isSystem: true },
+        ],
       },
     })
+
+    let role = existingRoles[0]
 
     if (!role) {
       role = await prisma.role.create({
@@ -68,10 +115,18 @@ export async function ensurePermissionsSeeded(): Promise<void> {
         where: { id: role.id },
         data: {
           name: tpl.name,
+          code: tpl.code,
           description: tpl.description,
           isSystem: true,
         },
       })
+
+      // Delete any duplicate roles with the same name or code
+      if (existingRoles.length > 1) {
+        for (let i = 1; i < existingRoles.length; i++) {
+          await prisma.role.delete({ where: { id: existingRoles[i].id } })
+        }
+      }
     }
 
     // Connect permissions
