@@ -38,6 +38,7 @@ export default async function SocietyReportsPage({
   const societyId = society.id
 
   const [
+    societyDetails,
     billAggregate,
     paymentAggregate,
     expenseAggregate,
@@ -46,11 +47,33 @@ export default async function SocietyReportsPage({
     expensesRaw,
     accounts,
     fixedDeposits,
+    fixedAssetsRaw,
     flats,
+    vendorBillsRaw,
+    chequesRaw,
+    budgetsRaw,
+    shareCertificatesRaw,
+    nominationsRaw,
+    propertyLiensRaw,
+    memberDepositsRaw,
+    financialYearsRaw,
     monthlyBills,
     monthlyPayments,
     monthlyExpenses,
   ] = await Promise.all([
+    prisma.society.findUnique({
+      where: { id: societyId },
+      select: {
+        address: true,
+        city: true,
+        state: true,
+        pincode: true,
+        registrationNumber: true,
+        panNumber: true,
+        gstin: true,
+      },
+    }),
+
     prisma.bill.aggregate({
       where: { societyId },
       _sum: { amount: true, lateFeeAmount: true },
@@ -98,6 +121,15 @@ export default async function SocietyReportsPage({
       orderBy: { maturityDate: "asc" },
     }),
 
+    prisma.fixedAsset.findMany({
+      where: { societyId, isActive: true, deletedAt: null },
+      include: {
+        category: { select: { name: true } },
+        amcVendor: { select: { name: true, companyName: true } },
+      },
+      orderBy: { name: "asc" },
+    }),
+
     prisma.flat.findMany({
       where: {
         block: { societyId },
@@ -129,6 +161,76 @@ export default async function SocietyReportsPage({
         { block: { name: "asc" } },
         { number: "asc" },
       ],
+    }),
+
+    prisma.vendorBill.findMany({
+      where: { societyId },
+      include: {
+        vendor: { select: { id: true, name: true, companyName: true, phone: true } },
+      },
+      orderBy: { billDate: "desc" },
+    }),
+
+    prisma.chequeRegister.findMany({
+      where: { societyId },
+      include: {
+        account: { select: { name: true, bankName: true } },
+      },
+      orderBy: { chequeDate: "desc" },
+    }),
+
+    prisma.budget.findMany({
+      where: { societyId },
+      include: {
+        financialYear: { select: { name: true } },
+        items: {
+          include: { ledger: { select: { name: true } } },
+        },
+      },
+    }),
+
+    prisma.shareCertificate.findMany({
+      where: { societyId },
+      include: {
+        flat: { select: { number: true, block: { select: { name: true } } } },
+        person: { select: { name: true } },
+      },
+      orderBy: { certificateNumber: "asc" },
+    }),
+
+    prisma.nomination.findMany({
+      where: { societyId },
+      include: {
+        flat: { select: { number: true, block: { select: { name: true } } } },
+        person: { select: { name: true } },
+      },
+      orderBy: { nominationDate: "desc" },
+    }),
+
+    prisma.propertyLien.findMany({
+      where: { societyId },
+      include: {
+        flat: { select: { number: true, block: { select: { name: true } } } },
+        person: { select: { name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+
+    prisma.memberDeposit.findMany({
+      where: { societyId, status: "HELD" },
+      select: { amount: true },
+    }),
+
+    prisma.financialYear.findMany({
+      where: { societyId },
+      orderBy: { startYear: "desc" },
+      select: {
+        id: true,
+        name: true,
+        startYear: true,
+        endYear: true,
+        isCurrent: true,
+      },
     }),
 
     prisma.bill.findMany({
@@ -174,7 +276,18 @@ export default async function SocietyReportsPage({
   const totalFixedDeposits = fixedDeposits
     .filter((fd) => fd.status === "ACTIVE")
     .reduce((sum, fd) => sum + Number(fd.principalAmount ?? 0), 0)
+
+  const totalFixedAssetsBookValue = fixedAssetsRaw.reduce(
+    (sum, a) => sum + Number(a.currentBookValue ?? a.purchaseCost ?? 0),
+    0
+  )
+
   const totalReserves = liquidCashAndBank + totalFixedDeposits
+
+  const totalMemberDepositsHeld = memberDepositsRaw.reduce(
+    (sum, d) => sum + Number(d.amount ?? 0),
+    0
+  )
 
   // Bills By Category Breakdown
   const billsByCategory = billsByTypeRaw.map((b) => {
@@ -230,6 +343,8 @@ export default async function SocietyReportsPage({
   }
 
   const unitLedger: SocietyReportData["unitLedger"] = []
+  const votingList: SocietyReportData["statutory"]["votingList"] = []
+  let totalAdvanceHeld = 0
 
   for (const flat of flats) {
     const blockName = flat.block?.name || "Main"
@@ -286,8 +401,10 @@ export default async function SocietyReportsPage({
       0
     )
     totalFlatPaid += flatAdvance
+    totalAdvanceHeld += flatAdvance
 
     const flatOutstanding = Math.max(0, totalFlatBilled - totalFlatPaid)
+    const isVotingDisqualified = maxDaysOverdue > 90
 
     let accountStatus: SocietyReportData["unitLedger"][0]["accountStatus"] = "CLEAR"
     if (flat.bills.length === 0) {
@@ -313,6 +430,18 @@ export default async function SocietyReportsPage({
       outstandingAmount: flatOutstanding,
       advanceAmount: flatAdvance,
       accountStatus,
+    })
+
+    votingList.push({
+      flatNumber: flat.number,
+      blockName,
+      memberName: primaryPerson?.name || "Unassigned",
+      occupancyStatus: flat.status,
+      outstandingDues: flatOutstanding,
+      isEligible: !isVotingDisqualified,
+      disqualificationReason: isVotingDisqualified
+        ? `Arrears pending for >90 days (₹${flatOutstanding.toLocaleString("en-IN")})`
+        : null,
     })
 
     if (flatOutstanding > 0) {
@@ -349,14 +478,119 @@ export default async function SocietyReportsPage({
         oldestDueDate: oldestDueDate ? oldestDueDate.toISOString() : null,
         agingBucket,
         daysOverdue: maxDaysOverdue,
+        isVotingDisqualified,
       })
     }
   }
 
-  // Sort Defaulters by highest overdue first
   defaulters.sort((a, b) => b.totalOverdue - a.totalOverdue)
 
-  // Monthly Trend Calculations (past 12 monthly slots)
+  // Vendor Aging Calculations
+  const vendorMap = new Map<
+    string,
+    {
+      vendorId: string
+      vendorName: string
+      companyName: string | null
+      phone: string | null
+      totalBilledAmount: number
+      totalPaidAmount: number
+      outstandingDue: number
+      tdsDeducted: number
+      pendingBillsCount: number
+      maxDaysDue: number
+    }
+  >()
+
+  let totalVendorPayables = 0
+
+  for (const vb of vendorBillsRaw) {
+    const vId = vb.vendor.id
+    const current = vendorMap.get(vId) || {
+      vendorId: vId,
+      vendorName: vb.vendor.name,
+      companyName: vb.vendor.companyName,
+      phone: vb.vendor.phone,
+      totalBilledAmount: 0,
+      totalPaidAmount: 0,
+      outstandingDue: 0,
+      tdsDeducted: 0,
+      pendingBillsCount: 0,
+      maxDaysDue: 0,
+    }
+
+    const billAmt = Number(vb.amount ?? 0)
+    const paidAmt = Number(vb.paidAmount ?? 0)
+    const dueAmt = Math.max(0, billAmt - paidAmt)
+
+    current.totalBilledAmount += billAmt
+    current.totalPaidAmount += paidAmt
+    current.outstandingDue += dueAmt
+    current.tdsDeducted += Number(vb.tdsAmount ?? 0)
+
+    if (dueAmt > 0) {
+      current.pendingBillsCount += 1
+      totalVendorPayables += dueAmt
+      const diffDays = Math.max(
+        0,
+        Math.floor((now.getTime() - new Date(vb.billDate).getTime()) / (1000 * 60 * 60 * 24))
+      )
+      if (diffDays > current.maxDaysDue) {
+        current.maxDaysDue = diffDays
+      }
+    }
+
+    vendorMap.set(vId, current)
+  }
+
+  const vendorAging: SocietyReportData["vendorAging"] = Array.from(vendorMap.values()).map(
+    (v) => {
+      let agingBucket: SocietyReportData["vendorAging"][0]["agingBucket"] = "DAYS_0_30"
+      if (v.maxDaysDue > 60) agingBucket = "OVER_60"
+      else if (v.maxDaysDue > 30) agingBucket = "DAYS_31_60"
+
+      return {
+        vendorId: v.vendorId,
+        vendorName: v.vendorName,
+        companyName: v.companyName,
+        phone: v.phone,
+        totalBilledAmount: v.totalBilledAmount,
+        totalPaidAmount: v.totalPaidAmount,
+        outstandingDue: v.outstandingDue,
+        tdsDeducted: v.tdsDeducted,
+        pendingBillsCount: v.pendingBillsCount,
+        agingBucket,
+      }
+    }
+  )
+
+  // Budget Variance Calculations
+  const budgetVariance: SocietyReportData["budgetVariance"] = []
+  for (const b of budgetsRaw) {
+    for (const item of b.items) {
+      const allocated = Number(item.allocatedAmount ?? 0)
+      const utilized = Number(item.utilizedAmount ?? 0)
+      const remaining = allocated - utilized
+      const utilRate = allocated > 0 ? Math.round((utilized / allocated) * 100) : 0
+
+      let status: SocietyReportData["budgetVariance"][0]["status"] = "ON_TRACK"
+      if (utilRate > 100) status = "OVER_BUDGET"
+      else if (utilRate >= 85) status = "WARNING"
+
+      budgetVariance.push({
+        id: item.id,
+        budgetName: b.name,
+        headName: item.ledger?.name || "Operating Head",
+        allocatedAmount: allocated,
+        utilizedAmount: utilized,
+        remainingAmount: remaining,
+        utilizationRate: utilRate,
+        status,
+      })
+    }
+  }
+
+  // Monthly Trend Calculations (past 12 months)
   const monthlyMap = new Map<
     string,
     {
@@ -370,7 +604,6 @@ export default async function SocietyReportsPage({
     }
   >()
 
-  // Initialize past 12 months in reverse chronological order
   for (let i = 0; i < 12; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     const y = d.getFullYear()
@@ -435,6 +668,37 @@ export default async function SocietyReportsPage({
     }
   })
 
+  // Balance Sheet Totals
+  const totalAssets =
+    liquidCashAndBank + totalOutstanding + totalFixedDeposits + totalFixedAssetsBookValue
+
+  const totalLiabilitiesAndFunds =
+    totalMemberDepositsHeld +
+    totalVendorPayables +
+    totalAdvanceHeld +
+    Math.max(0, totalAssets - (totalMemberDepositsHeld + totalVendorPayables + totalAdvanceHeld))
+
+  const balanceSheet: SocietyReportData["balanceSheet"] = {
+    assets: {
+      liquidBankCash: liquidCashAndBank,
+      maintenanceArrears: totalOutstanding,
+      fixedDeposits: totalFixedDeposits,
+      fixedAssetsBookValue: totalFixedAssetsBookValue,
+      totalAssets,
+    },
+    liabilities: {
+      memberDepositsHeld: totalMemberDepositsHeld,
+      vendorPayables: totalVendorPayables,
+      advanceCollections: totalAdvanceHeld,
+      sinkingAndGeneralReserves: Math.max(
+        0,
+        totalAssets - (totalMemberDepositsHeld + totalVendorPayables + totalAdvanceHeld)
+      ),
+      totalLiabilitiesAndFunds,
+    },
+    netFinancialPosition: totalAssets,
+  }
+
   // P&L Statement Heads
   const incomeHeads = billsByTypeRaw.map((b) => ({
     category: b.billType.replace(/_/g, " "),
@@ -454,6 +718,13 @@ export default async function SocietyReportsPage({
       name: society.name,
       code: society.code,
       currencySymbol: "₹",
+      address: societyDetails?.address,
+      city: societyDetails?.city,
+      state: societyDetails?.state,
+      pincode: societyDetails?.pincode,
+      registrationNumber: societyDetails?.registrationNumber,
+      panNumber: societyDetails?.panNumber,
+      gstin: societyDetails?.gstin,
     },
     summary: {
       totalBilled,
@@ -467,11 +738,14 @@ export default async function SocietyReportsPage({
       netOperatingSurplus,
       liquidCashAndBank,
       totalFixedDeposits,
+      totalFixedAssetsBookValue,
       totalReserves,
       defaultersCount: defaulters.length,
       totalFlatsCount: flats.length,
       defaulterRate:
         flats.length > 0 ? Math.round((defaulters.length / flats.length) * 100) : 0,
+      totalVendorPayables,
+      totalMemberDepositsHeld,
     },
     billsByCategory,
     expensesByCategory,
@@ -495,6 +769,17 @@ export default async function SocietyReportsPage({
       maturityDate: fd.maturityDate.toISOString(),
       status: fd.status,
     })),
+    fixedAssets: fixedAssetsRaw.map((a) => ({
+      id: a.id,
+      name: a.name,
+      assetCode: a.assetCode,
+      categoryName: a.category?.name || "General Asset",
+      location: a.location,
+      purchaseCost: Number(a.purchaseCost ?? 0),
+      currentBookValue: Number(a.currentBookValue ?? a.purchaseCost ?? 0),
+      amcVendorName: a.amcVendor?.companyName || a.amcVendor?.name || null,
+      status: a.status,
+    })),
     defaulters,
     agingSummary,
     monthlyTrends,
@@ -505,8 +790,73 @@ export default async function SocietyReportsPage({
       totalExpense: totalExpenses,
       netSurplus: totalBilled - totalExpenses,
     },
+    balanceSheet,
+    budgetVariance,
+    statutory: {
+      shares: shareCertificatesRaw.map((s) => ({
+        id: s.id,
+        flatNumber: s.flat.number,
+        blockName: s.flat.block.name,
+        memberName: s.person.name,
+        certificateNumber: s.certificateNumber,
+        sharesCount: s.sharesCount,
+        distinctiveNumbers:
+          s.shareDistinctFrom && s.shareDistinctTo
+            ? `${s.shareDistinctFrom} to ${s.shareDistinctTo}`
+            : `1 to ${s.sharesCount}`,
+        faceValueTotal: Number(s.faceValuePerShare ?? 50) * s.sharesCount,
+        issueDate: s.issueDate.toISOString(),
+        status: s.status,
+      })),
+      votingList,
+      nominations: nominationsRaw.map((n) => ({
+        id: n.id,
+        flatNumber: n.flat.number,
+        blockName: n.flat.block.name,
+        memberName: n.person.name,
+        nomineeName: n.nomineeName,
+        relationship: n.relationship,
+        percentageShare: Number(n.percentageShare),
+        nominationDate: n.nominationDate.toISOString(),
+        status: n.status,
+      })),
+      propertyLiens: propertyLiensRaw.map((l) => ({
+        id: l.id,
+        flatNumber: l.flat.number,
+        blockName: l.flat.block.name,
+        memberName: l.person.name,
+        bankName: l.bankName,
+        loanAccountNumber: l.loanAccountNumber,
+        sanctionAmount: l.sanctionAmount ? Number(l.sanctionAmount) : null,
+        nocIssuedDate: l.nocIssuedDate ? l.nocIssuedDate.toISOString() : null,
+        nocReference: l.nocReference,
+        status: l.status,
+      })),
+    },
+    vendorAging,
+    cheques: chequesRaw.map((c) => ({
+      id: c.id,
+      chequeNumber: c.chequeNumber,
+      direction: c.direction,
+      partyName: c.partyName,
+      bankName: c.bankName,
+      accountName: c.account.name,
+      amount: Number(c.amount),
+      status: c.status,
+      chequeDate: c.chequeDate.toISOString(),
+      clearedOn: c.clearedOn ? c.clearedOn.toISOString() : null,
+      bouncedReason: c.bouncedReason,
+      bounceCharges: Number(c.bounceCharges ?? 0),
+    })),
     unitLedger,
     blocks: Array.from(blocksSet).sort(),
+    financialYears: financialYearsRaw.map((fy) => ({
+      id: fy.id,
+      name: fy.name,
+      startYear: fy.startYear,
+      endYear: fy.endYear,
+      isCurrent: fy.isCurrent,
+    })),
   }
 
   return (
@@ -514,7 +864,7 @@ export default async function SocietyReportsPage({
       <AdminPageHeader
         eyebrow="Financial Intelligence & Audit"
         title="Reports & Analytics"
-        description={`Comprehensive financial audit, defaulters aging, month-on-month cashflow, and expenditure statements for ${society.name}.`}
+        description={`Comprehensive financial audit, Balance Sheet, statutory registers, and expenditure statements for ${society.name}.`}
       />
 
       <SocietyReportsClient data={reportData} />
