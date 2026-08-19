@@ -3,7 +3,9 @@ import { notFound } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { prisma } from "@/lib/prisma"
+import { maskBankAccount } from "@/lib/masking"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
+
 
 export default async function SocietyMortgagesPage({
   params,
@@ -65,8 +67,9 @@ export default async function SocietyMortgagesPage({
             </Link>
           </div>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-stone-900 md:text-3xl">
-            "M" Register — Mortgages & Bank NOCs
+            &quot;M&quot; Register — Mortgages & Bank NOCs
           </h1>
+
           <p className="text-sm text-stone-500">
             Official register recording bank home loan encumbrances, society NOCs, and mortgage discharge notes for {society.name}.
           </p>
@@ -198,9 +201,10 @@ export default async function SocietyMortgagesPage({
       {/* Mortgages Table */}
       <div className="rounded-2xl border border-stone-200 bg-white shadow-sm overflow-hidden">
         <div className="border-b border-stone-200 bg-stone-50 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-stone-900">Official "M" Register Entries</h2>
+          <h2 className="text-sm font-bold text-stone-900">Official &quot;M&quot; Register Entries</h2>
           <span className="text-xs text-stone-500">{liens.length} mortgage records</span>
         </div>
+
 
         {liens.length === 0 ? (
           <div className="p-12 text-center text-xs text-stone-500">
@@ -238,8 +242,9 @@ export default async function SocietyMortgagesPage({
                     </td>
 
                     <td className="px-4 py-3.5 font-mono font-medium text-stone-700">
-                      {l.loanAccountNumber || "—"}
+                      {l.loanAccountNumber ? maskBankAccount(l.loanAccountNumber) : "—"}
                     </td>
+
 
                     <td className="px-4 py-3.5 font-bold text-stone-950">
                       {l.sanctionAmount ? `₹${Number(l.sanctionAmount).toLocaleString("en-IN")}` : "—"}
@@ -290,28 +295,56 @@ export default async function SocietyMortgagesPage({
   )
 }
 
+import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
+import { encryptData } from "@/lib/crypto"
+
 async function recordLien(formData: FormData) {
   "use server"
 
-  const societyId = formData.get("societyId")?.toString().trim()
   const code = formData.get("code")?.toString().trim()
+  if (!code) throw new Error("Society code is required")
+
+  const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
+  const verifiedSocietyId = authContext.society.id
+
   const flatId = formData.get("flatId")?.toString().trim()
   const personId = formData.get("personId")?.toString().trim()
-  const bankName = formData.get("bankName")?.toString().trim()
-  const branchName = formData.get("branchName")?.toString().trim() || null
-  const loanAccountNumber = formData.get("loanAccountNumber")?.toString().trim() || null
+  const bankName = sanitizeText(formData.get("bankName")?.toString())
+  const branchName = formData.get("branchName") ? sanitizeText(formData.get("branchName")?.toString()) : null
+  const rawLoanAcc = formData.get("loanAccountNumber")?.toString().trim() || null
+  const loanAccountNumber = rawLoanAcc ? encryptData(rawLoanAcc) : null
   const rawAmount = formData.get("sanctionAmount")?.toString().trim()
-  const nocReference = formData.get("nocReference")?.toString().trim() || null
+  const nocReference = formData.get("nocReference") ? sanitizeText(formData.get("nocReference")?.toString()) : null
 
-  if (!societyId || !flatId || !personId || !bankName) {
+
+
+  if (!flatId || !personId || !bankName) {
     throw new Error("Flat, borrower, and bank name are required")
+  }
+
+  // Validate flat belongs to this society
+  const flat = await prisma.flat.findFirst({
+    where: { id: flatId, block: { societyId: verifiedSocietyId } },
+  })
+  if (!flat) {
+    throw new Error("Flat does not belong to this society")
+  }
+
+  // Validate person belongs to this society
+  const person = await prisma.person.findFirst({
+    where: { id: personId, societyId: verifiedSocietyId },
+  })
+  if (!person) {
+    throw new Error("Borrower / person does not belong to this society")
   }
 
   const sanctionAmount = rawAmount ? parseFloat(rawAmount) : null
 
-  await prisma.propertyLien.create({
+  const lien = await prisma.propertyLien.create({
     data: {
-      societyId,
+      societyId: verifiedSocietyId,
       flatId,
       personId,
       bankName,
@@ -323,6 +356,16 @@ async function recordLien(formData: FormData) {
     },
   })
 
+  await recordAuditLog({
+    societyId: verifiedSocietyId,
+    userId: authContext.user.id,
+    action: "CREATE",
+    entity: "PropertyLien",
+    entityId: lien.id,
+    description: `${authContext.user.email} registered bank lien/mortgage with ${bankName} for flat ${flat.number}`,
+    newData: { bankName, loanAccountNumber, sanctionAmount, flatId, personId },
+  })
+
   revalidatePath(`/society/${code}/registers/mortgages`)
   revalidatePath(`/society/${code}/registers`)
   revalidatePath("/admin/registers")
@@ -331,10 +374,23 @@ async function recordLien(formData: FormData) {
 async function dischargeLien(formData: FormData) {
   "use server"
 
-  const lienId = formData.get("lienId")?.toString().trim()
   const code = formData.get("code")?.toString().trim()
+  const lienId = formData.get("lienId")?.toString().trim()
 
-  if (!lienId) return
+  if (!code || !lienId) return
+
+  const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
+  const verifiedSocietyId = authContext.society.id
+
+
+  // Verify lien belongs to this society (IDOR prevention)
+  const lien = await prisma.propertyLien.findFirst({
+    where: { id: lienId, societyId: verifiedSocietyId },
+  })
+
+  if (!lien) {
+    throw new Error("Property lien record not found for this society")
+  }
 
   await prisma.propertyLien.update({
     where: { id: lienId },
@@ -345,7 +401,17 @@ async function dischargeLien(formData: FormData) {
     },
   })
 
+  await recordAuditLog({
+    societyId: verifiedSocietyId,
+    userId: authContext.user.id,
+    action: "STATUS_CHANGE",
+    entity: "PropertyLien",
+    entityId: lienId,
+    description: `${authContext.user.email} marked lien with ${lien.bankName} as DISCHARGED`,
+  })
+
   revalidatePath(`/society/${code}/registers/mortgages`)
   revalidatePath(`/society/${code}/registers`)
   revalidatePath("/admin/registers")
 }
+

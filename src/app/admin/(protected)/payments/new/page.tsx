@@ -208,8 +208,13 @@ export default async function NewPaymentPage() {
   )
 }
 
+import { requireSuperAdmin } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+
 async function createPayment(formData: FormData) {
   "use server"
+
+  const admin = await requireSuperAdmin()
 
   const billId = formData.get("billId")?.toString().trim()
   const paidById = formData.get("paidById")?.toString().trim()
@@ -253,7 +258,7 @@ async function createPayment(formData: FormData) {
   const randomSuffix = Math.floor(100 + Math.random() * 900)
   const receiptNumber = `${prefix}-${timestamp}-${randomSuffix}`
 
-  await prisma.payment.create({
+  const payment = await prisma.payment.create({
     data: {
       societyId: bill.society.id,
       billId,
@@ -290,9 +295,20 @@ async function createPayment(formData: FormData) {
     })
   }
 
+  await recordAuditLog({
+    societyId: bill.society.id,
+    userId: admin.id,
+    action: "PAYMENT_COLLECTED",
+    entity: "Payment",
+    entityId: payment.id,
+    description: `Super Admin ${admin.email} recorded payment of ₹${amount} for bill ${billId}`,
+    newData: { amount, receiptNumber, mode },
+  })
+
   revalidatePath("/admin/payments")
   revalidatePath("/admin/bills")
   revalidatePath(`/society/${bill.society.id}/payments`)
   revalidatePath(`/society/${bill.society.id}/bills`)
   redirect("/admin/payments")
 }
+

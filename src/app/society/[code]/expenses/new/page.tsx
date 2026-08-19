@@ -3,6 +3,9 @@ import { notFound } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
+import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
 import { prisma } from "@/lib/prisma"
 import type { PaymentMode, ExpenseStatus } from "@/generated/prisma/client"
 
@@ -40,7 +43,10 @@ export default async function NewSocietyExpensePage({
   async function createSocietyExpense(formData: FormData) {
     "use server"
 
-    const title = formData.get("title")?.toString().trim()
+    const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
+    const verifiedSocietyId = authContext.society.id
+
+    const title = sanitizeText(formData.get("title")?.toString())
     const categoryId = formData.get("categoryId")?.toString().trim()
     const vendorId = formData.get("vendorId")?.toString().trim() || null
     const rawAmount = formData.get("amount")?.toString().trim()
@@ -51,7 +57,7 @@ export default async function NewSocietyExpensePage({
     const mode = formData.get("mode")?.toString().trim() || "BANK"
     const invoiceNumber = formData.get("invoiceNumber")?.toString().trim() || null
     const reference = formData.get("reference")?.toString().trim() || null
-    const description = formData.get("description")?.toString().trim() || null
+    const description = formData.get("description") ? sanitizeText(formData.get("description")?.toString()) : null
 
     if (!title || !categoryId || !rawAmount || !expenseDateStr) {
       throw new Error("Title, category, amount, and expense date are required")
@@ -66,9 +72,37 @@ export default async function NewSocietyExpensePage({
     const tdsAmount = rawTds ? parseFloat(rawTds) : 0
 
     await prisma.$transaction(async (tx) => {
-      await tx.expense.create({
+      // Validate category belongs to this society
+      const category = await tx.expenseCategory.findFirst({
+        where: { id: categoryId, societyId: verifiedSocietyId },
+      })
+      if (!category) {
+        throw new Error("Invalid expense category for this society")
+      }
+
+      // Validate account belongs to this society if selected
+      if (accountId) {
+        const account = await tx.account.findFirst({
+          where: { id: accountId, societyId: verifiedSocietyId },
+        })
+        if (!account) {
+          throw new Error("Invalid payment account for this society")
+        }
+      }
+
+      // Validate vendor belongs to this society if selected
+      if (vendorId) {
+        const vendor = await tx.vendor.findFirst({
+          where: { id: vendorId, societyId: verifiedSocietyId },
+        })
+        if (!vendor) {
+          throw new Error("Invalid vendor for this society")
+        }
+      }
+
+      const expense = await tx.expense.create({
         data: {
-          societyId: society.id,
+          societyId: verifiedSocietyId,
           title,
           categoryId,
           vendorId,
@@ -93,6 +127,16 @@ export default async function NewSocietyExpensePage({
           },
         })
       }
+
+      await recordAuditLog({
+        societyId: verifiedSocietyId,
+        userId: authContext.user.id,
+        action: "CREATE",
+        entity: "Expense",
+        entityId: expense.id,
+        description: `${authContext.user.email} posted expense voucher ₹${amount} (${title})`,
+        newData: { title, amount, categoryId, accountId },
+      })
     })
 
     revalidatePath(`/society/${code}/expenses`)
@@ -100,6 +144,7 @@ export default async function NewSocietyExpensePage({
     revalidatePath("/admin/expenses")
     redirect(`/society/${code}/expenses`)
   }
+
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">

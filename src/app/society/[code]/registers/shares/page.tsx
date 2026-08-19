@@ -65,8 +65,9 @@ export default async function SocietyShareCertificatesPage({
             </Link>
           </div>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-stone-900 md:text-3xl">
-            "I" Register of Members & Share Certificates
+            &quot;I&quot; Register of Members & Share Certificates
           </h1>
+
           <p className="text-sm text-stone-500">
             Official register of share capital, certificate numbers, and distinctive share numbers issued to flat owners in {society.name}.
           </p>
@@ -200,9 +201,10 @@ export default async function SocietyShareCertificatesPage({
       {/* Share Certificates Table */}
       <div className="rounded-2xl border border-stone-200 bg-white shadow-sm overflow-hidden">
         <div className="border-b border-stone-200 bg-stone-50 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-stone-900">Official "I" Register</h2>
+          <h2 className="text-sm font-bold text-stone-900">Official &quot;I&quot; Register</h2>
           <span className="text-xs text-stone-500">{certificates.length} certificates issued</span>
         </div>
+
 
         {certificates.length === 0 ? (
           <div className="p-12 text-center text-xs text-stone-500">
@@ -277,11 +279,19 @@ export default async function SocietyShareCertificatesPage({
   )
 }
 
+import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+
 async function issueCertificate(formData: FormData) {
   "use server"
 
-  const societyId = formData.get("societyId")?.toString().trim()
   const code = formData.get("code")?.toString().trim()
+  if (!code) throw new Error("Society code is required")
+
+  const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
+  const verifiedSocietyId = authContext.society.id
+
+
   const flatId = formData.get("flatId")?.toString().trim()
   const personId = formData.get("personId")?.toString().trim()
   const certificateNumber = formData.get("certificateNumber")?.toString().trim()
@@ -290,17 +300,33 @@ async function issueCertificate(formData: FormData) {
   const rawTo = formData.get("shareDistinctTo")?.toString().trim()
   const rawFace = formData.get("faceValuePerShare")?.toString().trim()
 
-  if (!societyId || !flatId || !personId || !certificateNumber) {
+  if (!flatId || !personId || !certificateNumber) {
     throw new Error("Flat, member, and certificate number are required")
+  }
+
+  // Validate flat belongs to this society
+  const flat = await prisma.flat.findFirst({
+    where: { id: flatId, block: { societyId: verifiedSocietyId } },
+  })
+  if (!flat) {
+    throw new Error("Flat does not belong to this society")
+  }
+
+  // Validate person belongs to this society
+  const person = await prisma.person.findFirst({
+    where: { id: personId, societyId: verifiedSocietyId },
+  })
+  if (!person) {
+    throw new Error("Member / person does not belong to this society")
   }
 
   const shareDistinctFrom = rawFrom ? parseInt(rawFrom, 10) : null
   const shareDistinctTo = rawTo ? parseInt(rawTo, 10) : null
   const faceValuePerShare = rawFace ? parseFloat(rawFace) : 50
 
-  await prisma.shareCertificate.create({
+  const certificate = await prisma.shareCertificate.create({
     data: {
-      societyId,
+      societyId: verifiedSocietyId,
       flatId,
       personId,
       certificateNumber,
@@ -312,7 +338,18 @@ async function issueCertificate(formData: FormData) {
     },
   })
 
+  await recordAuditLog({
+    societyId: verifiedSocietyId,
+    userId: authContext.user.id,
+    action: "CREATE",
+    entity: "ShareCertificate",
+    entityId: certificate.id,
+    description: `${authContext.user.email} issued share certificate #${certificateNumber} to ${person.name}`,
+    newData: { certificateNumber, sharesCount, flatId, personId },
+  })
+
   revalidatePath(`/society/${code}/registers/shares`)
   revalidatePath(`/society/${code}/registers`)
   revalidatePath("/admin/registers")
 }
+

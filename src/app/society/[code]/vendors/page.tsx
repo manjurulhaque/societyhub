@@ -2,6 +2,8 @@ import { notFound } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { prisma } from "@/lib/prisma"
+import { maskBankAccount, maskPan } from "@/lib/masking"
+
 
 export default async function SocietyVendorsPage({
   params,
@@ -222,15 +224,16 @@ export default async function SocietyVendorsPage({
 
                     <td className="px-4 py-3.5 font-mono text-[11px] text-stone-700">
                       {v.gstin ? <p>GST: {v.gstin}</p> : null}
-                      {v.panNumber ? <p>PAN: {v.panNumber}</p> : null}
+                      {v.panNumber ? <p>PAN: {maskPan(v.panNumber)}</p> : null}
                       {!v.gstin && !v.panNumber ? <span className="text-stone-400">—</span> : null}
                     </td>
 
                     <td className="px-4 py-3.5 font-mono text-[11px] text-stone-700">
-                      {v.bankAccount ? <p>A/C: {v.bankAccount}</p> : null}
+                      {v.bankAccount ? <p>A/C: {maskBankAccount(v.bankAccount)}</p> : null}
                       {v.ifscCode ? <p>IFSC: {v.ifscCode}</p> : null}
                       {!v.bankAccount && !v.ifscCode ? <span className="text-stone-400">—</span> : null}
                     </td>
+
 
                     <td className="px-4 py-3.5 text-right text-stone-600 font-semibold">
                       {v._count.expenses} expense payouts
@@ -246,28 +249,40 @@ export default async function SocietyVendorsPage({
   )
 }
 
+import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
+import { encryptData } from "@/lib/crypto"
+
 async function createVendor(formData: FormData) {
   "use server"
 
-  const societyId = formData.get("societyId")?.toString().trim()
   const code = formData.get("code")?.toString().trim()
-  const name = formData.get("name")?.toString().trim()
-  const companyName = formData.get("companyName")?.toString().trim() || null
-  const phone = formData.get("phone")?.toString().trim() || null
-  const email = formData.get("email")?.toString().trim() || null
-  const gstin = formData.get("gstin")?.toString().trim().toUpperCase() || null
-  const panNumber = formData.get("panNumber")?.toString().trim().toUpperCase() || null
-  const bankAccount = formData.get("bankAccount")?.toString().trim() || null
-  const ifscCode = formData.get("ifscCode")?.toString().trim().toUpperCase() || null
-  const address = formData.get("address")?.toString().trim() || null
+  if (!code) throw new Error("Society code is required")
 
-  if (!societyId || !name) {
+  const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
+  const verifiedSocietyId = authContext.society.id
+
+  const name = sanitizeText(formData.get("name")?.toString())
+  const companyName = formData.get("companyName") ? sanitizeText(formData.get("companyName")?.toString()) : null
+  const phone = formData.get("phone")?.toString().trim() || null
+  const email = formData.get("email")?.toString().trim().toLowerCase() || null
+  const gstin = formData.get("gstin")?.toString().trim().toUpperCase() || null
+  const rawPan = formData.get("panNumber")?.toString().trim().toUpperCase() || null
+  const panNumber = rawPan ? encryptData(rawPan) : null
+  const rawBankAccount = formData.get("bankAccount")?.toString().trim() || null
+  const bankAccount = rawBankAccount ? encryptData(rawBankAccount) : null
+  const ifscCode = formData.get("ifscCode")?.toString().trim().toUpperCase() || null
+  const address = formData.get("address") ? sanitizeText(formData.get("address")?.toString()) : null
+
+
+  if (!name) {
     throw new Error("Vendor name is required")
   }
 
-  await prisma.vendor.create({
+  const vendor = await prisma.vendor.create({
     data: {
-      societyId,
+      societyId: verifiedSocietyId,
       name,
       companyName,
       phone,
@@ -280,6 +295,18 @@ async function createVendor(formData: FormData) {
     },
   })
 
+
+  await recordAuditLog({
+    societyId: verifiedSocietyId,
+    userId: authContext.user.id,
+    action: "CREATE",
+    entity: "Vendor",
+    entityId: vendor.id,
+    description: `${authContext.user.email} added vendor ${name}${companyName ? ` (${companyName})` : ""}`,
+    newData: { name, companyName, phone, email, gstin },
+  })
+
   revalidatePath(`/society/${code}/vendors`)
   revalidatePath(`/society/${code}/expenses`)
 }
+

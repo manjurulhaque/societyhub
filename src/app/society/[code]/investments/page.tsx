@@ -1,5 +1,5 @@
-import Link from "next/link"
 import { notFound } from "next/navigation"
+
 import { revalidatePath } from "next/cache"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { prisma } from "@/lib/prisma"
@@ -381,11 +381,19 @@ export default async function SocietyInvestmentsPage({
   )
 }
 
+import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+
 async function bookFixedDeposit(formData: FormData) {
   "use server"
 
-  const societyId = formData.get("societyId")?.toString().trim()
   const code = formData.get("code")?.toString().trim()
+  if (!code) throw new Error("Society code is required")
+
+  const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
+  const verifiedSocietyId = authContext.society.id
+
+
   const bankName = formData.get("bankName")?.toString().trim()
   const branch = formData.get("branch")?.toString().trim() || null
   const fdNumber = formData.get("fdNumber")?.toString().trim()
@@ -398,7 +406,7 @@ async function bookFixedDeposit(formData: FormData) {
   const accountId = formData.get("accountId")?.toString().trim() || null
   const remarks = formData.get("remarks")?.toString().trim() || null
 
-  if (!societyId || !bankName || !fdNumber || !rawPrincipal || !rawRate || !startDateStr || !maturityDateStr || !rawMaturity) {
+  if (!bankName || !fdNumber || !rawPrincipal || !rawRate || !startDateStr || !maturityDateStr || !rawMaturity) {
     throw new Error("All required fields must be filled")
   }
 
@@ -406,14 +414,28 @@ async function bookFixedDeposit(formData: FormData) {
   const interestRate = parseFloat(rawRate)
   const maturityAmount = parseFloat(rawMaturity)
 
+  if (isNaN(principalAmount) || principalAmount <= 0) {
+    throw new Error("Invalid principal amount")
+  }
+
   await prisma.$transaction(async (tx) => {
-    await tx.fixedDeposit.create({
+    // If accountId provided, verify it belongs to this society
+    if (accountId) {
+      const account = await tx.account.findFirst({
+        where: { id: accountId, societyId: verifiedSocietyId },
+      })
+      if (!account) {
+        throw new Error("Specified account does not belong to this society")
+      }
+    }
+
+    const fd = await tx.fixedDeposit.create({
       data: {
-        societyId,
+        societyId: verifiedSocietyId,
         bankName,
         branch,
         fdNumber,
-        principalAmount: !isNaN(principalAmount) ? principalAmount : 0,
+        principalAmount,
         interestRate: !isNaN(interestRate) ? interestRate : 0,
         startDate: new Date(startDateStr),
         maturityDate: new Date(maturityDateStr),
@@ -433,6 +455,16 @@ async function bookFixedDeposit(formData: FormData) {
         },
       })
     }
+
+    await recordAuditLog({
+      societyId: verifiedSocietyId,
+      userId: authContext.user.id,
+      action: "CREATE",
+      entity: "FixedDeposit",
+      entityId: fd.id,
+      description: `${authContext.user.email} booked Fixed Deposit ₹${principalAmount} with ${bankName} (FD #${fdNumber})`,
+      newData: { bankName, fdNumber, principalAmount, interestRate, maturityAmount },
+    })
   })
 
   revalidatePath(`/society/${code}/investments`)
@@ -444,10 +476,23 @@ async function bookFixedDeposit(formData: FormData) {
 async function settleMaturity(formData: FormData) {
   "use server"
 
-  const fdId = formData.get("fdId")?.toString().trim()
   const code = formData.get("code")?.toString().trim()
+  const fdId = formData.get("fdId")?.toString().trim()
 
-  if (!fdId) return
+  if (!code || !fdId) return
+
+  const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
+  const verifiedSocietyId = authContext.society.id
+
+
+  // Verify FD belongs to this society (IDOR prevention)
+  const fd = await prisma.fixedDeposit.findFirst({
+    where: { id: fdId, societyId: verifiedSocietyId },
+  })
+
+  if (!fd) {
+    throw new Error("Fixed deposit not found for this society")
+  }
 
   await prisma.fixedDeposit.update({
     where: { id: fdId },
@@ -456,8 +501,18 @@ async function settleMaturity(formData: FormData) {
     },
   })
 
+  await recordAuditLog({
+    societyId: verifiedSocietyId,
+    userId: authContext.user.id,
+    action: "STATUS_CHANGE",
+    entity: "FixedDeposit",
+    entityId: fdId,
+    description: `${authContext.user.email} marked Fixed Deposit ${fd.fdNumber} as MATURED`,
+  })
+
   revalidatePath(`/society/${code}/investments`)
   revalidatePath(`/society/${code}/accounts`)
   revalidatePath("/admin/investments")
   revalidatePath("/admin/accounts")
 }
+

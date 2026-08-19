@@ -314,26 +314,35 @@ export default async function SocietyMeetingsPage({
   )
 }
 
+import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
+
 async function recordMeeting(formData: FormData) {
   "use server"
 
-  const societyId = formData.get("societyId")?.toString().trim()
   const code = formData.get("code")?.toString().trim()
-  const title = formData.get("title")?.toString().trim()
+  if (!code) throw new Error("Society code is required")
+
+  const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
+  const verifiedSocietyId = authContext.society.id
+
+  const title = sanitizeText(formData.get("title")?.toString())
   const meetingType = formData.get("meetingType")?.toString().trim() || "MANAGING_COMMITTEE"
   const meetingDateStr = formData.get("meetingDate")?.toString().trim()
-  const venue = formData.get("venue")?.toString().trim() || null
+  const venue = formData.get("venue") ? sanitizeText(formData.get("venue")?.toString()) : null
   const rawAttendees = formData.get("attendeeCount")?.toString().trim()
   const quorumMet = formData.get("quorumMet") === "true"
-  const agenda = formData.get("agenda")?.toString().trim() || null
-  const minutesNotes = formData.get("minutesNotes")?.toString().trim() || null
+  const agenda = formData.get("agenda") ? sanitizeText(formData.get("agenda")?.toString()) : null
+  const minutesNotes = formData.get("minutesNotes") ? sanitizeText(formData.get("minutesNotes")?.toString()) : null
 
   const resolutionNumber = formData.get("resolutionNumber")?.toString().trim() || null
-  const resolutionTitle = formData.get("resolutionTitle")?.toString().trim() || null
-  const resolutionDescription = formData.get("resolutionDescription")?.toString().trim() || null
+  const resolutionTitle = formData.get("resolutionTitle") ? sanitizeText(formData.get("resolutionTitle")?.toString()) : null
+  const resolutionDescription = formData.get("resolutionDescription") ? sanitizeText(formData.get("resolutionDescription")?.toString()) : null
 
-  if (!societyId || !title || !meetingDateStr) {
-    throw new Error("Society, meeting title, and date are required")
+
+  if (!title || !meetingDateStr) {
+    throw new Error("Meeting title and date are required")
   }
 
   const attendeeCount = rawAttendees ? parseInt(rawAttendees, 10) : null
@@ -341,7 +350,7 @@ async function recordMeeting(formData: FormData) {
   await prisma.$transaction(async (tx) => {
     const meeting = await tx.meeting.create({
       data: {
-        societyId,
+        societyId: verifiedSocietyId,
         title,
         meetingType: meetingType as MeetingType,
         meetingDate: new Date(meetingDateStr),
@@ -364,9 +373,20 @@ async function recordMeeting(formData: FormData) {
         },
       })
     }
+
+    await recordAuditLog({
+      societyId: verifiedSocietyId,
+      userId: authContext.user.id,
+      action: "CREATE",
+      entity: "Meeting",
+      entityId: meeting.id,
+      description: `${authContext.user.email} recorded statutory meeting: ${title} (${meetingType})`,
+      newData: { title, meetingType, meetingDate: meetingDateStr, quorumMet },
+    })
   })
 
   revalidatePath(`/society/${code}/registers/meetings`)
   revalidatePath(`/society/${code}/registers`)
   revalidatePath("/admin/registers")
 }
+

@@ -2341,9 +2341,10 @@ export async function getCorpusFundRegister(params: {
 
     if (corpusDeposit) {
       corpusAmount = new Decimal(corpusDeposit.amount ? corpusDeposit.amount.toString() : 0)
-      status = corpusDeposit.status as any
+      status = corpusDeposit.status as "HELD" | "PENDING_COLLECTION" | "REFUNDED" | "FORFEITED"
 
       if (corpusDeposit.status === "HELD") {
+
         totalCollected = totalCollected.plus(corpusAmount)
         paidCount++
       }

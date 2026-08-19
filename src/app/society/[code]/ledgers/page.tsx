@@ -1,9 +1,13 @@
 import { notFound } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
+import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
 import { prisma } from "@/lib/prisma"
+
 import { seedSocietyChartOfAccounts } from "@/lib/chartOfAccounts"
 import type { LedgerGroup, BalanceType } from "@/generated/prisma/client"
+
 import { LedgerExplorer } from "./LedgerExplorer"
 
 export default async function SocietyLedgersPage({
@@ -63,11 +67,23 @@ export default async function SocietyLedgersPage({
     (l) => !l.parentLedgerId || (l.code && l.code.endsWith("00"))
   )
 
-  async function handleSeedChart() {
-    "use server"
-    await seedSocietyChartOfAccounts(society.id)
-    revalidatePath(`/society/${code}/ledgers`)
-  }
+    async function handleSeedChart() {
+      "use server"
+      const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
+      await seedSocietyChartOfAccounts(authContext.society.id)
+
+
+      await recordAuditLog({
+        societyId: authContext.society.id,
+        userId: authContext.user.id,
+        action: "UPDATE",
+        entity: "Ledger",
+        description: `${authContext.user.email} re-initialized / refreshed standard chart of accounts`,
+      })
+
+      revalidatePath(`/society/${code}/ledgers`)
+    }
+
 
   return (
     <div className="space-y-8">
@@ -249,8 +265,13 @@ export default async function SocietyLedgersPage({
 async function createLedger(formData: FormData) {
   "use server"
 
-  const societyId = formData.get("societyId")?.toString().trim()
   const code = formData.get("code")?.toString().trim()
+  if (!code) throw new Error("Society code is required")
+
+  const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
+  const verifiedSocietyId = authContext.society.id
+
+
   const name = formData.get("name")?.toString().trim()
   const ledgerCode = formData.get("ledgerCode")?.toString().trim() || null
   const group = formData.get("group")?.toString().trim() || "EXPENSE"
@@ -258,8 +279,18 @@ async function createLedger(formData: FormData) {
   const description = formData.get("description")?.toString().trim() || null
   const rawOpeningBalance = formData.get("openingBalance")?.toString().trim()
 
-  if (!societyId || !name) {
-    throw new Error("Society and ledger name are required")
+  if (!name) {
+    throw new Error("Ledger name is required")
+  }
+
+  // If parentLedgerId specified, verify it belongs to this society
+  if (parentLedgerId) {
+    const parent = await prisma.ledger.findFirst({
+      where: { id: parentLedgerId, societyId: verifiedSocietyId },
+    })
+    if (!parent) {
+      throw new Error("Parent ledger not found in this society")
+    }
   }
 
   const openingBalance = rawOpeningBalance ? parseFloat(rawOpeningBalance) : 0
@@ -268,9 +299,9 @@ async function createLedger(formData: FormData) {
   const balanceType: BalanceType =
     group === "ASSET" || group === "EXPENSE" ? "DEBIT" : "CREDIT"
 
-  await prisma.ledger.create({
+  const ledger = await prisma.ledger.create({
     data: {
-      societyId,
+      societyId: verifiedSocietyId,
       name,
       code: ledgerCode,
       group: group as LedgerGroup,
@@ -282,5 +313,16 @@ async function createLedger(formData: FormData) {
     },
   })
 
+  await recordAuditLog({
+    societyId: verifiedSocietyId,
+    userId: authContext.user.id,
+    action: "CREATE",
+    entity: "Ledger",
+    entityId: ledger.id,
+    description: `${authContext.user.email} created custom ledger ${name} (${group})`,
+    newData: { name, code: ledgerCode, group, openingBalance: validOpening },
+  })
+
   revalidatePath(`/society/${code}/ledgers`)
 }
+

@@ -1,8 +1,10 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
+import { requireCommitteeAccess, EXECUTIVE_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
+import { recordAuditLog } from "@/lib/audit"
+import type { SocietyType, MaintenanceType } from "@/generated/prisma/client"
 
 export type UpdateSocietySettingsState = {
   success?: boolean
@@ -17,10 +19,11 @@ export async function updateSocietySettings(
   formData: FormData
 ): Promise<UpdateSocietySettingsState> {
   try {
-    const context = await getSocietyAdmin(societyCode)
-    if (!context || context.society.id !== societyId) {
-      return { error: "Unauthorized. You do not have permission to update settings for this society." }
+    const context = await requireCommitteeAccess(societyCode, EXECUTIVE_ROLES)
+    if (context.society.id !== societyId) {
+      return { error: "Tenant mismatch. The specified society does not match your active session." }
     }
+
 
     const name = formData.get("name")?.toString().trim()
     const rawCode = formData.get("code")?.toString().trim().toUpperCase() || null
@@ -77,7 +80,7 @@ export async function updateSocietySettings(
       data: {
         name,
         code: rawCode,
-        societyType: societyType as any,
+        societyType: societyType as SocietyType,
         phone,
         email,
         address,
@@ -88,7 +91,7 @@ export async function updateSocietySettings(
         panNumber,
         tanNumber,
         gstin,
-        maintenanceType: maintenanceType as any,
+        maintenanceType: maintenanceType as MaintenanceType,
         fixedRate: fixedRate !== null && !isNaN(fixedRate) ? fixedRate : null,
         ratePerSqft: ratePerSqft !== null && !isNaN(ratePerSqft) ? ratePerSqft : null,
         billGenerationDay: !isNaN(billGenerationDay) ? billGenerationDay : 1,
@@ -102,6 +105,16 @@ export async function updateSocietySettings(
 
     const updatedCode = rawCode || societyId
 
+    await recordAuditLog({
+      societyId,
+      userId: context.user.id,
+      action: "UPDATE",
+      entity: "Society",
+      entityId: societyId,
+      description: `${context.user.email} updated society profile and settings for ${name}`,
+      newData: { name, code: rawCode, societyType, maintenanceType },
+    })
+
     revalidatePath(`/society/${societyCode}/settings`)
     revalidatePath(`/society/${updatedCode}/settings`)
     revalidatePath(`/society/${updatedCode}/dashboard`)
@@ -111,10 +124,12 @@ export async function updateSocietySettings(
       success: true,
       message: "Society settings updated successfully.",
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to update society settings:", err)
+    const message = err instanceof Error ? err.message : "Failed to update society settings. Please try again."
     return {
-      error: err.message || "Failed to update society settings. Please try again.",
+      error: message,
     }
   }
 }
+

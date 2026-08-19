@@ -290,20 +290,29 @@ export default async function SocietyPettyCashPage({
   )
 }
 
+import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
+
 async function createPettyEntry(formData: FormData) {
   "use server"
 
-  const societyId = formData.get("societyId")?.toString().trim()
-  const accountId = formData.get("accountId")?.toString().trim()
   const code = formData.get("code")?.toString().trim()
+  if (!code) throw new Error("Society code is required")
+
+  const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
+  const verifiedSocietyId = authContext.society.id
+
+  const accountId = formData.get("accountId")?.toString().trim()
   const type = formData.get("type")?.toString().trim() || "EXPENSE"
   const rawAmount = formData.get("amount")?.toString().trim()
   const entryDateStr = formData.get("entryDate")?.toString().trim()
-  const payee = formData.get("payee")?.toString().trim()
-  const purpose = formData.get("purpose")?.toString().trim()
-  const billReference = formData.get("billReference")?.toString().trim() || null
+  const payee = sanitizeText(formData.get("payee")?.toString())
+  const purpose = sanitizeText(formData.get("purpose")?.toString())
+  const billReference = formData.get("billReference") ? sanitizeText(formData.get("billReference")?.toString()) : null
 
-  if (!societyId || !accountId || !rawAmount || !entryDateStr || !payee || !purpose) {
+
+  if (!accountId || !rawAmount || !entryDateStr || !payee || !purpose) {
     throw new Error("All required fields must be provided")
   }
 
@@ -312,9 +321,14 @@ async function createPettyEntry(formData: FormData) {
     throw new Error("Invalid petty cash amount")
   }
 
-  const account = await prisma.account.findUniqueOrThrow({
-    where: { id: accountId },
+  // Validate account belongs to this society (IDOR prevention)
+  const account = await prisma.account.findFirst({
+    where: { id: accountId, societyId: verifiedSocietyId },
   })
+
+  if (!account) {
+    throw new Error("Specified account does not belong to this society")
+  }
 
   const currentBalance = Number(account.currentBalance)
   const newBalance = type === "TOPUP_RECEIPT" ? currentBalance + amount : currentBalance - amount
@@ -322,10 +336,10 @@ async function createPettyEntry(formData: FormData) {
   const timestamp = Date.now().toString().slice(-4)
   const voucherNumber = `PCV-${new Date().getFullYear()}-${timestamp}`
 
-  await prisma.$transaction([
+  const [entry] = await prisma.$transaction([
     prisma.pettyCashEntry.create({
       data: {
-        societyId,
+        societyId: verifiedSocietyId,
         accountId,
         voucherNumber,
         entryDate: new Date(entryDateStr),
@@ -345,6 +359,17 @@ async function createPettyEntry(formData: FormData) {
     }),
   ])
 
+  await recordAuditLog({
+    societyId: verifiedSocietyId,
+    userId: authContext.user.id,
+    action: "CREATE",
+    entity: "PettyCashEntry",
+    entityId: entry.id,
+    description: `${authContext.user.email} created petty cash entry ${voucherNumber} (${type} ₹${amount}) for ${purpose}`,
+    newData: { voucherNumber, type, amount, payee, purpose },
+  })
+
   revalidatePath(`/society/${code}/petty-cash`)
   revalidatePath(`/society/${code}/accounts`)
 }
+

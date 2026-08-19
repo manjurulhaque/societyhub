@@ -138,8 +138,8 @@ export default async function PeoplePage() {
             "Actions",
           ]}
           rows={people.map((person) => {
-            const primaryFlat = person.flats[0]
             const society = person.society
+
 
             return (
               <tr

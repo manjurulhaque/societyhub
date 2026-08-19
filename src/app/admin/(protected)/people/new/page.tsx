@@ -197,8 +197,13 @@ export default async function NewPersonPage() {
   )
 }
 
+import { requireSuperAdmin } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+
 async function createPerson(formData: FormData) {
   "use server"
+
+  const admin = await requireSuperAdmin()
 
   const societyId = formData.get("societyId")?.toString().trim()
   const name = formData.get("name")?.toString().trim()
@@ -215,7 +220,7 @@ async function createPerson(formData: FormData) {
     throw new Error("Society and name are required")
   }
 
-  await prisma.person.create({
+  const person = await prisma.person.create({
     data: {
       societyId,
       name,
@@ -230,7 +235,18 @@ async function createPerson(formData: FormData) {
     },
   })
 
+  await recordAuditLog({
+    societyId,
+    userId: admin.id,
+    action: "CREATE",
+    entity: "Person",
+    entityId: person.id,
+    description: `Super Admin ${admin.email} registered person ${name}`,
+    newData: { name, email, phone },
+  })
+
   revalidatePath("/admin/people")
   revalidatePath(`/admin/societies/${societyId}`)
   redirect("/admin/people")
 }
+

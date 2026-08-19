@@ -93,8 +93,13 @@ export default async function EditSocietyPage({
   )
 }
 
+import { requireSuperAdmin } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+
 async function updateSociety(id: string, formData: FormData) {
   "use server"
+
+  const admin = await requireSuperAdmin()
 
   const name = formData.get("name")?.toString().trim()
   const rawCode = formData.get("code")?.toString().trim() || null
@@ -107,8 +112,12 @@ async function updateSociety(id: string, formData: FormData) {
 
   const existingSociety = await prisma.society.findUnique({
     where: { id },
-    select: { code: true },
+    select: { id: true, name: true, code: true, address: true, maintenanceType: true },
   })
+
+  if (!existingSociety) {
+    throw new Error("Society not found")
+  }
 
   // If code is not changed, keep it. If changed or cleared, generate/sanitize.
   let code = existingSociety?.code
@@ -131,7 +140,19 @@ async function updateSociety(id: string, formData: FormData) {
     },
   })
 
+  await recordAuditLog({
+    societyId: id,
+    userId: admin.id,
+    action: "UPDATE",
+    entity: "Society",
+    entityId: id,
+    description: `Super Admin ${admin.email} updated society settings for ${name}`,
+    oldData: existingSociety,
+    newData: { name, code, address, maintenanceType },
+  })
+
   revalidatePath("/admin/societies")
   revalidatePath(`/admin/societies/${id}`)
   redirect(`/admin/societies/${id}`)
 }
+

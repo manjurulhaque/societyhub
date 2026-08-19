@@ -49,7 +49,9 @@ export default async function ProtectedAdminLayout({
         <SidebarLink href="/admin/registers">Statutory Registers</SidebarLink>
         <SidebarLink href="/admin/amenities">Amenities & Bookings</SidebarLink>
         <SidebarLink href="/admin/reports">Reports</SidebarLink>
+        <SidebarLink href="/admin/audit-logs">Security Audit Logs</SidebarLink>
         <SidebarLink href="/admin/profile">Account Settings</SidebarLink>
+
 
         <div className="pt-6 border-t mt-6">
           <form action="/admin/logout" method="POST">

@@ -185,8 +185,13 @@ export default async function NewBillPage() {
   )
 }
 
+import { requireSuperAdmin } from "@/lib/auth/requireAuth"
+import { recordAuditLog } from "@/lib/audit"
+
 async function createBill(formData: FormData) {
   "use server"
+
+  const admin = await requireSuperAdmin()
 
   const flatId = formData.get("flatId")?.toString().trim()
   const billType = formData.get("billType")?.toString().trim() || "MAINTENANCE"
@@ -227,7 +232,7 @@ async function createBill(formData: FormData) {
   const randomSuffix = Math.floor(1000 + Math.random() * 9000)
   const billNumber = `${prefix}-${year}-${String(month).padStart(2, "0")}-${flat.number}-${randomSuffix}`
 
-  await prisma.bill.create({
+  const bill = await prisma.bill.create({
     data: {
       societyId: flat.block.societyId,
       flatId,
@@ -242,7 +247,18 @@ async function createBill(formData: FormData) {
     },
   })
 
+  await recordAuditLog({
+    societyId: flat.block.societyId,
+    userId: admin.id,
+    action: "BILL_GENERATED",
+    entity: "Bill",
+    entityId: bill.id,
+    description: `Super Admin ${admin.email} generated bill ${billNumber} for ₹${amount}`,
+    newData: { billNumber, amount, flatId, year, month },
+  })
+
   revalidatePath("/admin/bills")
   revalidatePath(`/society/${flat.block.societyId}/bills`)
   redirect("/admin/bills")
 }
+

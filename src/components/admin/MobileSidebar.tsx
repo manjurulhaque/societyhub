@@ -20,10 +20,13 @@ export function MobileSidebar({
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
 
-  // Auto-close drawer on route change
-  useEffect(() => {
+  const [prevPathname, setPrevPathname] = useState(pathname)
+
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname)
     setIsOpen(false)
-  }, [pathname])
+  }
+
 
   // Lock body scroll when drawer is open
   useEffect(() => {

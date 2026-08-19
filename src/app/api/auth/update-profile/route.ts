@@ -2,6 +2,9 @@ import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth/getCurrentUser"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { prisma } from "@/lib/prisma"
+import { checkRateLimit } from "@/lib/rateLimit"
+import { recordAuditLog } from "@/lib/audit"
+import { updateEmailSchema, updatePasswordSchema } from "@/lib/validations/auth"
 
 export async function POST(req: Request) {
   try {
@@ -14,6 +17,26 @@ export async function POST(req: Request) {
       )
     }
 
+    // Rate limiting: max 5 requests per 5 minutes per user
+    const rateLimit = checkRateLimit(`profile-update:${currentUser.id}`, {
+      maxRequests: 5,
+      windowSeconds: 300,
+    })
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: `Too many profile update requests. Please wait ${rateLimit.retryAfterSeconds} seconds before trying again.`,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(rateLimit.retryAfterSeconds ?? 60),
+          },
+        }
+      )
+    }
+
     const body = await req.json()
     const { action } = body
 
@@ -21,14 +44,15 @@ export async function POST(req: Request) {
 
     // 1. UPDATE EMAIL
     if (action === "update_email") {
-      const newEmail = String(body.newEmail ?? "").trim().toLowerCase()
-
-      if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      const parsed = updateEmailSchema.safeParse({ newEmail: body.newEmail })
+      if (!parsed.success) {
         return NextResponse.json(
-          { error: "Please provide a valid email address." },
+          { error: parsed.error.issues[0]?.message || "Please provide a valid email address." },
           { status: 400 }
         )
       }
+
+      const newEmail = parsed.data.newEmail.toLowerCase().trim()
 
       if (newEmail === currentUser.email.toLowerCase()) {
         return NextResponse.json(
@@ -86,6 +110,16 @@ export async function POST(req: Request) {
         },
       })
 
+      await recordAuditLog({
+        userId: currentUser.id,
+        action: "UPDATE",
+        entity: "User",
+        entityId: currentUser.id,
+        description: `User changed email from ${currentUser.email} to ${newEmail}`,
+        oldData: { email: currentUser.email },
+        newData: { email: newEmail },
+      })
+
       return NextResponse.json({
         success: true,
         message: "Email address updated successfully.",
@@ -95,14 +129,19 @@ export async function POST(req: Request) {
 
     // 2. UPDATE PASSWORD
     if (action === "update_password") {
-      const newPassword = String(body.newPassword ?? "")
+      const parsed = updatePasswordSchema.safeParse({
+        newPassword: body.newPassword,
+        confirmPassword: body.confirmPassword ?? body.newPassword,
+      })
 
-      if (!newPassword || newPassword.length < 6) {
+      if (!parsed.success) {
         return NextResponse.json(
-          { error: "Password must be at least 6 characters long." },
+          { error: parsed.error.issues[0]?.message || "Password does not meet complexity requirements." },
           { status: 400 }
         )
       }
+
+      const { newPassword } = parsed.data
 
       const { error: supabaseError } =
         await supabaseAdmin.auth.admin.updateUserById(
@@ -118,6 +157,14 @@ export async function POST(req: Request) {
           { status: 500 }
         )
       }
+
+      await recordAuditLog({
+        userId: currentUser.id,
+        action: "UPDATE",
+        entity: "User",
+        entityId: currentUser.id,
+        description: "User successfully updated their password",
+      })
 
       return NextResponse.json({
         success: true,
