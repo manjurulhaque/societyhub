@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { prisma } from "@/lib/prisma"
+import { maskBankAccount } from "@/lib/masking"
 import {
   AdminPageHeader,
   AdminTable,
@@ -8,6 +9,7 @@ import {
   AdminButton,
   AdminEmptyState,
 } from "@/components/admin"
+
 
 export default async function AccountsPage() {
   const [accounts, totalBalanceAggregate, bankCount, cashCount] = await Promise.all([
@@ -191,11 +193,12 @@ export default async function AccountsPage() {
                   ) : null}
                   {acc.accountNumber ? (
                     <span className="font-mono text-stone-600 block">
-                      A/C: {acc.accountNumber}
+                      A/C: {maskBankAccount(acc.accountNumber)}
                     </span>
                   ) : (
                     <span className="text-stone-400">—</span>
                   )}
+
                 </td>
 
                 {/* IFSC & Branch */}

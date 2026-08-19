@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { prisma } from "@/lib/prisma"
+import { maskPan, maskAadhaar, maskPhone } from "@/lib/masking"
 import {
   AdminPageHeader,
   AdminCard,
@@ -10,6 +11,7 @@ import {
   AdminTable,
 } from "@/components/admin"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
+
 
 export default async function PersonDetailPage({
   params,
@@ -93,7 +95,7 @@ export default async function PersonDetailPage({
             label="Housing Society"
             value={`${person.society.name} (${person.society.code || "CHS"})`}
           />
-          <AdminDetailItem label="Phone" value={person.phone ?? "Not provided"} />
+          <AdminDetailItem label="Phone" value={person.phone ? maskPhone(person.phone) : "Not provided"} />
           <AdminDetailItem label="Email" value={person.email ?? "Not provided"} />
         </div>
       </AdminCard>
@@ -116,8 +118,9 @@ export default async function PersonDetailPage({
               </AdminBadge>
             }
           />
-          <AdminDetailItem label="PAN Number" value={person.panNumber ?? "—"} />
-          <AdminDetailItem label="Aadhaar" value={person.aadhaarNumber ?? "—"} />
+          <AdminDetailItem label="PAN Number" value={person.panNumber ? maskPan(person.panNumber) : "—"} />
+          <AdminDetailItem label="Aadhaar" value={person.aadhaarNumber ? maskAadhaar(person.aadhaarNumber) : "—"} />
+
           <AdminDetailItem label="Blood Group" value={person.bloodGroup ?? "—"} />
           <AdminDetailItem label="Occupation" value={person.occupation ?? "—"} />
           <AdminDetailItem

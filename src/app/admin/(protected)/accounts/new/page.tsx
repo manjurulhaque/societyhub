@@ -178,6 +178,7 @@ export default async function NewAccountPage() {
 
 import { requireSuperAdmin } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
+import { encryptData } from "@/lib/crypto"
 
 async function createAccount(formData: FormData) {
   "use server"
@@ -188,11 +189,13 @@ async function createAccount(formData: FormData) {
   const name = formData.get("name")?.toString().trim()
   const accountType = formData.get("accountType")?.toString().trim() || "BANK"
   const bankName = formData.get("bankName")?.toString().trim() || null
-  const accountNumber = formData.get("accountNumber")?.toString().trim() || null
+  const rawAccountNumber = formData.get("accountNumber")?.toString().trim() || null
+  const accountNumber = rawAccountNumber ? encryptData(rawAccountNumber) : null
   const ifscCode = formData.get("ifscCode")?.toString().trim().toUpperCase() || null
   const branch = formData.get("branch")?.toString().trim() || null
   const rawOpeningBalance = formData.get("openingBalance")?.toString().trim()
   const isDefault = formData.get("isDefault") === "true"
+
 
   if (!societyId || !name) {
     throw new Error("Society and account name are required")
