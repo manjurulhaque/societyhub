@@ -50,6 +50,32 @@ export const EXECUTIVE_ROLES: SocietyRole[] = [
 ]
 
 /**
+ * Roles with legal authority to approve data entries and disbursements entered by managers
+ */
+export const APPROVAL_ROLES: SocietyRole[] = [
+  "PRESIDENT",
+  "SECRETARY",
+  "TREASURER",
+]
+
+/**
+ * Helper to check if a user designation has approval authority
+ */
+export function canApproveDataEntry(designation?: string, isSuperAdmin = false): boolean {
+  if (isSuperAdmin) return true
+  if (!designation) return false
+  return APPROVAL_ROLES.includes(designation as SocietyRole)
+}
+
+/**
+ * Helper to check if a user is in a manager/operational data entry role
+ */
+export function isManagerRole(designation?: string, isSuperAdmin = false): boolean {
+  if (isSuperAdmin) return false
+  return designation === "MANAGER" || designation === "ACCOUNTANT"
+}
+
+/**
  * Enforces that the current authenticated user is a SUPER_ADMIN.
  * Throws UnauthorizedError or ForbiddenError if check fails.
  */
@@ -115,4 +141,13 @@ export async function requireCommitteeAccess(
 
   return context
 }
+
+/**
+ * Enforces that the current authenticated user is a Treasurer, Secretary, President, or Super Admin
+ * who has authority to approve or reject pending data entries submitted by managers.
+ */
+export async function requireApprovalAccess(societyCodeOrId: string): Promise<SocietyAdminContext> {
+  return requireCommitteeAccess(societyCodeOrId, APPROVAL_ROLES)
+}
+
 

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
-import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
+import { requireCommitteeAccess, FINANCIAL_ROLES, canApproveDataEntry, isManagerRole } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { prisma } from "@/lib/prisma"
@@ -21,7 +21,9 @@ export default async function NewSocietyExpensePage({
     notFound()
   }
 
-  const { society } = context
+  const { society, designation, isSuperAdmin } = context
+  const isManager = isManagerRole(designation, isSuperAdmin)
+  const isApprover = canApproveDataEntry(designation, isSuperAdmin)
 
   const [categories, accounts, vendors] = await Promise.all([
     prisma.expenseCategory.findMany({
@@ -71,6 +73,10 @@ export default async function NewSocietyExpensePage({
     const gstAmount = rawGst ? parseFloat(rawGst) : 0
     const tdsAmount = rawTds ? parseFloat(rawTds) : 0
 
+    // Determine approval requirement based on caller role
+    const hasAutoApproveAuthority = canApproveDataEntry(authContext.designation, authContext.isSuperAdmin)
+    const initialStatus: ExpenseStatus = hasAutoApproveAuthority ? "PAID" : "PENDING"
+
     await prisma.$transaction(async (tx) => {
       // Validate category belongs to this society
       const category = await tx.expenseCategory.findFirst({
@@ -112,14 +118,15 @@ export default async function NewSocietyExpensePage({
           tdsAmount: !isNaN(tdsAmount) ? tdsAmount : 0,
           expenseDate: new Date(expenseDateStr),
           mode: mode as PaymentMode,
-          status: "PAID" as ExpenseStatus,
+          status: initialStatus,
           invoiceNumber,
           reference,
           description,
         },
       })
 
-      if (accountId) {
+      // If created by executive with direct approval authority, immediately debit account
+      if (hasAutoApproveAuthority && accountId) {
         await tx.account.update({
           where: { id: accountId },
           data: {
@@ -128,19 +135,26 @@ export default async function NewSocietyExpensePage({
         })
       }
 
+      const auditDescription = hasAutoApproveAuthority
+        ? `${authContext.user.email} (${authContext.designation}) posted & approved expense voucher ₹${amount} (${title})`
+        : `${authContext.user.email} (${authContext.designation}) submitted expense voucher ₹${amount} (${title}) for Treasurer/Secretary approval`
+
       await recordAuditLog({
         societyId: verifiedSocietyId,
         userId: authContext.user.id,
         action: "CREATE",
         entity: "Expense",
         entityId: expense.id,
-        description: `${authContext.user.email} posted expense voucher ₹${amount} (${title})`,
-        newData: { title, amount, categoryId, accountId },
+        description: auditDescription,
+        newData: { title, amount, categoryId, accountId, status: initialStatus },
       })
     })
 
     revalidatePath(`/society/${code}/expenses`)
     revalidatePath(`/society/${code}/accounts`)
+    revalidatePath(`/society/${code}/approvals`)
+    revalidatePath(`/society/${code}/reports`)
+    revalidatePath(`/society/${code}/dashboard`)
     revalidatePath("/admin/expenses")
     redirect(`/society/${code}/expenses`)
   }
@@ -168,6 +182,32 @@ export default async function NewSocietyExpensePage({
           Cancel
         </Link>
       </div>
+
+      {isManager ? (
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900 shadow-sm">
+          <svg className="h-5 w-5 shrink-0 text-amber-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="text-xs space-y-0.5">
+            <p className="font-bold text-amber-950">Manager Data Entry — Approval Required</p>
+            <p className="text-amber-800">
+              As Estate Manager, this expense voucher will be submitted in <strong className="font-semibold">Pending</strong> status. It will require approval from the <strong className="font-semibold">Treasurer</strong> or <strong className="font-semibold">Secretary</strong> before bank account funds are disbursed and reflected in official books.
+            </p>
+          </div>
+        </div>
+      ) : isApprover ? (
+        <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 shadow-sm">
+          <svg className="h-5 w-5 shrink-0 text-emerald-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="text-xs space-y-0.5">
+            <p className="font-bold text-emerald-950">Executive Authorization ({designation})</p>
+            <p className="text-emerald-800">
+              As an authorized officer ({designation}), submitting this voucher will immediately post and debit the selected account balance.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       <form action={createSocietyExpense} className="space-y-6">
         {/* Particulars Card */}
@@ -367,10 +407,11 @@ export default async function NewSocietyExpensePage({
             type="submit"
             className="rounded-full bg-stone-950 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-800"
           >
-            Post Expense Voucher
+            {isManager ? "Submit for Approval" : "Post & Disburse Expense Voucher"}
           </button>
         </div>
       </form>
     </div>
   )
 }
+

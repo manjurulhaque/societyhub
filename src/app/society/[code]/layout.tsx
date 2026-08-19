@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth/getCurrentUser"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
+import { prisma } from "@/lib/prisma"
 import { AdminBadge, MobileSidebar } from "@/components/admin"
 import { SocietySidebarLink } from "@/components/society"
 
@@ -30,6 +31,10 @@ export default async function SocietyPortalLayout({
 
   const { society, designation, isSuperAdmin } = context
   const societyCode = society.code || society.id
+
+  const pendingApprovalCount = await prisma.expense.count({
+    where: { societyId: society.id, status: "PENDING" },
+  })
 
   const sidebarContent = (
     <>
@@ -67,6 +72,22 @@ export default async function SocietyPortalLayout({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
           </svg>
           Dashboard
+        </SocietySidebarLink>
+
+        <SocietySidebarLink href={`/society/${societyCode}/approvals`}>
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-2">
+              <svg className="h-4 w-4 shrink-0 text-stone-400 group-hover:text-stone-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Approvals</span>
+            </div>
+            {pendingApprovalCount > 0 ? (
+              <span className="inline-flex items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-xs">
+                {pendingApprovalCount}
+              </span>
+            ) : null}
+          </div>
         </SocietySidebarLink>
 
         <SocietySidebarLink href={`/society/${societyCode}/flats`}>
