@@ -1,4 +1,9 @@
 import type { NextConfig } from "next";
+import events from "node:events";
+
+if (typeof process !== "undefined" && (events.defaultMaxListeners ?? 10) < 30) {
+  events.defaultMaxListeners = 30;
+}
 
 const nextConfig: NextConfig = {
   experimental: {

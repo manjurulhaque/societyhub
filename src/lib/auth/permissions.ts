@@ -18,27 +18,41 @@ export {
   type PermissionDefinition,
 }
 
+let isPermissionsSeededCached = false
+
 /**
  * Ensures that all standard permissions and default system roles are present in the database.
  */
-export async function ensurePermissionsSeeded(): Promise<void> {
-  // 1. Seed standard permissions
-  for (const perm of STANDARD_PERMISSIONS) {
-    await prisma.permission.upsert({
-      where: { code: perm.code },
-      update: {
-        name: perm.name,
-        module: perm.module,
-        description: perm.description,
-      },
-      create: {
-        code: perm.code,
-        name: perm.name,
-        module: perm.module,
-        description: perm.description,
-      },
-    })
+export async function ensurePermissionsSeeded(force = false): Promise<void> {
+  if (isPermissionsSeededCached && !force) {
+    return
   }
+
+  // Fast check: If permissions and system roles are already populated, skip heavy loop
+  try {
+    const [permCount, systemRoleCount] = await Promise.all([
+      prisma.permission.count(),
+      prisma.role.count({ where: { societyId: null, isSystem: true } }),
+    ])
+
+    if (!force && permCount >= STANDARD_PERMISSIONS.length && systemRoleCount >= DEFAULT_ROLE_TEMPLATES.length) {
+      isPermissionsSeededCached = true
+      return
+    }
+  } catch {
+    // If table not ready, continue to seed
+  }
+
+  // 1. Batch seed standard permissions
+  await prisma.permission.createMany({
+    data: STANDARD_PERMISSIONS.map((perm) => ({
+      code: perm.code,
+      name: perm.name,
+      module: perm.module,
+      description: perm.description,
+    })),
+    skipDuplicates: true,
+  })
 
   // 2. Fetch all permissions to get their IDs
   const allPermissions = await prisma.permission.findMany()
@@ -129,27 +143,23 @@ export async function ensurePermissionsSeeded(): Promise<void> {
       }
     }
 
-    // Connect permissions
+    // Connect permissions in batch
     const validPermIds = tpl.permissions
       .map((code) => permMap.get(code))
       .filter((id): id is string => Boolean(id))
 
-    for (const permId of validPermIds) {
-      await prisma.rolePermission.upsert({
-        where: {
-          roleId_permissionId: {
-            roleId: role.id,
-            permissionId: permId,
-          },
-        },
-        update: {},
-        create: {
+    if (validPermIds.length > 0) {
+      await prisma.rolePermission.createMany({
+        data: validPermIds.map((permId) => ({
           roleId: role.id,
           permissionId: permId,
-        },
+        })),
+        skipDuplicates: true,
       })
     }
   }
+
+  isPermissionsSeededCached = true
 }
 
 /**
