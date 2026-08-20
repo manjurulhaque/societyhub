@@ -2,7 +2,7 @@ import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth/getCurrentUser"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
-import { prisma } from "@/lib/prisma"
+import { getCurrentFinancialYear, getPendingExpenseSummary } from "@/lib/society"
 import { AdminBadge, MobileSidebar } from "@/components/admin"
 import { SocietySidebarLink } from "@/components/society"
 
@@ -32,15 +32,11 @@ export default async function SocietyPortalLayout({
   const { society, designation, isSuperAdmin } = context
   const societyCode = society.code || society.id
 
-  const [pendingApprovalCount, currentFY] = await Promise.all([
-    prisma.expense.count({
-      where: { societyId: society.id, status: "PENDING" },
-    }),
-    prisma.financialYear.findFirst({
-      where: { societyId: society.id, isCurrent: true },
-      select: { id: true, name: true, isLocked: true },
-    }),
+  const [pendingExpenseSummary, currentFY] = await Promise.all([
+    getPendingExpenseSummary(society.id),
+    getCurrentFinancialYear(society.id),
   ])
+  const pendingApprovalCount = pendingExpenseSummary.count
 
   const sidebarContent = (
     <>

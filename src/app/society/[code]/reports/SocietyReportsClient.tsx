@@ -29,7 +29,6 @@ import {
   AdminModal,
 } from "@/components/admin"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
-import { generateReportPDF } from "@/lib/pdf/reportPdfGenerator"
 
 const CHART_COLORS = [
   "#059669",
@@ -750,7 +749,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
   }
 
   // Direct 1-Click PDF Download
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     let reportTitle = "Official Society Report"
     let subtitle = ""
     let headers: string[] = []
@@ -968,6 +967,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
       filename = `${data.society.name.toLowerCase().replace(/\s+/g, "_")}_unit_ledger_report.pdf`
     }
 
+    const { generateReportPDF } = await import("@/lib/pdf/reportPdfGenerator")
     generateReportPDF({
       society: {
         name: data.society.name,

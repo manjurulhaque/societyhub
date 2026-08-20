@@ -1,3 +1,4 @@
+import { cache } from "react"
 import { prisma } from "@/lib/prisma"
 import type { SocietyAdminContext } from "@/lib/auth/getSocietyAdmin"
 import { EXECUTIVE_ROLES } from "@/lib/auth/requireAuth"
@@ -166,10 +167,8 @@ export async function ensurePermissionsSeeded(force = false): Promise<void> {
  * Returns all effective permission codes for a given user in a society.
  * Super Admins and President/Secretary/Treasurer automatically receive full permissions.
  */
-export async function getMemberEffectivePermissions(
-  userId: string,
-  societyId: string
-): Promise<Set<string>> {
+export const getMemberEffectivePermissions = cache(
+  async (userId: string, societyId: string): Promise<Set<string>> => {
   // Check user role
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -229,7 +228,7 @@ export async function getMemberEffectivePermissions(
   }
 
   return permissions
-}
+})
 
 /**
  * Checks if the current society admin context has a specific permission.

@@ -58,7 +58,7 @@ export default async function SocietyAuditLogsPage({
     ]
   }
 
-  const [logs, totalCount, createCount, updateCount, statusChangeCount] = await Promise.all([
+  const [logs, totalCount, actionCounts] = await Promise.all([
     prisma.auditLog.findMany({
       where: whereClause,
       orderBy: { createdAt: "desc" },
@@ -75,10 +75,19 @@ export default async function SocietyAuditLogsPage({
       },
     }),
     prisma.auditLog.count({ where: whereClause }),
-    prisma.auditLog.count({ where: { societyId: verifiedSocietyId, action: "CREATE" } }),
-    prisma.auditLog.count({ where: { societyId: verifiedSocietyId, action: "UPDATE" } }),
-    prisma.auditLog.count({ where: { societyId: verifiedSocietyId, action: "STATUS_CHANGE" } }),
+    prisma.auditLog.groupBy({
+      by: ["action"],
+      where: { societyId: verifiedSocietyId },
+      _count: { _all: true },
+    }),
   ])
+
+  const createCount =
+    actionCounts.find((item) => item.action === "CREATE")?._count._all ?? 0
+  const updateCount =
+    actionCounts.find((item) => item.action === "UPDATE")?._count._all ?? 0
+  const statusChangeCount =
+    actionCounts.find((item) => item.action === "STATUS_CHANGE")?._count._all ?? 0
 
   const totalPages = Math.ceil(totalCount / pageSize)
 
