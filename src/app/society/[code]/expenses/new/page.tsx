@@ -165,6 +165,7 @@ export default async function NewSocietyExpensePage({
       initialCategories={categories.map((c) => ({
         id: c.id,
         name: c.name,
+        code: c.code,
         description: c.description,
       }))}
       accounts={accounts.map((a) => ({
