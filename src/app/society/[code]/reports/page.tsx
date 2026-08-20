@@ -38,7 +38,6 @@ export default async function SocietyReportsPage({
   const societyId = society.id
 
   const [
-    societyDetails,
     billAggregate,
     paymentAggregate,
     expenseAggregate,
@@ -63,19 +62,6 @@ export default async function SocietyReportsPage({
     oneTimeCollectionsRaw,
     memberDepositsDetailed,
   ] = await Promise.all([
-    prisma.society.findUnique({
-      where: { id: societyId },
-      select: {
-        address: true,
-        city: true,
-        state: true,
-        pincode: true,
-        registrationNumber: true,
-        panNumber: true,
-        gstin: true,
-      },
-    }),
-
     prisma.bill.aggregate({
       where: { societyId },
       _sum: { amount: true, lateFeeAmount: true },
@@ -866,14 +852,14 @@ export default async function SocietyReportsPage({
       id: society.id,
       name: society.name,
       code: society.code,
-      currencySymbol: "₹",
-      address: societyDetails?.address,
-      city: societyDetails?.city,
-      state: societyDetails?.state,
-      pincode: societyDetails?.pincode,
-      registrationNumber: societyDetails?.registrationNumber,
-      panNumber: societyDetails?.panNumber,
-      gstin: societyDetails?.gstin,
+      currencySymbol: society.currencySymbol || "₹",
+      address: society.address,
+      city: society.city,
+      state: society.state,
+      pincode: society.pincode,
+      registrationNumber: society.registrationNumber,
+      panNumber: society.panNumber,
+      gstin: society.gstin,
     },
     summary: {
       totalBilled,

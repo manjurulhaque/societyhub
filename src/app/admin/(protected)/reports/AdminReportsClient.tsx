@@ -12,7 +12,6 @@ import {
   AdminSelect,
 } from "@/components/admin"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
-import { generateReportPDF } from "@/lib/pdf/reportPdfGenerator"
 
 export type AdminReportData = {
   summary: {
@@ -142,7 +141,8 @@ export function AdminReportsClient({ data }: { data: AdminReportData }) {
     document.body.removeChild(link)
   }
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
+    const { generateReportPDF } = await import("@/lib/pdf/reportPdfGenerator")
     generateReportPDF({
       society: {
         name: "SocietyHub Central Platform Administration",

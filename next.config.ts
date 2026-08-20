@@ -6,10 +6,21 @@ if (typeof process !== "undefined" && (events.defaultMaxListeners ?? 10) < 30) {
 }
 
 const nextConfig: NextConfig = {
+  compress: true,
+  poweredByHeader: false,
+  reactStrictMode: true,
   experimental: {
-    useLightningcss: false,
+    optimizePackageImports: [
+      "lucide-react",
+      "date-fns",
+      "recharts",
+      "radix-ui",
+      "@radix-ui/react-slot",
+      "cmdk",
+    ],
   },
   images: {
+    formats: ["image/avif", "image/webp"],
     remotePatterns: [
       {
         protocol: "https",

@@ -1,46 +1,19 @@
-import { createClient } from "@/lib/supabase/server"
-import { prisma } from "@/lib/prisma"
+import { cache } from "react"
+import { getCurrentUser } from "@/lib/auth/getCurrentUser"
 
-export async function getAdmin() {
-  const supabase = await createClient()
+export const getAdmin = cache(async () => {
+  const user = await getCurrentUser()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user?.email) {
-    return null
-  }
-
-  const admin = await prisma.user.findFirst({
-    where: {
-      email: {
-        equals: user.email,
-        mode: "insensitive",
-      },
-      appRole: "SUPER_ADMIN",
-      isActive: true,
-      deletedAt: null,
-    },
-    select: {
-      id: true,
-      email: true,
-      appRole: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  })
-
-  if (!admin) {
+  if (!user || user.appRole !== "SUPER_ADMIN") {
     return null
   }
 
   return {
-    id: admin.id,
-    email: admin.email,
-    appRole: admin.appRole,
-    createdAt: admin.createdAt,
-    updatedAt: admin.updatedAt,
-    role: admin.appRole,
+    id: user.id,
+    email: user.email,
+    appRole: user.appRole,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    role: user.appRole,
   }
-}
+})

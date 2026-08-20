@@ -1,3 +1,4 @@
+import { cache } from "react"
 import slugify from "slugify"
 import { prisma } from "@/lib/prisma"
 
@@ -37,3 +38,37 @@ export async function generateUniqueSocietyCode(name: string, customCode?: strin
     candidate = `${baseCode}-${count}`
   }
 }
+
+/**
+ * Request-scoped cached getter for the current active Financial Year of a society.
+ * Memoizes across layout, page, and subcomponents during a single HTTP request.
+ */
+export const getCurrentFinancialYear = cache(async (societyId: string) => {
+  return await prisma.financialYear.findFirst({
+    where: { societyId, isCurrent: true },
+    select: {
+      id: true,
+      name: true,
+      startDate: true,
+      endDate: true,
+      isLocked: true,
+    },
+  })
+})
+
+/**
+ * Request-scoped cached getter for pending expense approval count and sum.
+ * Memoizes across layout sidebar badge and dashboard/approvals page.
+ */
+export const getPendingExpenseSummary = cache(async (societyId: string) => {
+  const result = await prisma.expense.aggregate({
+    where: { societyId, status: "PENDING" },
+    _count: { _all: true },
+    _sum: { amount: true },
+  })
+  return {
+    count: result._count._all,
+    amount: Number(result._sum.amount ?? 0),
+  }
+})
+

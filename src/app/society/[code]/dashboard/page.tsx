@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { canApproveDataEntry, isManagerRole } from "@/lib/auth/requireAuth"
+import { getCurrentFinancialYear, getPendingExpenseSummary } from "@/lib/society"
 import { prisma } from "@/lib/prisma"
 import {
   AdminPageHeader,
@@ -32,8 +33,7 @@ export default async function SocietyDashboardPage({
   const societyCode = society.code || society.id
 
   const [
-    totalFlats,
-    occupiedFlats,
+    flatStatusCounts,
     totalPeople,
     totalMembers,
     billTotal,
@@ -42,19 +42,12 @@ export default async function SocietyDashboardPage({
     recentPayments,
     blocks,
     pendingExpenseData,
-    financialYearData,
+    currentFY,
   ] = await Promise.all([
-    prisma.flat.count({
+    prisma.flat.groupBy({
+      by: ["status"],
       where: { block: { societyId }, isActive: true, deletedAt: null },
-    }),
-
-    prisma.flat.count({
-      where: {
-        block: { societyId },
-        status: "OCCUPIED",
-        isActive: true,
-        deletedAt: null,
-      },
+      _count: { _all: true },
     }),
 
     prisma.person.count({
@@ -120,27 +113,16 @@ export default async function SocietyDashboardPage({
       },
     }),
 
-    prisma.expense.aggregate({
-      where: { societyId, status: "PENDING" },
-      _count: { _all: true },
-      _sum: { amount: true },
-    }),
-
-    prisma.financialYear.findFirst({
-      where: { societyId, isCurrent: true },
-      select: {
-        id: true,
-        name: true,
-        startDate: true,
-        endDate: true,
-        isLocked: true,
-      },
-    }),
+    getPendingExpenseSummary(societyId),
+    getCurrentFinancialYear(societyId),
   ])
 
-  const currentFY = financialYearData
-  const pendingCount = pendingExpenseData._count._all
-  const pendingAmount = Number(pendingExpenseData._sum.amount ?? 0)
+  const totalFlats = flatStatusCounts.reduce((sum, item) => sum + item._count._all, 0)
+  const occupiedFlats =
+    flatStatusCounts.find((item) => item.status === "OCCUPIED")?._count._all ?? 0
+
+  const pendingCount = pendingExpenseData.count
+  const pendingAmount = pendingExpenseData.amount
 
   const totalBilled = Number(billTotal._sum.amount ?? 0)
   const totalCollected = Number(paymentTotal._sum.amount ?? 0)

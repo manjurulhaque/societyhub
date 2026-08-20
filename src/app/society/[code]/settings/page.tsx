@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
-import { prisma } from "@/lib/prisma"
+import { getCurrentFinancialYear } from "@/lib/society"
 import { AdminPageHeader } from "@/components/admin"
 import { SocietySettingsForm } from "./SocietySettingsForm"
 
@@ -17,23 +17,8 @@ export default async function SocietySettingsPage({
     notFound()
   }
 
-  const { society: currentSociety } = context
-
-  const society = await prisma.society.findUnique({
-    where: { id: currentSociety.id },
-    include: {
-      financialYears: {
-        where: { isCurrent: true },
-        select: { id: true, name: true, startYear: true, endYear: true },
-      },
-    },
-  })
-
-  if (!society) {
-    notFound()
-  }
-
-  const currentFY = society.financialYears[0]
+  const { society } = context
+  const currentFY = await getCurrentFinancialYear(society.id)
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 px-6 py-8 md:px-8">
@@ -121,9 +106,9 @@ export default async function SocietySettingsPage({
           maintenanceType: society.maintenanceType,
           fixedRate: society.fixedRate ? Number(society.fixedRate) : null,
           ratePerSqft: society.ratePerSqft ? Number(society.ratePerSqft) : null,
-          billGenerationDay: society.billGenerationDay,
-          dueDayOfMonth: society.dueDayOfMonth,
-          gracePeriodDays: society.gracePeriodDays,
+          billGenerationDay: society.billGenerationDay ?? 1,
+          dueDayOfMonth: society.dueDayOfMonth ?? 10,
+          gracePeriodDays: society.gracePeriodDays ?? 0,
           lateFeeRate: society.lateFeeRate ? Number(society.lateFeeRate) : null,
           invoicePrefix: society.invoicePrefix,
           receiptPrefix: society.receiptPrefix,

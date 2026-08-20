@@ -1,7 +1,8 @@
+import { cache } from "react"
 import { createClient } from "@/lib/supabase/server"
 import { prisma } from "@/lib/prisma"
 
-export async function getCurrentUser() {
+export const getCurrentUser = cache(async () => {
   const supabase = await createClient()
 
   const {
@@ -52,4 +53,4 @@ export async function getCurrentUser() {
     ...dbUser,
     supabaseUser: user,
   }
-}
+})

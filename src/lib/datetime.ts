@@ -43,15 +43,24 @@ export function getTimeZoneOffsetMinutes(timeZone: string = APP_TIME_ZONE, date 
   }
 }
 
+const formatterCache = new Map<string, Intl.DateTimeFormat>()
+
 function getFormatter(
   options: Intl.DateTimeFormatOptions,
   locale = "en-US",
   timeZone = APP_TIME_ZONE
 ) {
-  return new Intl.DateTimeFormat(locale, {
-    timeZone: timeZone || APP_TIME_ZONE,
-    ...options,
-  })
+  const resolvedTz = timeZone || APP_TIME_ZONE
+  const cacheKey = `${locale}:${resolvedTz}:${JSON.stringify(options)}`
+  let formatter = formatterCache.get(cacheKey)
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, {
+      timeZone: resolvedTz,
+      ...options,
+    })
+    formatterCache.set(cacheKey, formatter)
+  }
+  return formatter
 }
 
 export function formatDateInAppTimeZone(
