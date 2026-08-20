@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { LedgerGroup, BalanceType } from "@/generated/prisma"
+import { ensureStandardExpenseCategories } from "@/lib/expenseCategories"
 
 export interface StandardAccountNode {
   name: string
@@ -805,4 +806,5 @@ export async function seedSocietyChartOfAccounts(societyId: string): Promise<voi
   }
 
   await createNodes(STANDARD_CHART_OF_ACCOUNTS)
+  await ensureStandardExpenseCategories(societyId)
 }
