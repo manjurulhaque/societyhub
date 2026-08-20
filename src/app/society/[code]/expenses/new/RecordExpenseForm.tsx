@@ -7,6 +7,7 @@ import { createExpenseCategoryAction } from "../actions"
 interface CategoryOption {
   id: string
   name: string
+  code?: string | null
   description?: string | null
 }
 
@@ -214,7 +215,7 @@ export function RecordExpenseForm({
                 <option value="">Select category ({categories.length} available)...</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name}
+                    {c.code ? `[${c.code}] ` : ""}{c.name}
                   </option>
                 ))}
               </select>

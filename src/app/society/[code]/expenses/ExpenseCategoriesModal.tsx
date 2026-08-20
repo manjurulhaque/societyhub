@@ -6,6 +6,7 @@ import { createExpenseCategoryAction, syncStandardExpenseCategoriesAction } from
 export interface ExpenseCategoryItem {
   id: string
   name: string
+  code?: string | null
   description?: string | null
   isActive: boolean
   _count?: {
@@ -36,6 +37,7 @@ export function ExpenseCategoriesModal({
 
   const filteredCategories = categories.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
+    (c.code && c.code.toLowerCase().includes(search.toLowerCase())) ||
     (c.description && c.description.toLowerCase().includes(search.toLowerCase()))
   )
 
@@ -266,6 +268,11 @@ export function ExpenseCategoriesModal({
                   <div key={c.id} className="py-3 flex items-start justify-between gap-4 group">
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2">
+                        {c.code && (
+                          <span className="font-mono text-[10px] font-bold text-stone-700 bg-stone-100 border border-stone-200 px-1.5 py-0.5 rounded">
+                            [{c.code}]
+                          </span>
+                        )}
                         <span className="text-xs font-bold text-stone-900 group-hover:text-stone-950">
                           {c.name}
                         </span>

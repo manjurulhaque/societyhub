@@ -27,10 +27,10 @@ export default async function SocietyExpensesPage({
   const isApprover = canApproveDataEntry(designation, isSuperAdmin)
   const isManager = isManagerRole(designation, isSuperAdmin)
 
-  // Ensure all standard categories exist
-  await ensureStandardExpenseCategories(society.id)
+  // Ensure all standard categories exist and fetch enriched list with COA codes
+  const categories = await ensureStandardExpenseCategories(society.id)
 
-  const [expenses, categories, vendors, currentFY] = await Promise.all([
+  const [expenses, vendors, currentFY] = await Promise.all([
     prisma.expense.findMany({
       where: {
         societyId: society.id,
@@ -51,13 +51,6 @@ export default async function SocietyExpensesPage({
         vendor: {
           select: { name: true, companyName: true },
         },
-      },
-    }),
-    prisma.expenseCategory.findMany({
-      where: { societyId: society.id, isActive: true, deletedAt: null },
-      orderBy: { name: "asc" },
-      include: {
-        _count: { select: { expenses: true } },
       },
     }),
     prisma.vendor.count({
@@ -85,6 +78,7 @@ export default async function SocietyExpensesPage({
   const totalTds = paidExpenses.reduce((acc, e) => acc + Number(e.tdsAmount), 0)
 
   const activeTab = filterStatus || "ALL"
+  const categoryCodeMap = new Map(categories.map((c) => [c.name.trim().toLowerCase(), c.code]))
 
   return (
     <div className="space-y-8">
@@ -127,6 +121,7 @@ export default async function SocietyExpensesPage({
             categories={categories.map((c) => ({
               id: c.id,
               name: c.name,
+              code: c.code,
               description: c.description,
               isActive: c.isActive,
               _count: c._count,
@@ -264,6 +259,7 @@ export default async function SocietyExpensesPage({
                 categories={categories.map((c) => ({
                   id: c.id,
                   name: c.name,
+                  code: c.code,
                   description: c.description,
                   isActive: c.isActive,
                   _count: c._count,
@@ -395,8 +391,13 @@ export default async function SocietyExpensesPage({
                       </td>
 
                       <td className="px-4 py-3.5">
-                        <span className="inline-flex rounded-full bg-stone-100 px-2.5 py-0.5 text-[10px] font-semibold text-stone-700">
-                          {e.category.name}
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2.5 py-0.5 text-[10px] font-semibold text-stone-700">
+                          {categoryCodeMap.get(e.category.name.trim().toLowerCase()) && (
+                            <span className="font-mono text-[9px] font-bold text-stone-500">
+                              [{categoryCodeMap.get(e.category.name.trim().toLowerCase())}]
+                            </span>
+                          )}
+                          <span>{e.category.name}</span>
                         </span>
                       </td>
 
