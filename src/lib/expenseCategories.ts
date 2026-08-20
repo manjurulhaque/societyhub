@@ -151,30 +151,46 @@ const LEGACY_ALIASES: Record<string, string> = {
 }
 
 /**
- * Ensures all standard expense categories exist for a given society.
- * Idempotently creates any missing standard categories.
+ * Ensures all standard and society Chart of Accounts (COA) expense categories exist for a given society.
+ * Dynamically synchronizes active EXPENSE ledgers from the Chart of Accounts into ExpenseCategory records.
+ * Idempotently creates any missing categories.
  * Returns all active, non-deleted categories for the society sorted alphabetically.
  */
 export async function ensureStandardExpenseCategories(societyId: string) {
-  // 1. Fetch all existing categories for this society
-  const existingCategories = await prisma.expenseCategory.findMany({
-    where: {
-      societyId,
-      deletedAt: null,
-    },
-  })
+  // 1. Fetch all existing expense categories and active COA expense ledgers for this society in parallel
+  const [existingCategories, coaExpenseLedgers] = await Promise.all([
+    prisma.expenseCategory.findMany({
+      where: {
+        societyId,
+        deletedAt: null,
+      },
+    }),
+    prisma.ledger.findMany({
+      where: {
+        societyId,
+        group: "EXPENSE",
+        isActive: true,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        subLedgers: { select: { id: true } },
+      },
+    }),
+  ])
 
   // Create a fast lookup map of lowercase existing names
   const existingNamesLower = new Set(
     existingCategories.map((c: { name: string }) => c.name.trim().toLowerCase())
   )
 
-  // 2. Identify missing standard categories
-  const categoriesToCreate: { name: string; description: string }[] = []
+  // 2. Identify missing standard catalog categories
+  const categoriesToCreate: { name: string; description?: string | null }[] = []
 
   for (const std of STANDARD_EXPENSE_CATEGORIES) {
     const stdLower = std.name.trim().toLowerCase()
-    // Check direct match
     if (!existingNamesLower.has(stdLower)) {
       // Check if a known legacy alias exists
       let aliasMatched = false
@@ -187,7 +203,23 @@ export async function ensureStandardExpenseCategories(societyId: string) {
 
       if (!aliasMatched) {
         categoriesToCreate.push(std)
+        existingNamesLower.add(stdLower)
       }
+    }
+  }
+
+  // 3. Dynamically sync any leaf Expense Ledgers from Chart of Accounts
+  for (const ledger of coaExpenseLedgers) {
+    // Only sync leaf ledgers or standalone ledgers (avoid parent headers with sub-ledgers)
+    if (ledger.subLedgers && ledger.subLedgers.length > 0) continue
+
+    const ledgerNameLower = ledger.name.trim().toLowerCase()
+    if (!existingNamesLower.has(ledgerNameLower)) {
+      categoriesToCreate.push({
+        name: ledger.name.trim(),
+        description: ledger.description?.trim() || null,
+      })
+      existingNamesLower.add(ledgerNameLower)
     }
   }
 
