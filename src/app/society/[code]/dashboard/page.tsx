@@ -42,6 +42,7 @@ export default async function SocietyDashboardPage({
     recentPayments,
     blocks,
     pendingExpenseData,
+    financialYearData,
   ] = await Promise.all([
     prisma.flat.count({
       where: { block: { societyId }, isActive: true, deletedAt: null },
@@ -124,8 +125,20 @@ export default async function SocietyDashboardPage({
       _count: { _all: true },
       _sum: { amount: true },
     }),
+
+    prisma.financialYear.findFirst({
+      where: { societyId, isCurrent: true },
+      select: {
+        id: true,
+        name: true,
+        startDate: true,
+        endDate: true,
+        isLocked: true,
+      },
+    }),
   ])
 
+  const currentFY = financialYearData
   const pendingCount = pendingExpenseData._count._all
   const pendingAmount = Number(pendingExpenseData._sum.amount ?? 0)
 
@@ -153,6 +166,39 @@ export default async function SocietyDashboardPage({
           </div>
         }
       />
+
+      {/* Active Financial Year Indicator */}
+      {currentFY && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-5 py-3.5 shadow-xs">
+          <div className="flex items-center gap-3">
+            <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 ring-4 ring-emerald-100 shrink-0" />
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
+                Active Financial Year
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-stone-950">
+                  {currentFY.name}
+                </span>
+                <span className="text-xs text-stone-500 font-medium">
+                  ({new Date(currentFY.startDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} – {new Date(currentFY.endDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})
+                </span>
+                {currentFY.isLocked ? (
+                  <AdminBadge variant="warning" size="sm">AUDIT FROZEN</AdminBadge>
+                ) : (
+                  <AdminBadge variant="success" size="sm">LIVE</AdminBadge>
+                )}
+              </div>
+            </div>
+          </div>
+          <Link
+            href={`/society/${societyCode}/settings/financial-years`}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-stone-700 hover:text-stone-900 transition"
+          >
+            Manage Accounting Cycles →
+          </Link>
+        </div>
+      )}
 
       {/* Governance & Approvals Banner */}
       {pendingCount > 0 && isApprover ? (

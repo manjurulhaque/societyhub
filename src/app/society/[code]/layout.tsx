@@ -32,9 +32,15 @@ export default async function SocietyPortalLayout({
   const { society, designation, isSuperAdmin } = context
   const societyCode = society.code || society.id
 
-  const pendingApprovalCount = await prisma.expense.count({
-    where: { societyId: society.id, status: "PENDING" },
-  })
+  const [pendingApprovalCount, currentFY] = await Promise.all([
+    prisma.expense.count({
+      where: { societyId: society.id, status: "PENDING" },
+    }),
+    prisma.financialYear.findFirst({
+      where: { societyId: society.id, isCurrent: true },
+      select: { id: true, name: true, isLocked: true },
+    }),
+  ])
 
   const sidebarContent = (
     <>
@@ -63,6 +69,30 @@ export default async function SocietyPortalLayout({
             {user.email}
           </p>
         </div>
+
+        {currentFY && (
+          <div className="pt-1">
+            <Link
+              href={`/society/${societyCode}/settings/financial-years`}
+              className="group flex items-center justify-between rounded-xl border border-stone-200/80 bg-stone-50/80 px-2.5 py-1 text-[11px] font-medium text-stone-700 hover:border-stone-400 hover:bg-stone-100 transition"
+              title="Active Financial Year (Click to manage)"
+            >
+              <div className="flex items-center gap-1.5 truncate">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <span className="truncate">{currentFY.name}</span>
+              </div>
+              {currentFY.isLocked ? (
+                <span className="text-[10px] font-bold text-amber-700 bg-amber-100/80 rounded px-1 shrink-0">
+                  FROZEN
+                </span>
+              ) : (
+                <span className="text-[10px] text-stone-400 group-hover:text-stone-700 shrink-0">
+                  FY ↗
+                </span>
+              )}
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Navigation Links */}
