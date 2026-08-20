@@ -162,6 +162,18 @@ export const STANDARD_PERMISSIONS: PermissionDefinition[] = [
     module: "ACCOUNTS",
     description: "Can record FDs, interest payouts, and maturities",
   },
+  {
+    code: "BUDGETS_VIEW",
+    name: "View Budgets & Plans",
+    module: "ACCOUNTS",
+    description: "Can view annual operating budgets and expenditure allocations",
+  },
+  {
+    code: "BUDGETS_MANAGE",
+    name: "Manage Budgets & Allocations",
+    module: "ACCOUNTS",
+    description: "Can create, update line items, and manage annual budgets",
+  },
 
   // REGISTERS
   {
@@ -290,7 +302,7 @@ export const DEFAULT_ROLE_TEMPLATES: {
       "BILLS_VIEW", "BILLS_CREATE", "BILLS_GENERATE",
       "PAYMENTS_VIEW", "PAYMENTS_COLLECT", "PAYMENTS_REFUND",
       "EXPENSES_VIEW", "EXPENSES_CREATE", "EXPENSES_APPROVE", "EXPENSES_PAY",
-      "ACCOUNTS_VIEW", "ACCOUNTS_MANAGE", "PETTY_CASH_MANAGE", "CHEQUES_MANAGE", "INVESTMENTS_MANAGE",
+      "ACCOUNTS_VIEW", "ACCOUNTS_MANAGE", "PETTY_CASH_MANAGE", "CHEQUES_MANAGE", "INVESTMENTS_MANAGE", "BUDGETS_VIEW", "BUDGETS_MANAGE",
       "REGISTERS_VIEW", "REGISTERS_MANAGE", "MEETINGS_MANAGE", "NOMINATIONS_MANAGE", "SHARES_MANAGE",
       "MEMBERS_VIEW", "MEMBERS_MANAGE", "ROLES_ASSIGN",
       "AMENITIES_VIEW", "AMENITIES_MANAGE", "BOOKINGS_APPROVE",
@@ -303,6 +315,7 @@ export const DEFAULT_ROLE_TEMPLATES: {
     description: "Administrative & statutory governance: meetings, registers, members, amenities, and approvals.",
     permissions: [
       "BILLS_VIEW", "PAYMENTS_VIEW", "EXPENSES_VIEW", "EXPENSES_CREATE", "EXPENSES_APPROVE",
+      "BUDGETS_VIEW",
       "REGISTERS_VIEW", "REGISTERS_MANAGE", "MEETINGS_MANAGE", "NOMINATIONS_MANAGE", "SHARES_MANAGE",
       "MEMBERS_VIEW", "MEMBERS_MANAGE", "ROLES_ASSIGN",
       "AMENITIES_VIEW", "AMENITIES_MANAGE", "BOOKINGS_APPROVE",
@@ -315,6 +328,7 @@ export const DEFAULT_ROLE_TEMPLATES: {
     description: "Administrative officer: assist with meetings, member records, statutory registers, and amenities.",
     permissions: [
       "BILLS_VIEW", "PAYMENTS_VIEW", "EXPENSES_VIEW", "EXPENSES_CREATE",
+      "BUDGETS_VIEW",
       "REGISTERS_VIEW", "REGISTERS_MANAGE", "MEETINGS_MANAGE", "NOMINATIONS_MANAGE", "SHARES_MANAGE",
       "MEMBERS_VIEW", "MEMBERS_MANAGE",
       "AMENITIES_VIEW", "AMENITIES_MANAGE", "BOOKINGS_APPROVE",
@@ -329,7 +343,7 @@ export const DEFAULT_ROLE_TEMPLATES: {
       "BILLS_VIEW", "BILLS_CREATE", "BILLS_GENERATE", "BILLS_CANCEL",
       "PAYMENTS_VIEW", "PAYMENTS_COLLECT", "PAYMENTS_REFUND",
       "EXPENSES_VIEW", "EXPENSES_CREATE", "EXPENSES_APPROVE", "EXPENSES_PAY",
-      "ACCOUNTS_VIEW", "ACCOUNTS_MANAGE", "PETTY_CASH_MANAGE", "CHEQUES_MANAGE", "INVESTMENTS_MANAGE",
+      "ACCOUNTS_VIEW", "ACCOUNTS_MANAGE", "PETTY_CASH_MANAGE", "CHEQUES_MANAGE", "INVESTMENTS_MANAGE", "BUDGETS_VIEW", "BUDGETS_MANAGE",
       "REGISTERS_VIEW", "MEMBERS_VIEW", "REPORTS_VIEW", "SETTINGS_VIEW",
     ],
   },
@@ -341,7 +355,7 @@ export const DEFAULT_ROLE_TEMPLATES: {
       "BILLS_VIEW", "BILLS_CREATE", "BILLS_GENERATE",
       "PAYMENTS_VIEW", "PAYMENTS_COLLECT",
       "EXPENSES_VIEW", "EXPENSES_CREATE",
-      "PETTY_CASH_MANAGE", "CHEQUES_MANAGE",
+      "PETTY_CASH_MANAGE", "CHEQUES_MANAGE", "BUDGETS_VIEW", "BUDGETS_MANAGE",
       "REGISTERS_VIEW", "MEMBERS_VIEW", "MEMBERS_MANAGE",
       "AMENITIES_VIEW", "AMENITIES_MANAGE", "BOOKINGS_APPROVE",
       "REPORTS_VIEW", "SETTINGS_VIEW",
@@ -355,7 +369,7 @@ export const DEFAULT_ROLE_TEMPLATES: {
       "BILLS_VIEW", "BILLS_CREATE", "BILLS_GENERATE",
       "PAYMENTS_VIEW", "PAYMENTS_COLLECT",
       "EXPENSES_VIEW", "EXPENSES_CREATE",
-      "ACCOUNTS_VIEW", "ACCOUNTS_MANAGE", "PETTY_CASH_MANAGE", "CHEQUES_MANAGE", "INVESTMENTS_MANAGE",
+      "ACCOUNTS_VIEW", "ACCOUNTS_MANAGE", "PETTY_CASH_MANAGE", "CHEQUES_MANAGE", "INVESTMENTS_MANAGE", "BUDGETS_VIEW", "BUDGETS_MANAGE",
       "REPORTS_VIEW", "SETTINGS_VIEW",
     ],
   },
@@ -364,7 +378,7 @@ export const DEFAULT_ROLE_TEMPLATES: {
     name: "Auditor",
     description: "Read-only inspection authority for accounting records, registers, reports, and audit logs.",
     permissions: [
-      "BILLS_VIEW", "PAYMENTS_VIEW", "EXPENSES_VIEW", "ACCOUNTS_VIEW",
+      "BILLS_VIEW", "PAYMENTS_VIEW", "EXPENSES_VIEW", "ACCOUNTS_VIEW", "BUDGETS_VIEW",
       "REGISTERS_VIEW", "MEMBERS_VIEW", "REPORTS_VIEW", "AUDIT_LOGS_VIEW", "SETTINGS_VIEW",
     ],
   },
@@ -381,7 +395,7 @@ export const DEFAULT_ROLE_TEMPLATES: {
     name: "Managing Committee Member",
     description: "General committee review authority for meetings, reports, registers, and directory.",
     permissions: [
-      "BILLS_VIEW", "PAYMENTS_VIEW", "EXPENSES_VIEW",
+      "BILLS_VIEW", "PAYMENTS_VIEW", "EXPENSES_VIEW", "BUDGETS_VIEW",
       "REGISTERS_VIEW", "MEMBERS_VIEW", "AMENITIES_VIEW", "REPORTS_VIEW",
     ],
   },
