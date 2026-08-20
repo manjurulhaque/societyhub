@@ -50,6 +50,7 @@ export function FinancialYearModal({
 
   useEffect(() => {
     if (financialYear) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStartYear(financialYear.startYear)
       setEndYear(financialYear.endYear)
       setName(financialYear.name)

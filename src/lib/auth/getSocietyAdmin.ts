@@ -12,6 +12,7 @@ export type SocietyAdminContext = {
     name: string
     code: string | null
     societyType: string
+    timezone: string
     address: string | null
     city: string | null
     state: string | null
@@ -55,6 +56,7 @@ export async function getSocietyAdmin(societyCode: string): Promise<SocietyAdmin
       name: true,
       code: true,
       societyType: true,
+      timezone: true,
       address: true,
       city: true,
       state: true,
@@ -90,6 +92,7 @@ export async function getSocietyAdmin(societyCode: string): Promise<SocietyAdmin
       },
       society: {
         ...society,
+        timezone: society.timezone || "Asia/Kolkata",
         fixedRate: society.fixedRate ? Number(society.fixedRate) : null,
         ratePerSqft: society.ratePerSqft ? Number(society.ratePerSqft) : null,
         dueDayOfMonth: society.dueDayOfMonth,
@@ -124,6 +127,7 @@ export async function getSocietyAdmin(societyCode: string): Promise<SocietyAdmin
     },
     society: {
       ...society,
+      timezone: society.timezone || "Asia/Kolkata",
       fixedRate: society.fixedRate ? Number(society.fixedRate) : null,
       ratePerSqft: society.ratePerSqft ? Number(society.ratePerSqft) : null,
       dueDayOfMonth: society.dueDayOfMonth,

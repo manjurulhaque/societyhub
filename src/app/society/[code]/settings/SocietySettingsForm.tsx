@@ -24,6 +24,7 @@ import {
   societySettingsSchema,
   type SocietySettingsInput,
 } from "@/lib/validations/society"
+import { TIMEZONE_OPTIONS, formatCurrentTimeInTimeZone } from "@/lib/datetime"
 import { updateSocietySettings, type UpdateSocietySettingsState } from "./actions"
 
 type SocietySettingsFormProps = {
@@ -32,6 +33,7 @@ type SocietySettingsFormProps = {
     name: string
     code: string | null
     societyType: string
+    timezone?: string | null
     phone: string | null
     email: string | null
     address: string | null
@@ -83,6 +85,7 @@ export function SocietySettingsForm({ society, currentCode }: SocietySettingsFor
       dueDayOfMonth: society.dueDayOfMonth || 10,
       gracePeriodDays: society.gracePeriodDays || 0,
       lateFeeRate: society.lateFeeRate ?? 21.0,
+      timezone: society.timezone || "Asia/Kolkata",
       invoicePrefix: society.invoicePrefix || "INV",
       receiptPrefix: society.receiptPrefix || "RCPT",
     },
@@ -91,6 +94,11 @@ export function SocietySettingsForm({ society, currentCode }: SocietySettingsFor
   const maintenanceType = useWatch({
     control: form.control,
     name: "maintenanceType",
+  })
+
+  const selectedTimezone = useWatch({
+    control: form.control,
+    name: "timezone",
   })
 
   function onSubmit(values: SocietySettingsInput) {
@@ -119,6 +127,7 @@ export function SocietySettingsForm({ society, currentCode }: SocietySettingsFor
     formData.append("dueDayOfMonth", String(values.dueDayOfMonth))
     formData.append("gracePeriodDays", String(values.gracePeriodDays))
     formData.append("lateFeeRate", String(values.lateFeeRate))
+    formData.append("timezone", values.timezone || "Asia/Kolkata")
     formData.append("invoicePrefix", values.invoicePrefix || "INV")
     formData.append("receiptPrefix", values.receiptPrefix || "RCPT")
 
@@ -446,7 +455,65 @@ export function SocietySettingsForm({ society, currentCode }: SocietySettingsFor
           </div>
         </AdminCard>
 
-        {/* 3. Maintenance & Billing Policy */}
+        {/* 3. Regional & Localization Settings */}
+        <AdminCard
+          title="Regional & Timezone Settings"
+          description="Localization preferences used across billing, receipt issuance, audit logs, and meeting notices"
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="sm:col-span-2">
+                <FormField
+                  control={form.control}
+                  name="timezone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-semibold uppercase tracking-wider text-stone-700">
+                        Operating Timezone
+                      </FormLabel>
+                      <FormControl>
+                        <AdminSelect
+                          options={TIMEZONE_OPTIONS.map((tz) => ({
+                            label: `${tz.label} (${tz.offset})`,
+                            value: tz.value,
+                          }))}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-2">
+                  Live Timezone Preview
+                </label>
+                <div className="flex h-[42px] items-center gap-2.5 rounded-xl border border-stone-200 bg-stone-50/80 px-3.5 text-xs text-stone-700">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                  </span>
+                  <span className="font-mono font-medium text-stone-900 truncate">
+                    {formatCurrentTimeInTimeZone(selectedTimezone || "Asia/Kolkata")}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
+              <svg className="h-4 w-4 shrink-0 text-amber-700 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>
+                All statutory financial statements, PDF receipt generation timestamps, audit log trails, and meeting notices for this society will be computed according to this selected timezone.
+              </span>
+            </div>
+          </div>
+        </AdminCard>
+
+        {/* 4. Maintenance & Billing Policy */}
         <AdminCard
           title="Maintenance Billing Policy & Parameters"
           description="Rules and calculations applied when generating periodic dues and invoices"

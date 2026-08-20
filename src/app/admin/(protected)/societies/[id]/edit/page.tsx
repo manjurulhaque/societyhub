@@ -86,6 +86,20 @@ export default async function EditSocietyPage({
             </select>
           </AdminFormField>
 
+          <AdminFormField label="Operating Timezone">
+            <select
+              name="timezone"
+              defaultValue={society.timezone || "Asia/Kolkata"}
+              className="w-full rounded-xl border border-stone-300 px-3 py-2 outline-none ring-0"
+            >
+              {TIMEZONE_OPTIONS.map((tz) => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.label} ({tz.offset})
+                </option>
+              ))}
+            </select>
+          </AdminFormField>
+
           <AdminPrimaryButton type="submit">Update Society</AdminPrimaryButton>
         </AdminFormCard>
       </form>
@@ -95,6 +109,7 @@ export default async function EditSocietyPage({
 
 import { requireSuperAdmin } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
+import { TIMEZONE_OPTIONS } from "@/lib/datetime"
 
 async function updateSociety(id: string, formData: FormData) {
   "use server"
@@ -105,6 +120,7 @@ async function updateSociety(id: string, formData: FormData) {
   const rawCode = formData.get("code")?.toString().trim() || null
   const address = formData.get("address")?.toString().trim() || null
   const maintenanceType = formData.get("maintenanceType")?.toString()
+  const timezone = formData.get("timezone")?.toString().trim() || "Asia/Kolkata"
 
   if (!name) {
     throw new Error("Society name is required")
@@ -112,7 +128,7 @@ async function updateSociety(id: string, formData: FormData) {
 
   const existingSociety = await prisma.society.findUnique({
     where: { id },
-    select: { id: true, name: true, code: true, address: true, maintenanceType: true },
+    select: { id: true, name: true, code: true, address: true, maintenanceType: true, timezone: true },
   })
 
   if (!existingSociety) {
@@ -131,6 +147,7 @@ async function updateSociety(id: string, formData: FormData) {
       name,
       code,
       address,
+      timezone,
       maintenanceType:
         maintenanceType === "PER_SQFT"
           ? "PER_SQFT"
@@ -148,7 +165,7 @@ async function updateSociety(id: string, formData: FormData) {
     entityId: id,
     description: `Super Admin ${admin.email} updated society settings for ${name}`,
     oldData: existingSociety,
-    newData: { name, code, address, maintenanceType },
+    newData: { name, code, address, maintenanceType, timezone },
   })
 
   revalidatePath("/admin/societies")

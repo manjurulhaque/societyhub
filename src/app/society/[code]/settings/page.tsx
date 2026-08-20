@@ -127,6 +127,7 @@ export default async function SocietySettingsPage({
           lateFeeRate: society.lateFeeRate ? Number(society.lateFeeRate) : null,
           invoicePrefix: society.invoicePrefix,
           receiptPrefix: society.receiptPrefix,
+          timezone: society.timezone || "Asia/Kolkata",
         }}
       />
     </div>
