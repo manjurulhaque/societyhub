@@ -2,6 +2,7 @@ import Link from "next/link"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
+import { ensureStandardExpenseCategories } from "@/lib/expenseCategories"
 import type { PaymentMode, ExpenseStatus } from "@/generated/prisma/client"
 import {
   AdminPageHeader,
@@ -13,12 +14,16 @@ import {
 } from "@/components/admin"
 
 export default async function NewAdminExpensePage() {
-  const [societies, categories, accounts, vendors] = await Promise.all([
-    prisma.society.findMany({
-      where: { isActive: true, deletedAt: null },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, code: true },
-    }),
+  const societies = await prisma.society.findMany({
+    where: { isActive: true, deletedAt: null },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, code: true },
+  })
+
+  // Ensure standard categories for active societies
+  await Promise.all(societies.map((s) => ensureStandardExpenseCategories(s.id)))
+
+  const [categories, accounts, vendors] = await Promise.all([
     prisma.expenseCategory.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },

@@ -6,6 +6,7 @@ import type { SocietyType } from "@/generated/prisma/client"
 import { generateUniqueSocietyCode } from "@/lib/society"
 
 import { seedSocietyChartOfAccounts } from "@/lib/chartOfAccounts"
+import { ensureStandardExpenseCategories } from "@/lib/expenseCategories"
 import {
   AdminPageHeader,
   AdminCard,
@@ -380,8 +381,9 @@ async function createSociety(formData: FormData) {
     },
   })
 
-  // Auto-seed standard Chart of Accounts for the society
+  // Auto-seed standard Chart of Accounts & Expense Categories for the society
   await seedSocietyChartOfAccounts(society.id)
+  await ensureStandardExpenseCategories(society.id)
 
   await recordAuditLog({
     societyId: society.id,

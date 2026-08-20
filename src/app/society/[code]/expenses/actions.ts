@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
-import { requireApprovalAccess } from "@/lib/auth/requireAuth"
+import { requireApprovalAccess, requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
+import { createCustomExpenseCategory, ensureStandardExpenseCategories } from "@/lib/expenseCategories"
 import type { ExpenseStatus } from "@/generated/prisma/client"
 
 export async function approveExpenseAction(formData: FormData) {
@@ -123,3 +124,64 @@ export async function rejectExpenseAction(formData: FormData) {
   revalidatePath(`/society/${code}/reports`)
   revalidatePath(`/society/${code}/dashboard`)
 }
+
+export async function createExpenseCategoryAction(formData: FormData) {
+  const code = formData.get("code")?.toString().trim()
+  const name = formData.get("name")?.toString().trim()
+  const description = formData.get("description") ? sanitizeText(formData.get("description")?.toString()) : null
+
+  if (!code || !name) {
+    throw new Error("Society code and category name are required")
+  }
+
+  const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
+  const societyId = authContext.society.id
+
+  const sanitizedName = sanitizeText(name)
+  if (!sanitizedName) {
+    throw new Error("Invalid category name")
+  }
+
+  const category = await createCustomExpenseCategory(societyId, sanitizedName, description)
+
+  await recordAuditLog({
+    societyId,
+    userId: authContext.user.id,
+    action: "CREATE",
+    entity: "ExpenseCategory",
+    entityId: category.id,
+    description: `${authContext.user.email} (${authContext.designation}) created new expense category: ${sanitizedName}`,
+    newData: { name: sanitizedName, description },
+  })
+
+  revalidatePath(`/society/${code}/expenses`)
+  revalidatePath(`/society/${code}/expenses/new`)
+  return { success: true, category: { id: category.id, name: category.name } }
+}
+
+export async function syncStandardExpenseCategoriesAction(formData: FormData) {
+  const code = formData.get("code")?.toString().trim()
+
+  if (!code) {
+    throw new Error("Society code is required")
+  }
+
+  const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
+  const societyId = authContext.society.id
+
+  await ensureStandardExpenseCategories(societyId)
+
+  await recordAuditLog({
+    societyId,
+    userId: authContext.user.id,
+    action: "UPDATE",
+    entity: "ExpenseCategory",
+    entityId: societyId,
+    description: `${authContext.user.email} (${authContext.designation}) synced standard expense categories`,
+  })
+
+  revalidatePath(`/society/${code}/expenses`)
+  revalidatePath(`/society/${code}/expenses/new`)
+  return { success: true }
+}
+

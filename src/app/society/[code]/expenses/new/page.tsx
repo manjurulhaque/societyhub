@@ -1,4 +1,3 @@
-import Link from "next/link"
 import { notFound } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
@@ -7,7 +6,9 @@ import { requireCommitteeAccess, FINANCIAL_ROLES, canApproveDataEntry, isManager
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { prisma } from "@/lib/prisma"
+import { ensureStandardExpenseCategories } from "@/lib/expenseCategories"
 import type { PaymentMode, ExpenseStatus } from "@/generated/prisma/client"
+import { RecordExpenseForm } from "./RecordExpenseForm"
 
 export default async function NewSocietyExpensePage({
   params,
@@ -25,22 +26,20 @@ export default async function NewSocietyExpensePage({
   const isManager = isManagerRole(designation, isSuperAdmin)
   const isApprover = canApproveDataEntry(designation, isSuperAdmin)
 
+  // Ensure all standard categories exist and fetch all active categories
   const [categories, accounts, vendors] = await Promise.all([
-    prisma.expenseCategory.findMany({
-      where: { societyId: society.id, isActive: true, deletedAt: null },
-      orderBy: { name: "asc" },
-    }),
+    ensureStandardExpenseCategories(society.id),
     prisma.account.findMany({
       where: { societyId: society.id, isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
+      select: { id: true, name: true, currentBalance: true },
     }),
     prisma.vendor.findMany({
       where: { societyId: society.id, isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
+      select: { id: true, name: true, companyName: true },
     }),
   ])
-
-  const today = new Date().toISOString().split("T")[0]
 
   async function createSocietyExpense(formData: FormData) {
     "use server"
@@ -159,259 +158,29 @@ export default async function NewSocietyExpensePage({
     redirect(`/society/${code}/expenses`)
   }
 
-
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <span className="inline-flex items-center rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-stone-600">
-            Disbursement Entry
-          </span>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-stone-900 md:text-3xl">
-            Record Society Expense
-          </h1>
-          <p className="text-sm text-stone-500">
-            Post an operating expenditure for {society.name}.
-          </p>
-        </div>
-
-        <Link
-          href={`/society/${code}/expenses`}
-          className="rounded-full border border-stone-300 bg-white px-4 py-2 text-xs font-medium text-stone-700 transition hover:bg-stone-100"
-        >
-          Cancel
-        </Link>
-      </div>
-
-      {isManager ? (
-        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900 shadow-sm">
-          <svg className="h-5 w-5 shrink-0 text-amber-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div className="text-xs space-y-0.5">
-            <p className="font-bold text-amber-950">Manager Data Entry — Approval Required</p>
-            <p className="text-amber-800">
-              As Estate Manager, this expense voucher will be submitted in <strong className="font-semibold">Pending</strong> status. It will require approval from the <strong className="font-semibold">Treasurer</strong> or <strong className="font-semibold">Secretary</strong> before bank account funds are disbursed and reflected in official books.
-            </p>
-          </div>
-        </div>
-      ) : isApprover ? (
-        <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 shadow-sm">
-          <svg className="h-5 w-5 shrink-0 text-emerald-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div className="text-xs space-y-0.5">
-            <p className="font-bold text-emerald-950">Executive Authorization ({designation})</p>
-            <p className="text-emerald-800">
-              As an authorized officer ({designation}), submitting this voucher will immediately post and debit the selected account balance.
-            </p>
-          </div>
-        </div>
-      ) : null}
-
-      <form action={createSocietyExpense} className="space-y-6">
-        {/* Particulars Card */}
-        <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm space-y-5">
-          <h2 className="text-base font-bold text-stone-950">Expense Particulars</h2>
-
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700">
-              Expense Title / Purpose *
-            </label>
-            <input
-              type="text"
-              name="title"
-              required
-              placeholder="e.g. Monthly Security Agency Charges - August 2026"
-              className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700">
-                Expense Category *
-              </label>
-              <select
-                name="categoryId"
-                required
-                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
-              >
-                <option value="">Select category...</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700">
-                Registered Vendor (Optional)
-              </label>
-              <select
-                name="vendorId"
-                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
-              >
-                <option value="">Direct / Ad-hoc / Select vendor...</option>
-                {vendors.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.companyName ? `${v.companyName} (${v.name})` : v.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Financial Details Card */}
-        <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm space-y-5">
-          <h2 className="text-base font-bold text-stone-950">Payment & Account Particulars</h2>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700">
-                Total Amount (₹) *
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                name="amount"
-                required
-                placeholder="e.g. 28000"
-                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm font-bold text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700">
-                GST Included (₹)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                name="gstAmount"
-                defaultValue="0"
-                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700">
-                TDS Withheld (₹)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                name="tdsAmount"
-                defaultValue="0"
-                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700">
-                Expense Date *
-              </label>
-              <input
-                type="date"
-                name="expenseDate"
-                defaultValue={today}
-                required
-                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700">
-                Paid From Account *
-              </label>
-              <select
-                name="accountId"
-                required
-                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
-              >
-                <option value="">Select bank account...</option>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} (Bal: ₹{Number(a.currentBalance).toLocaleString("en-IN")})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700">
-                Payment Mode *
-              </label>
-              <select
-                name="mode"
-                defaultValue="BANK"
-                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
-              >
-                <option value="BANK">Bank Transfer (NEFT/RTGS/IMPS)</option>
-                <option value="CHEQUE">Cheque Payment</option>
-                <option value="UPI">UPI / QR</option>
-                <option value="CARD">Debit / Credit Card</option>
-                <option value="CASH">Cash Disbursement</option>
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700">
-                Bill / Invoice Number
-              </label>
-              <input
-                type="text"
-                name="invoiceNumber"
-                placeholder="e.g. INV-8491"
-                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
-              />
-            </div>
-
-            <div className="sm:col-span-2 space-y-1.5">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700">
-                Transaction Reference / UTR
-              </label>
-              <input
-                type="text"
-                name="reference"
-                placeholder="e.g. UTR: 3192039201 or Cheque # 045120"
-                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
-              />
-            </div>
-
-            <div className="sm:col-span-3 space-y-1.5">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700">
-                Notes / Purpose Remarks
-              </label>
-              <textarea
-                name="description"
-                rows={2}
-                placeholder="Optional notes or remarks regarding this expense"
-                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-3 pt-2">
-          <Link
-            href={`/society/${code}/expenses`}
-            className="rounded-full border border-stone-300 bg-white px-5 py-2.5 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
-          >
-            Cancel
-          </Link>
-          <button
-            type="submit"
-            className="rounded-full bg-stone-950 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-800"
-          >
-            {isManager ? "Submit for Approval" : "Post & Disburse Expense Voucher"}
-          </button>
-        </div>
-      </form>
-    </div>
+    <RecordExpenseForm
+      code={code}
+      societyName={society.name}
+      initialCategories={categories.map((c) => ({
+        id: c.id,
+        name: c.name,
+        description: c.description,
+      }))}
+      accounts={accounts.map((a) => ({
+        id: a.id,
+        name: a.name,
+        currentBalance: Number(a.currentBalance),
+      }))}
+      vendors={vendors.map((v) => ({
+        id: v.id,
+        name: v.name,
+        companyName: v.companyName,
+      }))}
+      isManager={isManager}
+      isApprover={isApprover}
+      designation={designation}
+      onSubmitAction={createSocietyExpense}
+    />
   )
 }
-
