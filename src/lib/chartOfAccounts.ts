@@ -181,6 +181,13 @@ export const STANDARD_CHART_OF_ACCOUNTS: StandardAccountNode[] = [
         balanceType: BalanceType.DEBIT,
       },
       {
+        name: "Underground & Overhead Water Tanks Infrastructure",
+        code: "1535",
+        group: LedgerGroup.ASSET,
+        balanceType: BalanceType.DEBIT,
+        description: "Capitalized underground sump tanks, overhead tanks, and raw water storage structures",
+      },
+      {
         name: "CCTV & Security Equipment",
         code: "1540",
         group: LedgerGroup.ASSET,
@@ -615,6 +622,13 @@ export const STANDARD_CHART_OF_ACCOUNTS: StandardAccountNode[] = [
         code: "5340",
         group: LedgerGroup.EXPENSE,
         balanceType: BalanceType.DEBIT,
+      },
+      {
+        name: "Water Tank Repairs, Waterproofing & Reconstruction",
+        code: "5345",
+        group: LedgerGroup.EXPENSE,
+        balanceType: BalanceType.DEBIT,
+        description: "Underground sump and overhead water tank repairs, crack sealing, epoxy waterproofing, and reconstruction",
       },
       {
         name: "General Civil, Electrical & Plumbing Repairs",

@@ -5,20 +5,8 @@ import { canApproveDataEntry, isManagerRole } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
 import { approveExpenseAction, rejectExpenseAction } from "./actions"
-
-const DEFAULT_CATEGORIES = [
-  "Security Agency",
-  "Lift AMC & Maintenance",
-  "Common Electricity Charges",
-  "Water Tanker & Supply",
-  "Building Repairs & Plumbing",
-  "Housekeeping & Waste Disposal",
-  "Gardening & Landscaping",
-  "Generator Diesel & Maintenance",
-  "Staff Salaries & Wages",
-  "Auditor & Legal Fees",
-  "Office Administration & Printing",
-]
+import { ensureStandardExpenseCategories } from "@/lib/expenseCategories"
+import { ExpenseCategoriesModal } from "./ExpenseCategoriesModal"
 
 export default async function SocietyExpensesPage({
   params,
@@ -39,21 +27,8 @@ export default async function SocietyExpensesPage({
   const isApprover = canApproveDataEntry(designation, isSuperAdmin)
   const isManager = isManagerRole(designation, isSuperAdmin)
 
-  // Auto-provision standard expense categories if none exist
-  const existingCategoriesCount = await prisma.expenseCategory.count({
-    where: { societyId: society.id },
-  })
-
-  if (existingCategoriesCount === 0) {
-    for (const catName of DEFAULT_CATEGORIES) {
-      await prisma.expenseCategory.create({
-        data: {
-          societyId: society.id,
-          name: catName,
-        },
-      })
-    }
-  }
+  // Ensure all standard categories exist
+  await ensureStandardExpenseCategories(society.id)
 
   const [expenses, categories, vendors, currentFY] = await Promise.all([
     prisma.expense.findMany({
@@ -147,6 +122,16 @@ export default async function SocietyExpensesPage({
           >
             Vendors Directory ({vendors})
           </Link>
+          <ExpenseCategoriesModal
+            code={code}
+            categories={categories.map((c) => ({
+              id: c.id,
+              name: c.name,
+              description: c.description,
+              isActive: c.isActive,
+              _count: c._count,
+            }))}
+          />
           <Link
             href={`/society/${code}/expenses/new`}
             className="inline-flex items-center justify-center rounded-full bg-stone-950 px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-stone-800"
@@ -268,13 +253,29 @@ export default async function SocietyExpensesPage({
           </p>
         </div>
 
-        <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
-            Expense Categories
-          </p>
-          <p className="mt-2 text-2xl font-bold text-stone-950">
-            {categories.length}
-          </p>
+        <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
+                Expense Categories
+              </p>
+              <ExpenseCategoriesModal
+                code={code}
+                categories={categories.map((c) => ({
+                  id: c.id,
+                  name: c.name,
+                  description: c.description,
+                  isActive: c.isActive,
+                  _count: c._count,
+                }))}
+                triggerText="View / Edit"
+                triggerClassName="text-[11px] font-semibold text-stone-950 hover:underline"
+              />
+            </div>
+            <p className="mt-2 text-2xl font-bold text-stone-950">
+              {categories.length}
+            </p>
+          </div>
           <p className="mt-1 text-xs text-stone-500">
             {vendors} registered vendors
           </p>
