@@ -55,7 +55,7 @@ export default async function SocietyExpensesPage({
     }
   }
 
-  const [expenses, categories, vendors] = await Promise.all([
+  const [expenses, categories, vendors, currentFY] = await Promise.all([
     prisma.expense.findMany({
       where: {
         societyId: society.id,
@@ -88,6 +88,10 @@ export default async function SocietyExpensesPage({
     prisma.vendor.count({
       where: { societyId: society.id, isActive: true, deletedAt: null },
     }),
+    prisma.financialYear.findFirst({
+      where: { societyId: society.id, isCurrent: true },
+      select: { id: true, name: true, startDate: true, endDate: true, isLocked: true },
+    }),
   ])
 
   // Get total counts across all statuses
@@ -113,10 +117,10 @@ export default async function SocietyExpensesPage({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <span className="inline-flex items-center rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-stone-600">
-            Outflow Management
+            Accounts Payable
           </span>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-stone-900 md:text-3xl">
-            Operational Expenses
+            Expenses & Payables
           </h1>
           <p className="text-sm text-stone-500">
             Manage contractor payouts, security bills, lift AMC, utility charges, and repairs for {society.name}.
@@ -151,6 +155,43 @@ export default async function SocietyExpensesPage({
           </Link>
         </div>
       </div>
+
+      {/* Active Financial Year Context Bar */}
+      {currentFY && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-5 py-3.5 shadow-xs">
+          <div className="flex items-center gap-3">
+            <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 ring-4 ring-emerald-100 shrink-0" />
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
+                Active Financial Year Cycle
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-stone-950">
+                  {currentFY.name}
+                </span>
+                <span className="text-xs text-stone-500 font-medium">
+                  ({new Date(currentFY.startDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} – {new Date(currentFY.endDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})
+                </span>
+                {currentFY.isLocked ? (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                    AUDIT FROZEN
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                    LIVE
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <Link
+            href={`/society/${code}/settings/financial-years`}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-stone-700 hover:text-stone-900 transition"
+          >
+            Manage Accounting Cycles →
+          </Link>
+        </div>
+      )}
 
       {/* Pending Approval Notice Banner for Approvers */}
       {pendingExpenses.length > 0 && isApprover ? (

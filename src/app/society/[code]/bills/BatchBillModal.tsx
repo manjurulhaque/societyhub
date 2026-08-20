@@ -15,9 +15,6 @@ interface BatchBillModalProps {
 }
 
 const MONTH_NAMES = [
-  { value: 1, label: "January" },
-  { value: 2, label: "February" },
-  { value: 3, label: "March" },
   { value: 4, label: "April" },
   { value: 5, label: "May" },
   { value: 6, label: "June" },
@@ -27,6 +24,9 @@ const MONTH_NAMES = [
   { value: 10, label: "October" },
   { value: 11, label: "November" },
   { value: 12, label: "December" },
+  { value: 1, label: "January" },
+  { value: 2, label: "February" },
+  { value: 3, label: "March" },
 ]
 
 export function BatchBillModal({
@@ -170,6 +170,21 @@ export function BatchBillModal({
                 className="w-full rounded-xl border border-stone-200 bg-stone-50/50 px-3.5 py-2.5 text-xs text-stone-900 focus:border-stone-900 focus:bg-white focus:outline-none"
               />
             </div>
+          </div>
+
+          {/* Applicable Financial Year Tag */}
+          <div className="flex items-center justify-between rounded-2xl border border-stone-200 bg-stone-50/80 px-4 py-3 text-xs">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
+                Accounting Period
+              </span>
+              <p className="font-bold text-stone-900 mt-0.5">
+                {month >= 4 ? `FY ${year}-${year + 1}` : `FY ${year - 1}-${year}`}
+              </p>
+            </div>
+            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-bold text-amber-800">
+              {MONTH_NAMES.find((m) => m.value === month)?.label} {year}
+            </span>
           </div>
 
           {/* Due Date */}

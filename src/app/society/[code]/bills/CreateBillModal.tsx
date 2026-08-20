@@ -203,11 +203,21 @@ export function CreateBillModal({
                 className="w-full rounded-xl border border-stone-200 bg-stone-50/50 px-3.5 py-2.5 text-xs text-stone-900 focus:border-stone-900 focus:bg-white focus:outline-none"
               >
                 {[
-                  "January", "February", "March", "April", "May", "June",
-                  "July", "August", "September", "October", "November", "December",
-                ].map((name, idx) => (
-                  <option key={idx + 1} value={idx + 1}>
-                    {name}
+                  { value: 4, name: "April" },
+                  { value: 5, name: "May" },
+                  { value: 6, name: "June" },
+                  { value: 7, name: "July" },
+                  { value: 8, name: "August" },
+                  { value: 9, name: "September" },
+                  { value: 10, name: "October" },
+                  { value: 11, name: "November" },
+                  { value: 12, name: "December" },
+                  { value: 1, name: "January" },
+                  { value: 2, name: "February" },
+                  { value: 3, name: "March" },
+                ].map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.name}
                   </option>
                 ))}
               </select>

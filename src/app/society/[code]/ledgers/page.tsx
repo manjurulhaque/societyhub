@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { notFound } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
@@ -24,23 +25,29 @@ export default async function SocietyLedgersPage({
 
   const { society } = context
 
-  const rawLedgers = await prisma.ledger.findMany({
-    where: {
-      societyId: society.id,
-      isActive: true,
-      deletedAt: null,
-    },
-    orderBy: [
-      { group: "asc" },
-      { code: "asc" },
-      { name: "asc" },
-    ],
-    include: {
-      parentLedger: {
-        select: { name: true, code: true },
+  const [rawLedgers, currentFY] = await Promise.all([
+    prisma.ledger.findMany({
+      where: {
+        societyId: society.id,
+        isActive: true,
+        deletedAt: null,
       },
-    },
-  })
+      orderBy: [
+        { group: "asc" },
+        { code: "asc" },
+        { name: "asc" },
+      ],
+      include: {
+        parentLedger: {
+          select: { name: true, code: true },
+        },
+      },
+    }),
+    prisma.financialYear.findFirst({
+      where: { societyId: society.id, isCurrent: true },
+      select: { id: true, name: true, startDate: true, endDate: true, isLocked: true },
+    }),
+  ])
 
   // Format ledgers for client explorer component
   const ledgers = rawLedgers.map((l) => ({
@@ -110,6 +117,43 @@ export default async function SocietyLedgersPage({
           </button>
         </form>
       </div>
+
+      {/* Active Financial Year Context Bar */}
+      {currentFY && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-5 py-3.5 shadow-xs">
+          <div className="flex items-center gap-3">
+            <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 ring-4 ring-emerald-100 shrink-0" />
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
+                Active Financial Year Cycle
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-stone-950">
+                  {currentFY.name}
+                </span>
+                <span className="text-xs text-stone-500 font-medium">
+                  ({new Date(currentFY.startDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} – {new Date(currentFY.endDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})
+                </span>
+                {currentFY.isLocked ? (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                    AUDIT FROZEN
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                    OPEN FOR POSTING
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <Link
+            href={`/society/${code}/settings/financial-years`}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-stone-700 hover:text-stone-900 transition"
+          >
+            Manage Accounting Cycles →
+          </Link>
+        </div>
+      )}
 
       {/* KPI Overview */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
