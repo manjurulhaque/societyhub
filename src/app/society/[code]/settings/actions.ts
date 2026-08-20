@@ -74,6 +74,7 @@ export async function updateSocietySettings(
     const dueDayOfMonth = rawDueDay ? parseInt(rawDueDay, 10) : 10
     const gracePeriodDays = rawGraceDays ? parseInt(rawGraceDays, 10) : 0
     const lateFeeRate = rawLateFeeRate ? parseFloat(rawLateFeeRate) : 21.0
+    const timezone = formData.get("timezone")?.toString().trim() || "Asia/Kolkata"
 
     await prisma.society.update({
       where: { id: societyId },
@@ -81,6 +82,7 @@ export async function updateSocietySettings(
         name,
         code: rawCode,
         societyType: societyType as SocietyType,
+        timezone,
         phone,
         email,
         address,
@@ -112,7 +114,7 @@ export async function updateSocietySettings(
       entity: "Society",
       entityId: societyId,
       description: `${context.user.email} updated society profile and settings for ${name}`,
-      newData: { name, code: rawCode, societyType, maintenanceType },
+      newData: { name, code: rawCode, societyType, maintenanceType, timezone },
     })
 
     revalidatePath(`/society/${societyCode}/settings`)

@@ -43,6 +43,7 @@ export const societySettingsSchema = z.object({
     .min(0, "Cannot be negative")
     .max(100, "Cannot exceed 100%")
     .default(21.0),
+  timezone: z.string().default("Asia/Kolkata"),
   invoicePrefix: z.string().default("INV"),
   receiptPrefix: z.string().default("RCPT"),
 })

@@ -14,6 +14,7 @@ import {
   AdminTextarea,
   AdminButton,
 } from "@/components/admin"
+import { TIMEZONE_OPTIONS } from "@/lib/datetime"
 
 export default function NewSocietyPage() {
   return (
@@ -272,6 +273,20 @@ export default function NewSocietyPage() {
                 placeholder="INV"
               />
             </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                Operating Timezone
+              </label>
+              <AdminSelect
+                name="timezone"
+                defaultValue="Asia/Kolkata"
+                options={TIMEZONE_OPTIONS.map((tz) => ({
+                  label: `${tz.label} (${tz.offset})`,
+                  value: tz.value,
+                }))}
+              />
+            </div>
           </div>
         </AdminCard>
 
@@ -303,6 +318,7 @@ async function createSociety(formData: FormData) {
   const name = formData.get("name")?.toString().trim()
   const rawCode = formData.get("code")?.toString().trim().toUpperCase() || null
   const societyType = formData.get("societyType")?.toString() || "COOPERATIVE_HOUSING_SOCIETY"
+  const timezone = formData.get("timezone")?.toString().trim() || "Asia/Kolkata"
   const phone = formData.get("phone")?.toString().trim() || null
   const email = formData.get("email")?.toString().trim().toLowerCase() || null
   const address = formData.get("address")?.toString().trim() || null
@@ -338,6 +354,7 @@ async function createSociety(formData: FormData) {
       name,
       code,
       societyType: societyType as SocietyType,
+      timezone,
 
       phone,
       email,

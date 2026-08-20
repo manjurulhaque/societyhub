@@ -377,6 +377,7 @@ model Society {
 
   currency              String                 @default("INR")
   currencySymbol        String                 @default("₹")
+  timezone              String                 @default("Asia/Kolkata")
 
   fyStartMonth          Int                    @default(4) // 4 = April (1st April start)
   fyStartDay            Int                    @default(1) // 1st of the month
