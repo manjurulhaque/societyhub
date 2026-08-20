@@ -1,8 +1,11 @@
 import { notFound } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { prisma } from "@/lib/prisma"
-import { AdminPageHeader, AdminTable, AdminBadge } from "@/components/admin"
-import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { AdminPageHeader } from "@/components/admin"
+import { BillsClientView, type BillListItem } from "./BillsClientView"
+import { type FlatOption } from "./CreateBillModal"
+import { FINANCIAL_ROLES, EXECUTIVE_ROLES } from "@/lib/auth/requireAuth"
+import type { SocietyRole } from "@/generated/prisma/client"
 
 export default async function SocietyBillsPage({
   params,
@@ -16,110 +19,95 @@ export default async function SocietyBillsPage({
     notFound()
   }
 
-  const { society } = context
+  const { society, designation, isSuperAdmin } = context
+  const canManageBills =
+    isSuperAdmin ||
+    EXECUTIVE_ROLES.includes(designation as SocietyRole) ||
+    FINANCIAL_ROLES.includes(designation as SocietyRole) ||
+    designation === "MANAGER"
 
-  const bills = await prisma.bill.findMany({
-    where: { societyId: society.id },
-    orderBy: [
-      { year: "desc" },
-      { month: "desc" },
-      { createdAt: "desc" },
-    ],
-    include: {
-      flat: {
-        select: {
-          number: true,
-          block: {
-            select: { name: true },
+  const [rawBills, rawFlats] = await Promise.all([
+    prisma.bill.findMany({
+      where: { societyId: society.id },
+      orderBy: [
+        { year: "desc" },
+        { month: "desc" },
+        { createdAt: "desc" },
+      ],
+      include: {
+        flat: {
+          select: {
+            id: true,
+            number: true,
+            block: {
+              select: { name: true },
+            },
           },
         },
       },
-    },
-  })
+    }),
 
-  const totalAmount = bills.reduce((acc, b) => acc + Number(b.amount), 0)
-  const paidCount = bills.filter((b) => b.status === "PAID").length
-  const pendingCount = bills.filter((b) => b.status === "PENDING").length
-  const overdueCount = bills.filter((b) => b.status === "OVERDUE").length
+    prisma.flat.findMany({
+      where: {
+        block: { societyId: society.id },
+        isActive: true,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        number: true,
+        block: {
+          select: { name: true },
+        },
+      },
+      orderBy: [
+        { block: { name: "asc" } },
+        { number: "asc" },
+      ],
+    }),
+  ])
+
+  const bills: BillListItem[] = rawBills.map((b) => ({
+    id: b.id,
+    billNumber: b.billNumber,
+    flatId: b.flat.id,
+    flatNumber: b.flat.number,
+    blockName: b.flat.block.name,
+    month: b.month,
+    year: b.year,
+    billType: b.billType,
+    title: b.title,
+    amount: Number(b.amount),
+    status: b.status,
+    dueDate: b.dueDate ? b.dueDate.toISOString() : null,
+    paidDate: b.paidDate ? b.paidDate.toISOString() : null,
+    createdAt: b.createdAt.toISOString(),
+  }))
+
+  const flats: FlatOption[] = rawFlats.map((f) => ({
+    id: f.id,
+    number: f.number,
+    blockName: f.block.name,
+  }))
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-6 py-8 md:px-8">
       <AdminPageHeader
-        eyebrow="Billing"
+        eyebrow="Billing & Demand"
         title="Bills & Invoices"
-        description={`Maintenance invoices and utility bills for units in ${society.name}.`}
+        description={`Manage maintenance assessments, batch invoice generation, and receivables for ${society.name}.`}
       />
 
-      {/* Summary Row */}
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
-          Summary:
-        </span>
-        <AdminBadge variant="neutral" size="md">
-          {bills.length} Total Bills (₹{totalAmount.toLocaleString("en-IN")})
-        </AdminBadge>
-        <AdminBadge variant="success" size="md" dot>
-          {paidCount} Paid
-        </AdminBadge>
-        <AdminBadge variant="warning" size="md" dot>
-          {pendingCount} Pending
-        </AdminBadge>
-        {overdueCount > 0 ? (
-          <AdminBadge variant="danger" size="md" dot>
-            {overdueCount} Overdue
-          </AdminBadge>
-        ) : null}
-      </div>
-
-      {bills.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-stone-300 bg-white p-12 text-center shadow-sm">
-          <p className="text-sm font-semibold text-stone-900">No bills generated</p>
-          <p className="mt-1 text-xs text-stone-500">
-            No bills have been created for this society yet.
-          </p>
-        </div>
-      ) : (
-        <AdminTable
-          headers={["Bill #", "Flat / Unit", "Period", "Type", "Amount", "Due Date", "Status"]}
-          rows={bills.map((bill) => (
-            <tr key={bill.id} className="border-t border-stone-100 hover:bg-stone-50/60">
-              <td className="px-4 py-3 font-mono text-xs font-semibold text-stone-900">
-                {bill.billNumber || `#${bill.month}/${bill.year}`}
-              </td>
-              <td className="px-4 py-3 text-xs text-stone-800">
-                {bill.flat.block.name} - {bill.flat.number}
-              </td>
-              <td className="px-4 py-3 text-xs text-stone-600">
-                {bill.month}/{bill.year}
-              </td>
-              <td className="px-4 py-3 text-xs text-stone-600">
-                {bill.billType}
-              </td>
-              <td className="px-4 py-3 text-xs font-semibold text-stone-950">
-                ₹{Number(bill.amount).toLocaleString("en-IN")}
-              </td>
-              <td className="px-4 py-3 text-xs text-stone-600">
-                {bill.dueDate ? formatDateInAppTimeZone(bill.dueDate) : "—"}
-              </td>
-              <td className="px-4 py-3">
-                <AdminBadge
-                  variant={
-                    bill.status === "PAID"
-                      ? "success"
-                      : bill.status === "OVERDUE"
-                        ? "danger"
-                        : "warning"
-                  }
-                  size="sm"
-                  dot
-                >
-                  {bill.status}
-                </AdminBadge>
-              </td>
-            </tr>
-          ))}
-        />
-      )}
+      <BillsClientView
+        societyCode={code}
+        bills={bills}
+        flats={flats}
+        canManageBills={canManageBills}
+        maintenanceType={society.maintenanceType || "FIXED"}
+        fixedRate={society.fixedRate ? Number(society.fixedRate) : null}
+        ratePerSqft={society.ratePerSqft ? Number(society.ratePerSqft) : null}
+        dueDayOfMonth={society.dueDayOfMonth}
+      />
     </div>
   )
 }

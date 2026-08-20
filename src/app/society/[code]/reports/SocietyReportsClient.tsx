@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useRef } from "react"
+import { useState, useMemo, useRef, useSyncExternalStore } from "react"
 import Link from "next/link"
 import {
   ResponsiveContainer,
@@ -357,6 +357,12 @@ export type SocietyReportData = {
 }
 
 export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
+  const isMounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  )
+
   const [activeTab, setActiveTab] = useState<string>("overview")
   const [periodFilter, setPeriodFilter] = useState<string>("ALL")
 
@@ -1697,22 +1703,26 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                 </AdminBadge>
               </div>
 
-              <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartMonthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
-                    <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
-                    <Tooltip
-                      formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
-                      contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
-                    <Bar dataKey="Billed" fill="#1c1917" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Collected" fill="#059669" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Expenses" fill="#d97706" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="h-72 w-full min-w-0">
+                {isMounted ? (
+                  <ResponsiveContainer width="100%" height={280} minWidth={100} minHeight={100}>
+                    <BarChart data={chartMonthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                      <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                      <Tooltip
+                        formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
+                        contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
+                      <Bar dataKey="Billed" fill="#1c1917" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Collected" fill="#059669" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Expenses" fill="#d97706" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                )}
               </div>
             </div>
 
@@ -1730,29 +1740,33 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                   No expense data to chart
                 </div>
               ) : (
-                <div className="h-72 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={chartExpenseData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={80}
-                        paddingAngle={3}
-                        dataKey="value"
-                      >
-                        {chartExpenseData.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
-                        contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: "11px" }} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                <div className="h-72 w-full min-w-0">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height={280} minWidth={100} minHeight={100}>
+                      <PieChart>
+                        <Pie
+                          data={chartExpenseData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={50}
+                          outerRadius={80}
+                          paddingAngle={3}
+                          dataKey="value"
+                        >
+                          {chartExpenseData.map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
+                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: "11px" }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                  )}
                 </div>
               )}
             </div>
@@ -1771,32 +1785,36 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
               </div>
             </div>
 
-            <div className="h-56 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartMonthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorCashflow" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#059669" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#059669" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
-                  <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
-                  <Tooltip
-                    formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, "Net Cashflow"]}
-                    contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="Cashflow"
-                    stroke="#059669"
-                    strokeWidth={2.5}
-                    fillOpacity={1}
-                    fill="url(#colorCashflow)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="h-56 w-full min-w-0">
+              {isMounted ? (
+                <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
+                  <AreaChart data={chartMonthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorCashflow" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#059669" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="#059669" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                    <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                    <Tooltip
+                      formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, "Net Cashflow"]}
+                      contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="Cashflow"
+                      stroke="#059669"
+                      strokeWidth={2.5}
+                      fillOpacity={1}
+                      fill="url(#colorCashflow)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+              )}
             </div>
           </div>
 

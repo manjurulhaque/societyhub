@@ -1,7 +1,12 @@
 import { notFound } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { prisma } from "@/lib/prisma"
-import { AdminPageHeader, AdminTable, AdminBadge, AdminCard } from "@/components/admin"
+import { AdminPageHeader, AdminCard } from "@/components/admin"
+import { CommitteeMembersClient, type CommitteeMemberItem } from "./CommitteeMembersClient"
+import { ResidentsDirectoryClient, type ResidentItem } from "./ResidentsDirectoryClient"
+import { type FlatOption } from "./RegisterResidentModal"
+import { EXECUTIVE_ROLES } from "@/lib/auth/requireAuth"
+import type { SocietyRole } from "@/generated/prisma/client"
 
 export default async function SocietyMembersPage({
   params,
@@ -15,9 +20,13 @@ export default async function SocietyMembersPage({
     notFound()
   }
 
-  const { society } = context
+  const { society, designation, isSuperAdmin } = context
+  const canManage =
+    isSuperAdmin ||
+    EXECUTIVE_ROLES.includes(designation as SocietyRole) ||
+    designation === "MANAGER"
 
-  const [committeeMembers, residents] = await Promise.all([
+  const [rawCommitteeMembers, availableRolesData, rawResidents, availableFlatsData] = await Promise.all([
     prisma.societyMember.findMany({
       where: { societyId: society.id },
       include: {
@@ -28,8 +37,39 @@ export default async function SocietyMembersPage({
             appRole: true,
           },
         },
+        customRoles: {
+          include: {
+            role: {
+              select: {
+                id: true,
+                name: true,
+                isSystem: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { createdAt: "asc" },
+    }),
+
+    prisma.role.findMany({
+      where: {
+        OR: [
+          { societyId: null },
+          { societyId: society.id },
+        ],
+      },
+      include: {
+        _count: {
+          select: {
+            rolePermissions: true,
+          },
+        },
+      },
+      orderBy: [
+        { isSystem: "desc" },
+        { name: "asc" },
+      ],
     }),
 
     prisma.person.findMany({
@@ -53,52 +93,93 @@ export default async function SocietyMembersPage({
       },
       orderBy: { name: "asc" },
     }),
+
+    prisma.flat.findMany({
+      where: {
+        block: { societyId: society.id },
+        isActive: true,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        number: true,
+        block: {
+          select: { name: true },
+        },
+      },
+      orderBy: [
+        { block: { name: "asc" } },
+        { number: "asc" },
+      ],
+    }),
   ])
+
+  const committeeMembers: CommitteeMemberItem[] = rawCommitteeMembers.map((m) => ({
+    id: m.id,
+    userId: m.user.id,
+    email: m.user.email,
+    designation: m.designation,
+    appRole: m.user.appRole,
+    createdAt: m.createdAt.toISOString(),
+    customRoles: m.customRoles.map((cr) => ({
+      id: cr.role.id,
+      name: cr.role.name,
+      isSystem: cr.role.isSystem,
+    })),
+  }))
+
+  const availableRoles = availableRolesData.map((r) => ({
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    isSystem: r.isSystem,
+    permissionCount: r._count.rolePermissions,
+  }))
+
+  const availableFlats: FlatOption[] = availableFlatsData.map((f) => ({
+    id: f.id,
+    number: f.number,
+    blockName: f.block.name,
+  }))
+
+  const residents: ResidentItem[] = rawResidents.map((r) => {
+    const flatList = r.flats
+      .map((f) => `${f.flat.block.name} - ${f.flat.number} (${f.role})`)
+      .join(", ")
+
+    const primaryRole = r.flats[0]?.role || "RESIDENT"
+
+    return {
+      id: r.id,
+      name: r.name,
+      phone: r.phone,
+      email: r.email,
+      panNumber: r.panNumber,
+      aadhaarNumber: r.aadhaarNumber,
+      primaryRole,
+      flatsDisplay: flatList,
+    }
+  })
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-6 py-8 md:px-8">
       <AdminPageHeader
-        eyebrow="Directory"
+        eyebrow="Directory & Access"
         title="Members & Residents"
-        description={`Manage committee roles and view resident directory for ${society.name}.`}
+        description={`Manage committee roles, operational staff assignments, and resident directory for ${society.name}.`}
       />
 
-      {/* Committee Members */}
+      {/* Committee Members & Staff */}
       <AdminCard
-        title="Management Committee & Staff"
-        description="Users authorized to manage and administer this society"
+        title="Managing Committee & Staff"
+        description="Users authorized to manage, disburse funds, or administer operations for this society"
       >
-        {committeeMembers.length === 0 ? (
-          <p className="py-4 text-center text-xs text-stone-500">
-            No committee members assigned yet.
-          </p>
-        ) : (
-          <AdminTable
-            headers={["User / Email", "Designation", "Platform Role", "Assigned On"]}
-            rows={committeeMembers.map((m) => (
-              <tr key={m.id} className="border-t border-stone-100 hover:bg-stone-50/60">
-                <td className="px-4 py-3 text-xs font-semibold text-stone-950">
-                  {m.user.email}
-                </td>
-                <td className="px-4 py-3">
-                  <AdminBadge variant="purple" size="sm" dot>
-                    {m.designation}
-                  </AdminBadge>
-                </td>
-                <td className="px-4 py-3 text-xs text-stone-600">
-                  {m.user.appRole}
-                </td>
-                <td className="px-4 py-3 text-xs text-stone-500">
-                  {new Date(m.createdAt).toLocaleDateString("en-IN", {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                </td>
-              </tr>
-            ))}
-          />
-        )}
+        <CommitteeMembersClient
+          societyCode={code}
+          members={committeeMembers}
+          availableRoles={availableRoles}
+          canManageMembers={canManage}
+        />
       </AdminCard>
 
       {/* Residents Directory */}
@@ -106,49 +187,12 @@ export default async function SocietyMembersPage({
         title="Registered Residents & People"
         description="Owners, tenants, and family members residing in this society"
       >
-        {residents.length === 0 ? (
-          <p className="py-4 text-center text-xs text-stone-500">
-            No residents registered in this society yet.
-          </p>
-        ) : (
-          <AdminTable
-            headers={["Name", "Phone", "Email", "Associated Flat(s)", "Role"]}
-            rows={residents.map((r) => {
-              const flatList = r.flats
-                .map((f) => `${f.flat.block.name} - ${f.flat.number} (${f.role})`)
-                .join(", ")
-
-              const primaryRole = r.flats[0]?.role || "RESIDENT"
-
-              return (
-                <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/60">
-                  <td className="px-4 py-3 text-xs font-semibold text-stone-950">
-                    {r.name}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-stone-600">{r.phone || "—"}</td>
-                  <td className="px-4 py-3 text-xs text-stone-600">{r.email || "—"}</td>
-                  <td className="px-4 py-3 text-xs text-stone-700">
-                    {flatList || <span className="text-stone-400">None assigned</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <AdminBadge
-                      variant={
-                        primaryRole === "OWNER"
-                          ? "info"
-                          : primaryRole === "TENANT"
-                            ? "warning"
-                            : "neutral"
-                      }
-                      size="sm"
-                    >
-                      {primaryRole}
-                    </AdminBadge>
-                  </td>
-                </tr>
-              )
-            })}
-          />
-        )}
+        <ResidentsDirectoryClient
+          societyCode={code}
+          residents={residents}
+          availableFlats={availableFlats}
+          canManageResidents={canManage}
+        />
       </AdminCard>
     </div>
   )

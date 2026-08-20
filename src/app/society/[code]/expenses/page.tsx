@@ -330,7 +330,7 @@ export default async function SocietyExpensesPage({
                     <tr
                       key={e.id}
                       className={`hover:bg-stone-50/70 transition ${
-                        isPending ? "bg-amber-50/30" : ""
+                        isPending ? "bg-amber-50/30" : isRejected ? "bg-rose-50/20" : ""
                       }`}
                     >
                       <td className="px-4 py-3.5">
