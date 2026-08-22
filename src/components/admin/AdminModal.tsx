@@ -95,7 +95,7 @@ export function AdminModal({
         <div className="mt-4 flex-1 overflow-y-auto pr-1">{children}</div>
 
         {footer ? (
-          <div className="mt-6 flex shrink-0 items-center justify-end gap-3 border-t border-stone-100 pt-4">
+          <div className="mt-6 flex shrink-0 flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-3 border-t border-stone-100 pt-4">
             {footer}
           </div>
         ) : null}

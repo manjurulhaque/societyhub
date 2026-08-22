@@ -158,7 +158,7 @@ export default async function SocietyDashboardPage({
               <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
                 Active Financial Year
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-bold text-stone-950">
                   {currentFY.name}
                 </span>

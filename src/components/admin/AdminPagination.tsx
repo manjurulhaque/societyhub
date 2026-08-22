@@ -93,7 +93,7 @@ export function AdminPagination({
         </p>
       )}
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center justify-center gap-1.5">
         {renderButton(currentPage - 1, "Previous", currentPage <= 1)}
 
         {startPage > 1 ? (

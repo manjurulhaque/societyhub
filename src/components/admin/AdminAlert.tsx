@@ -113,16 +113,18 @@ export function AdminAlert({
   return (
     <div
       role="alert"
-      className={`flex items-start gap-3 rounded-2xl border p-4 shadow-sm ${styles.container} ${className}`.trim()}
+      className={`flex flex-col sm:flex-row items-start gap-3 rounded-2xl border p-4 shadow-sm ${styles.container} ${className}`.trim()}
     >
-      <div className="mt-0.5">{styles.icon}</div>
-      <div className="flex-1 text-sm">
-        {title ? (
-          <h4 className={`font-semibold mb-1 ${styles.title}`}>{title}</h4>
-        ) : null}
-        <div className={styles.body}>{children}</div>
+      <div className="flex items-start gap-3 flex-1 min-w-0">
+        <div className="mt-0.5 shrink-0">{styles.icon}</div>
+        <div className="flex-1 min-w-0 text-sm">
+          {title ? (
+            <h4 className={`font-semibold mb-1 ${styles.title}`}>{title}</h4>
+          ) : null}
+          <div className={styles.body}>{children}</div>
+        </div>
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+      {action ? <div className="shrink-0 w-full sm:w-auto mt-2 sm:mt-0 flex justify-end">{action}</div> : null}
     </div>
   )
 }
