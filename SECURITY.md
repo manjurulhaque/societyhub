@@ -35,6 +35,7 @@ SocietyHub operates under a **Zero-Trust Multi-Tenant Architecture**. No client-
 ┌────────────────────────────────────────────────────────────────────────┐
 │  Input Sanitization & Injection Mitigation Layer                       │
 │  - @/lib/sanitize.ts: Stored XSS & Control Character Stripping         │
+│  - @/lib/auth/safeRedirect.ts: Centralized Open Redirect Defense       │
 │  - @/lib/csv.ts: Formula / DDE Injection Escaping (=, +, -, @, \t, \r) │
 │  - @/lib/errors.ts: Production Error Sanitization & Schema Suppression │
 └───────────────────────────────────┬────────────────────────────────────┘
@@ -44,6 +45,7 @@ SocietyHub operates under a **Zero-Trust Multi-Tenant Architecture**. No client-
 │  Data Layer, Cryptography & Audit Trail                                │
 │  - Write-Time AES-256-GCM Field-Level Encryption (@/lib/crypto)        │
 │  - Resident PAN / Aadhaar & Financial Number Masking (@/lib/masking)   │
+│  - DPDP/GDPR Automated PII & Secret Redactor (@/lib/auditSanitizer)    │
 │  - Cryptographic Tamper-Proof Audit Log Hash Chaining (@/lib/audit)    │
 │  - Tenant-Isolated Prisma Queries (societyId enforced)                 │
 └────────────────────────────────────────────────────────────────────────┘
@@ -85,12 +87,21 @@ SocietyHub implements a 6-tier functional role hierarchy with strict separation 
 - **POST-Only Sign-Out**: Sign-out routes (`/logout` and `/admin/logout`) are restricted exclusively to `POST` requests with HTTP 303 See Other redirects, preventing image-tag (`<img>`) cross-site logout attacks.
 - **Anti-Caching for Sensitive APIs**: `/api/auth/me` and `/api/users` enforce `Cache-Control: no-store, no-cache, must-revalidate, private` to prevent caching of user credentials in browser history or intermediate corporate proxies.
 
-### C. Zero-Trust Multi-Tenant Isolation (IDOR Defense)
+### C. Open Redirect Defense Protocol
+- **Centralized Safe Redirect Validator (`@/lib/auth/safeRedirect.ts`)**:
+  - `getSafeRedirectUrl(targetUrl, fallback)` strictly enforces safe relative paths (`/path`), rejecting:
+    - Protocol-relative URLs (`//evil.com`)
+    - Windows backslash traversal bypasses (`/\evil.com` or `\/evil.com`)
+    - External schemes (`http://`, `https://`, `javascript:`, `data:`, `vbscript:`)
+    - CRLF header injection characters (`\r`, `\n`) and null bytes (`\0`).
+  - Integrated across all authentication redirects (`/login`, `/admin/login`).
+
+### D. Zero-Trust Multi-Tenant Isolation (IDOR Defense)
 - Server actions never trust client-supplied society IDs.
 - User session and active society memberships are resolved server-side via `requireCommitteeAccess` and `requireSocietyAccess`.
 - All database operations enforce tenant isolation (`where: { id, societyId }` or `where: { block: { societyId } }`).
 
-### D. Active Field-Level AES-256-GCM Encryption at Rest
+### E. Active Field-Level AES-256-GCM Encryption at Rest
 - Sensitive Personally Identifiable Information (PII) and financial data are encrypted on write using **AES-256-GCM** authenticated encryption with 96-bit random IVs and 128-bit authentication tags (`@/lib/crypto.ts`):
   - **Resident PII**: Permanent Account Number (`panNumber`) and Aadhaar Number (`aadhaarNumber`) in the `Person` table.
   - **Financial Accounts**: Bank Account Number (`accountNumber`) and IFSC codes in the `Account` table.
@@ -100,7 +111,7 @@ SocietyHub implements a 6-tier functional role hierarchy with strict separation 
 - In the event of a raw PostgreSQL database breach or backup snapshot leakage, stored government identity numbers and bank accounts remain protected ciphertext.
 - **Backward-Compatible Decryption**: `decryptData(val)` transparently decrypts encrypted envelopes while gracefully handling legacy plaintext records during database migrations.
 
-### E. PII & Financial Identifier Masking
+### F. PII & Financial Identifier Masking
 - Automated UI masking (`@/lib/masking.ts`) decrypts ciphertext on the server and renders masked representations for browser display:
   - **PAN Number**: `ABCDE••••F` via `maskPan()` (e.g. Residents Directory, Vendor Bill Modals).
   - **Aadhaar Number**: `•••• •••• 1234` via `maskAadhaar()` (e.g. Residents Directory).
@@ -108,7 +119,7 @@ SocietyHub implements a 6-tier functional role hierarchy with strict separation 
   - **Phone Number**: `••••••1234` via `maskPhone()`.
   - **Email Address**: `m••••••@example.com` via `maskEmail()`.
 
-### F. Brute-Force Rate Limiting & Account Lockout Defense
+### G. Brute-Force Rate Limiting & Account Lockout Defense
 - **Sliding-Window In-Memory Rate Limiter (`@/lib/rateLimit.ts`)**:
   - `peekRateLimit(key, options)`: Inspects remaining attempts without consuming quota hits.
   - `incrementRateLimit(key, options)`: Consumes attempt quota upon authentication failure.
@@ -117,9 +128,19 @@ SocietyHub implements a 6-tier functional role hierarchy with strict separation 
   - `action: "CHECK"` executes pre-flight quota inspection before invoking authentication.
   - `action: "RECORD_FAILURE"` records failed attempts upon bad credentials (**5 attempts per 5 minutes** per IP and normalized email).
   - `action: "RESET"` immediately clears rate limit tally upon successful login.
-- **Directory Endpoint Protection**: User directory API (`/api/users`) is throttled to **30 requests per minute** to prevent automated account enumeration.
+- **Directory & User Provisioning Protection**:
+  - `/api/users` is throttled to **30 requests per minute** (GET) and **10 requests per minute** (POST) to prevent automated account enumeration or creation flooding.
 
-### G. Input Sanitization & Stored XSS Mitigation
+### H. NIST SP 800-63B & OWASP ASVS Password Policy Engine
+- **Password Engine (`@/lib/auth/passwordValidation.ts`)**:
+  - Minimum length: **10 characters** (NIST SP 800-63B standard).
+  - Character diversity: Requires uppercase, lowercase, numeric digits, and special characters (`!@#$%^&*`).
+  - Common / Breached Password Blocklist: Blocks top known breached passwords.
+  - Contextual Rejection: Rejects passwords containing the user's email username or name.
+  - Repeated Character Defense: Blocks trivial character repetitions (`aaaaaa`, `111111`).
+  - Integrated into Zod validation schemas (`@/lib/validations/auth.ts`).
+
+### I. Input Sanitization & Stored XSS Mitigation
 - User-submitted text fields across all Server Actions and Forms are sanitized via `@/lib/sanitize.ts` prior to database writes.
 - Sanitized entities include:
   - Resident profiles and emergency contacts (`residentActions.ts`)
@@ -139,22 +160,28 @@ SocietyHub implements a 6-tier functional role hierarchy with strict separation 
   - Share certificate numbers (`registers/shares/page.tsx`)
   - Fixed deposit numbers and bank allocations (`investments/page.tsx`)
   - Cheque numbers, party names, and banks (`cheques/page.tsx`)
-- Strips `<script>` tags, HTML markup, `javascript:` protocols, `data:text/html` payloads, and dangerous control characters / null bytes.
+- Strips full `<script>` and `<style>` blocks, HTML markup, `javascript:` pseudo-protocols, and control characters / null bytes.
 
-### H. CSV & Spreadsheet Formula Injection Defense
-- Tabular exports use `@/lib/csv.ts` to neutralize spreadsheet formula execution triggers (`=`, `+`, `-`, `@`, `\t`, `\r`) by prepending a single quote `'`.
-- Protects administrators from malicious spreadsheet DDE macro execution when opening exported CSVs in Microsoft Excel, LibreOffice, or Google Sheets.
+### J. Universal CSV / Excel Formula Injection (DDE) Defense
+- All tabular data exports in Society and Admin reporting modules ([`SocietyReportsClient.tsx`](file:///d:/societyhub/src/app/society/%5Bcode%5D/reports/SocietyReportsClient.tsx) and [`AdminReportsClient.tsx`](file:///d:/societyhub/src/app/admin/%28protected%29/reports/AdminReportsClient.tsx)) pipe exports through `@/lib/csv.ts` (`generateSafeCsv`).
+- Formula execution triggers (`=`, `+`, `-`, `@`, `\t`, `\r`) are automatically escaped by prepending a single quote `'` and rendered with UTF-8 BOM.
+- Eliminates CSV / Excel formula injection (DDE code execution) when spreadsheets are opened in Microsoft Excel, LibreOffice Calc, or Google Sheets.
 
-### I. Cryptographic Tamper-Proof Audit Log Hash Chaining
+### K. Automated Audit PII & Secret Redaction (DPDP Act / GDPR)
+- **Automatic Audit Redaction Engine (`@/lib/auditSanitizer.ts`)**:
+  - `recordAuditLog` automatically runs deep recursive sanitization on `oldData` and `newData` before persistence.
+  - Automatically redacts passwords, tokens, API keys, OTPs, session cookies, and masks PAN, Aadhaar, and Bank Account numbers within arbitrary JSON payloads.
+
+### L. Cryptographic Tamper-Proof Audit Log Hash Chaining
 - Audit logs are chained chronologically using HMAC-SHA256 hash signatures (`@/lib/auditCrypto.ts`), linking each record to the preceding entry's signature (Merkle audit chain).
 - **Super Admin Audit Explorer** (`/admin/audit-logs`): Real-time mathematical chain verification that detects any record modification, backdating, or unauthorized deletion.
 - **Society Audit Explorer** (`/society/[code]/audit-logs`): Tenant-isolated audit trails for committee transparency and statutory compliance.
 
-### J. Production Error Sanitization & Environment Validation
+### M. Production Error Sanitization & Environment Validation
 - **Safe Error Handling (`@/lib/errors.ts`)**: In production, `getSafeErrorMessage(err)` suppresses raw PostgreSQL/Prisma error details, table names, foreign key constraints, and internal stack traces, returning sanitized, safe user feedback.
 - **Runtime Environment Validator (`@/lib/env.ts`)**: Verifies required environment secrets (`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ENCRYPTION_SECRET_KEY`, `AUDIT_HMAC_SECRET_KEY`) at boot time using Zod schemas.
 
-### K. Security Health & Diagnostics Probe
+### N. Security Health & Diagnostics Probe
 - Automated health check endpoint at `/api/health/security` continuously verifies:
   1. Database connectivity (`SELECT 1`).
   2. AES-256-GCM encryption/decryption round-trip parity.
@@ -172,8 +199,9 @@ npm run security:check
 ```
 
 This script executes:
-1. **ESLint Rule Validation**: Codebase-wide linting with 0 errors and 0 warnings.
-2. **Next.js Production Build**: TypeScript type-checking and static/dynamic optimization across all 42 App Router routes.
+1. **Automated Cryptographic & Security Self-Tests (`tsx scripts/test-security.ts`)**: Mathematically validates all 8 cryptographic, rate limiting, sanitization, redirect, and password subsystems.
+2. **ESLint Rule Validation**: Codebase-wide linting with 0 errors and 0 warnings.
+3. **Next.js Production Build**: TypeScript type-checking and static/dynamic optimization across all 42 App Router routes.
 
 ---
 

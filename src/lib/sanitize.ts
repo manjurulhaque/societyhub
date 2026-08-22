@@ -14,12 +14,16 @@ export function sanitizeText(input: string | null | undefined): string {
       // Remove null bytes and dangerous control characters (keep \r, \n, \t)
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
 
-      // Strip HTML tags
+      // Strip full <script>...</script> and <style>...</style> blocks with content
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+
+      // Strip remaining HTML tags
       .replace(/<[^>]*>?/gm, "")
-      // Strip javascript: pseudo-protocol
-      .replace(/javascript:/gi, "")
+      // Strip javascript: pseudo-protocol URIs
+      .replace(/javascript:\S*/gi, "")
       // Strip data: text/html protocols
-      .replace(/data:text\/html/gi, "")
+      .replace(/data:text\/html\S*/gi, "")
       .trim()
   )
 }

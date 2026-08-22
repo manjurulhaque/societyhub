@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { createClient } from "@/lib/supabase/client"
 import { loginSchema, type LoginInput } from "@/lib/validations/auth"
+import { getSafeRedirectUrl } from "@/lib/auth/safeRedirect"
 import {
   Form,
   FormControl,
@@ -98,18 +99,14 @@ export default function LoginPage() {
       }
 
 
-      // If a safe relative next parameter is provided, use it (prevent open redirect attacks)
-      const isSafeRelativeUrl =
-        nextParam &&
-        nextParam.startsWith("/") &&
-        !nextParam.startsWith("//") &&
-        !nextParam.startsWith("/\\") &&
-        !nextParam.includes("://")
-
-      if (isSafeRelativeUrl) {
-        router.push(nextParam)
-        router.refresh()
-        return
+      // If a next parameter is provided, validate through Open Redirect defense
+      if (nextParam) {
+        const safeUrl = getSafeRedirectUrl(nextParam, "")
+        if (safeUrl) {
+          router.push(safeUrl)
+          router.refresh()
+          return
+        }
       }
 
 

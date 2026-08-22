@@ -14,11 +14,12 @@ export function escapeCsvCell(value: string | number | boolean | null | undefine
     return '""'
   }
 
-  let str = String(value).trim()
+  const rawStr = String(value)
+  let str = rawStr.trim()
 
   // Neutralize formula triggers by prefixing with a single quote
-  if (FORMULA_TRIGGERS.some((trigger) => str.startsWith(trigger))) {
-    str = `'${str}`
+  if (FORMULA_TRIGGERS.some((trigger) => rawStr.startsWith(trigger) || str.startsWith(trigger))) {
+    str = `'${rawStr}`
   }
 
   // Escape internal double-quotes by doubling them (RFC 4180)

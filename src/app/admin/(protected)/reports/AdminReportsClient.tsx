@@ -12,6 +12,7 @@ import {
   AdminSelect,
 } from "@/components/admin"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { generateSafeCsv } from "@/lib/csv"
 
 export type AdminReportData = {
   summary: {
@@ -110,7 +111,7 @@ export function AdminReportsClient({ data }: { data: AdminReportData }) {
     ]
 
     const rows = filteredSocieties.map((s) => [
-      `"${s.name.replace(/"/g, '""')}"`,
+      s.name,
       s.code || "",
       s.blocksCount,
       s.flatsCount,
@@ -128,17 +129,16 @@ export function AdminReportsClient({ data }: { data: AdminReportData }) {
       return
     }
 
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n")
-
-    const encodedUri = encodeURI(csvContent)
+    const csvString = generateSafeCsv(headers, rows)
+    const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
-    link.setAttribute("href", encodedUri)
+    link.setAttribute("href", url)
     link.setAttribute("download", `platform_societies_financial_report.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 
   const handleDownloadPDF = async () => {
