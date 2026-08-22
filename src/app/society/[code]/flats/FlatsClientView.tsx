@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useTransition } from "react"
+import Link from "next/link"
 import { AdminTable, AdminBadge, AdminStatCard } from "@/components/admin"
 import { AddBlockModal } from "./AddBlockModal"
 import { AddFlatModal, type BlockOption } from "./AddFlatModal"
@@ -251,12 +252,17 @@ export function FlatsClientView({
             "Carpet Area",
             "Occupancy",
             "Current Occupants",
-            ...(canManageFlats ? ["Actions"] : []),
+            "Action",
           ]}
           rows={filteredFlats.map((flat) => (
             <tr key={flat.id} className="border-t border-stone-100 hover:bg-stone-50/60 transition-colors">
               <td className="px-4 py-3.5 font-bold text-stone-950 text-xs">
-                {flat.number}
+                <Link
+                  href={`/society/${societyCode}/flats/${flat.id}`}
+                  className="hover:text-blue-600 transition"
+                >
+                  {flat.number}
+                </Link>
               </td>
               <td className="px-4 py-3.5 text-stone-700 text-xs font-medium">
                 {flat.blockName}
@@ -294,24 +300,34 @@ export function FlatsClientView({
                   <span className="text-stone-400">None assigned</span>
                 )}
               </td>
-              {canManageFlats ? (
-                <td className="px-4 py-3.5">
-                  <button
-                    type="button"
-                    onClick={() => setDeletingFlat(flat)}
-                    className="rounded-lg p-1 text-stone-400 hover:bg-red-50 hover:text-red-600 transition"
-                    title="Delete Flat"
+              <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                <div className="flex items-center justify-end gap-1.5">
+                  <Link
+                    href={`/society/${societyCode}/flats/${flat.id}`}
+                    className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2 py-1 text-[11px] font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-900 transition"
                   >
-                    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                      <path
-                        fillRule="evenodd"
-                        d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </button>
-                </td>
-              ) : null}
+                    <span>View 360°</span>
+                    <span>→</span>
+                  </Link>
+
+                  {canManageFlats && (
+                    <button
+                      type="button"
+                      onClick={() => setDeletingFlat(flat)}
+                      className="rounded-lg p-1 text-stone-400 hover:bg-red-50 hover:text-red-600 transition"
+                      title="Delete Flat"
+                    >
+                      <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path
+                          fillRule="evenodd"
+                          d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </td>
             </tr>
           ))}
         />
