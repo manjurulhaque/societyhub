@@ -75,6 +75,8 @@ export async function updateSocietySettings(
     const gracePeriodDays = rawGraceDays ? parseInt(rawGraceDays, 10) : 0
     const lateFeeRate = rawLateFeeRate ? parseFloat(rawLateFeeRate) : 21.0
     const timezone = formData.get("timezone")?.toString().trim() || "Asia/Kolkata"
+    const currency = formData.get("currency")?.toString().trim() || "INR"
+    const currencySymbol = formData.get("currencySymbol")?.toString().trim() || "₹"
 
     await prisma.society.update({
       where: { id: societyId },
@@ -83,6 +85,8 @@ export async function updateSocietySettings(
         code: rawCode,
         societyType: societyType as SocietyType,
         timezone,
+        currency,
+        currencySymbol,
         phone,
         email,
         address,
