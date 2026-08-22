@@ -210,7 +210,7 @@ function SidebarLink({
   children: React.ReactNode
 }) {
   return (
-    <Link href={href} className="text-gray-600 hover:text-black transition">
+    <Link href={href} prefetch={true} className="text-gray-600 hover:text-black transition">
       {children}
     </Link>
   )
