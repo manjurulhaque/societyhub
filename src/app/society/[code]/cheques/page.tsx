@@ -369,6 +369,7 @@ export default async function SocietyChequesPage({
 
 import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
 
 async function createCheque(formData: FormData) {
   "use server"
@@ -379,11 +380,14 @@ async function createCheque(formData: FormData) {
   const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
   const verifiedSocietyId = authContext.society.id
 
-  const chequeNumber = formData.get("chequeNumber")?.toString().trim()
+  const rawChequeNum = formData.get("chequeNumber")?.toString().trim()
+  const chequeNumber = rawChequeNum ? sanitizeText(rawChequeNum) : ""
   const chequeDateStr = formData.get("chequeDate")?.toString().trim()
   const direction = formData.get("direction")?.toString().trim() || "INWARD"
-  const partyName = formData.get("partyName")?.toString().trim()
-  const bankName = formData.get("bankName")?.toString().trim() || null
+  const rawParty = formData.get("partyName")?.toString().trim()
+  const partyName = rawParty ? sanitizeText(rawParty) : ""
+  const rawBank = formData.get("bankName")?.toString().trim() || null
+  const bankName = rawBank ? sanitizeText(rawBank) : null
   const accountId = formData.get("accountId")?.toString().trim()
   const rawAmount = formData.get("amount")?.toString().trim()
 

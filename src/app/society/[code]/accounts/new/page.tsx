@@ -6,6 +6,8 @@ import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
 import { encryptData } from "@/lib/crypto"
+import { sanitizeText } from "@/lib/sanitize"
+import { maskBankAccount } from "@/lib/masking"
 import { prisma } from "@/lib/prisma"
 import type { AccountType, LedgerGroup, BalanceType } from "@/generated/prisma/client"
 
@@ -29,13 +31,17 @@ export default async function NewSocietyAccountPage({
     const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
     const verifiedSocietyId = authContext.society.id
 
-    const name = formData.get("name")?.toString().trim()
+    const rawName = formData.get("name")?.toString().trim()
+    const name = sanitizeText(rawName)
     const accountType = formData.get("accountType")?.toString().trim() || "BANK"
-    const bankName = formData.get("bankName")?.toString().trim() || null
+    const rawBankName = formData.get("bankName")?.toString().trim() || null
+    const bankName = rawBankName ? sanitizeText(rawBankName) : null
     const rawAccountNumber = formData.get("accountNumber")?.toString().trim() || null
     const accountNumber = rawAccountNumber ? encryptData(rawAccountNumber) : null
-    const ifscCode = formData.get("ifscCode")?.toString().trim().toUpperCase() || null
-    const branch = formData.get("branch")?.toString().trim() || null
+    const rawIfsc = formData.get("ifscCode")?.toString().trim().toUpperCase() || null
+    const ifscCode = rawIfsc ? sanitizeText(rawIfsc) : null
+    const rawBranch = formData.get("branch")?.toString().trim() || null
+    const branch = rawBranch ? sanitizeText(rawBranch) : null
     const rawOpeningBalance = formData.get("openingBalance")?.toString().trim()
     const isDefault = formData.get("isDefault") === "true"
 
@@ -98,7 +104,7 @@ export default async function NewSocietyAccountPage({
           openingBalance: validOpening,
           parentLedgerId: parentCashBank?.id ?? null,
           description: accountType === "BANK"
-            ? `Bank Account - ${bankName ?? ""} (A/C: ${accountNumber ?? ""})`
+            ? `Bank Account - ${bankName ?? ""} (A/C: ${accountNumber ? maskBankAccount(accountNumber) : ""})`
             : "Cash / Imprest Float Account",
           isSystem: false,
         },

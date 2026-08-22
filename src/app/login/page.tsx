@@ -64,9 +64,37 @@ export default function LoginPage() {
       })
 
       if (signInError) {
+        // Record failed attempt in rate limiter
+        try {
+          const failRes = await fetch("/api/auth/login-limit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, action: "RECORD_FAILURE" }),
+          })
+          if (!failRes.ok) {
+            const failData = await failRes.json()
+            setError(failData.error || signInError.message)
+            setLoading(false)
+            return
+          }
+        } catch {
+          // Fall through
+        }
+
         setError(signInError.message)
         setLoading(false)
         return
+      }
+
+      // 3. Clear rate limit tally upon successful authentication
+      try {
+        await fetch("/api/auth/login-limit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, action: "RESET" }),
+        })
+      } catch {
+        // Non-blocking cleanup
       }
 
 

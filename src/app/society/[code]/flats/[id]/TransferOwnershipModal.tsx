@@ -212,6 +212,17 @@ export function TransferOwnershipModal({
             />
           </div>
 
+          {/* NOC Issued Date */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-stone-700">NOC Issued Date</label>
+            <input
+              type="date"
+              value={nocIssuedDate}
+              onChange={(e) => setNocIssuedDate(e.target.value)}
+              className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs text-stone-900 focus:border-stone-900 focus:outline-none"
+            />
+          </div>
+
           {/* MCM Resolution No */}
           <div className="space-y-1">
             <label className="text-[11px] font-semibold text-stone-700">MCM Approval Resolution No.</label>

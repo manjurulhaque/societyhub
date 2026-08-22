@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
+import { getSafeErrorMessage } from "@/lib/errors"
 import type { AmenityType } from "@/generated/prisma/client"
 
 export type AmenityActionState = {
@@ -31,7 +33,8 @@ export async function createAmenity(
     const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
     const societyId = context.society.id
 
-    const name = data.name?.trim()
+    const rawName = data.name?.trim()
+    const name = sanitizeText(rawName)
     if (!name) {
       return { error: "Amenity name is required (e.g. Main Clubhouse Banquet Hall)." }
     }
@@ -43,12 +46,14 @@ export async function createAmenity(
       return { error: "An amenity with this name already exists in this society." }
     }
 
+    const description = data.description ? sanitizeText(data.description) : null
+
     const amenity = await prisma.amenity.create({
       data: {
         societyId,
         name,
         type: data.type,
-        description: data.description?.trim() || null,
+        description,
         defaultRent: Math.max(0, data.defaultRent || 0),
         defaultDeposit: Math.max(0, data.defaultDeposit || 0),
         capacity: data.capacity || null,
@@ -76,8 +81,7 @@ export async function createAmenity(
     }
   } catch (err: unknown) {
     console.error("Failed to create amenity:", err)
-    const message = err instanceof Error ? err.message : "Failed to create amenity."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to create amenity.") }
   }
 }
 
@@ -106,12 +110,15 @@ export async function updateAmenity(
     })
     if (!amenity) return { error: "Amenity not found." }
 
+    const sanitizedName = data.name ? sanitizeText(data.name) : undefined
+    const sanitizedDescription = data.description !== undefined ? (data.description ? sanitizeText(data.description) : null) : amenity.description
+
     await prisma.amenity.update({
       where: { id: amenityId },
       data: {
-        ...(data.name ? { name: data.name.trim() } : {}),
+        ...(sanitizedName ? { name: sanitizedName } : {}),
         ...(data.type ? { type: data.type } : {}),
-        description: data.description !== undefined ? data.description?.trim() || null : amenity.description,
+        description: sanitizedDescription,
         ...(data.defaultRent !== undefined ? { defaultRent: Math.max(0, data.defaultRent) } : {}),
         ...(data.defaultDeposit !== undefined ? { defaultDeposit: Math.max(0, data.defaultDeposit) } : {}),
         capacity: data.capacity !== undefined ? data.capacity : amenity.capacity,
@@ -134,8 +141,7 @@ export async function updateAmenity(
     return { success: true, message: "Amenity updated successfully." }
   } catch (err: unknown) {
     console.error("Failed to update amenity:", err)
-    const message = err instanceof Error ? err.message : "Failed to update amenity."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to update amenity.") }
   }
 }
 
@@ -175,7 +181,6 @@ export async function deleteAmenity(
     return { success: true, message: "Amenity deleted." }
   } catch (err: unknown) {
     console.error("Failed to delete amenity:", err)
-    const message = err instanceof Error ? err.message : "Failed to delete amenity."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to delete amenity.") }
   }
 }

@@ -29,6 +29,7 @@ import {
   AdminModal,
 } from "@/components/admin"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { maskBankAccount } from "@/lib/masking"
 
 const CHART_COLORS = [
   "#059669",
@@ -1923,7 +1924,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                       </td>
                       <td className="px-4 py-3 text-xs text-stone-700">{acc.bankName || acc.accountType}</td>
                       <td className="px-4 py-3 font-mono text-xs text-stone-600">
-                        {acc.accountNumber ? `••••${acc.accountNumber.slice(-4)}` : "—"}
+                        {acc.accountNumber ? maskBankAccount(acc.accountNumber) : "—"}
                       </td>
                       <td className="px-4 py-3 text-xs font-extrabold text-stone-950">
                         {sym}{acc.currentBalance.toLocaleString("en-IN")}
@@ -2600,7 +2601,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                       </td>
                       <td className="px-4 py-3.5 text-xs text-stone-800">{l.memberName}</td>
                       <td className="px-4 py-3.5 text-xs font-semibold text-stone-900">{l.bankName}</td>
-                      <td className="px-4 py-3.5 font-mono text-xs text-stone-600">{l.loanAccountNumber || "—"}</td>
+                      <td className="px-4 py-3.5 font-mono text-xs text-stone-600">{l.loanAccountNumber ? maskBankAccount(l.loanAccountNumber) : "—"}</td>
                       <td className="px-4 py-3.5 text-xs font-bold text-stone-950">
                         {l.sanctionAmount ? `${sym}${l.sanctionAmount.toLocaleString("en-IN")}` : "—"}
                       </td>

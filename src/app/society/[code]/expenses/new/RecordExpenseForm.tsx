@@ -14,7 +14,7 @@ interface CategoryOption {
 interface AccountOption {
   id: string
   name: string
-  currentBalance: number | string | any
+  currentBalance: number | string
 }
 
 interface VendorOption {
@@ -89,8 +89,9 @@ export function RecordExpenseForm({
           setNewCatDesc("")
           setShowAddCatModal(false)
         }
-      } catch (err: any) {
-        setCatError(err.message || "Failed to create category")
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Failed to create category"
+        setCatError(errorMsg)
       }
     })
   }
@@ -103,8 +104,9 @@ export function RecordExpenseForm({
     const formData = new FormData(e.currentTarget)
     try {
       await onSubmitAction(formData)
-    } catch (err: any) {
-      setFormError(err.message || "An unexpected error occurred while saving expense")
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : "An unexpected error occurred while saving expense"
+      setFormError(errorMsg)
       setIsSubmitting(false)
     }
   }

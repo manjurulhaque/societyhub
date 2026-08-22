@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useTransition } from "react"
 import { AdminTable, AdminBadge } from "@/components/admin"
+import { maskPan, maskAadhaar } from "@/lib/masking"
 import { RegisterResidentModal, type FlatOption } from "./RegisterResidentModal"
 import { removeResident, toggleResidentKyc } from "./residentActions"
 
@@ -156,8 +157,8 @@ export function ResidentsDirectoryClient({
               </td>
               <td className="px-4 py-3.5">
                 <div className="space-y-0.5 text-[11px] font-mono text-stone-600">
-                  {r.panNumber ? <p>PAN: {r.panNumber}</p> : null}
-                  {r.aadhaarNumber ? <p>UID: •••• {r.aadhaarNumber.slice(-4)}</p> : null}
+                  {r.panNumber ? <p>PAN: {maskPan(r.panNumber)}</p> : null}
+                  {r.aadhaarNumber ? <p>UID: {maskAadhaar(r.aadhaarNumber)}</p> : null}
                   {!r.panNumber && !r.aadhaarNumber ? (
                     <span className="text-stone-400 italic font-sans">—</span>
                   ) : null}

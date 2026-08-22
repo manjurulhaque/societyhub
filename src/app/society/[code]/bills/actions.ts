@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
+import { getSafeErrorMessage } from "@/lib/errors"
 import type { BillType, BillStatus } from "@/generated/prisma/client"
 
 export type BillActionState = {
@@ -156,7 +158,7 @@ export async function generateBatchBills(
             flatId: flat.id,
             billNumber,
             billType,
-            title: `Maintenance Demand - ${periodLabel}`,
+            title: `Maintenance Charges - ${periodLabel}`,
             sequence: 1,
             year,
             month,
@@ -164,7 +166,6 @@ export async function generateBatchBills(
             status: "PENDING" as BillStatus,
             billDate: new Date(),
             dueDate,
-            gracePeriodDate: graceDate,
           },
         })
 
@@ -205,8 +206,7 @@ export async function generateBatchBills(
     }
   } catch (err: unknown) {
     console.error("Failed to generate batch bills:", err)
-    const message = err instanceof Error ? err.message : "Failed to execute batch billing."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to execute batch billing.") }
   }
 }
 
@@ -276,13 +276,16 @@ export async function createIndividualBill(
       ? new Date(data.dueDate)
       : new Date(year, month - 1, 10, 23, 59, 59)
 
+    const rawTitle = data.title?.trim() || `${data.billType.replace(/_/g, " ")} Assessment`
+    const title = sanitizeText(rawTitle)
+
     const bill = await prisma.bill.create({
       data: {
         societyId,
         flatId: data.flatId,
         billNumber,
         billType: data.billType,
-        title: data.title?.trim() || `${data.billType.replace(/_/g, " ")} Assessment`,
+        title,
         sequence,
         year,
         month,
@@ -312,8 +315,7 @@ export async function createIndividualBill(
     }
   } catch (err: unknown) {
     console.error("Failed to create individual bill:", err)
-    const message = err instanceof Error ? err.message : "Failed to create bill."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to create bill.") }
   }
 }
 
@@ -346,6 +348,8 @@ export async function cancelBill(
       return { error: "Cannot cancel a bill that has already been paid." }
     }
 
+    const sanitizedReason = reason ? sanitizeText(reason) : undefined
+
     const updatedBill = await prisma.bill.update({
       where: { id: billId },
       data: {
@@ -359,9 +363,9 @@ export async function cancelBill(
       action: "STATUS_CHANGE",
       entity: "Bill",
       entityId: billId,
-      description: `${context.user.email} cancelled Bill ${bill.billNumber || bill.id} for Flat ${bill.flat.block.name}-${bill.flat.number}${reason ? `: ${reason}` : ""}`,
+      description: `${context.user.email} cancelled Bill ${bill.billNumber || bill.id} for Flat ${bill.flat.block.name}-${bill.flat.number}${sanitizedReason ? `: ${sanitizedReason}` : ""}`,
       oldData: { status: bill.status },
-      newData: { status: updatedBill.status, reason },
+      newData: { status: updatedBill.status, reason: sanitizedReason },
     })
 
     revalidatePath(`/society/${societyCode}/bills`)
@@ -373,7 +377,6 @@ export async function cancelBill(
     }
   } catch (err: unknown) {
     console.error("Failed to cancel bill:", err)
-    const message = err instanceof Error ? err.message : "Failed to cancel bill."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to cancel bill.") }
   }
 }

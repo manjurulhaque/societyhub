@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
+import { getSafeErrorMessage } from "@/lib/errors"
 import type { MaintenanceType, UnitType } from "@/generated/prisma/client"
 
 export type RateActionState = {
@@ -63,6 +65,9 @@ export async function createMaintenanceRate(
       })
     }
 
+    const approvedInMeeting = data.approvedInMeeting ? sanitizeText(data.approvedInMeeting) : null
+    const remarks = data.remarks ? sanitizeText(data.remarks) : null
+
     const newRate = await prisma.maintenanceRate.create({
       data: {
         societyId,
@@ -73,8 +78,8 @@ export async function createMaintenanceRate(
         effectiveFrom,
         effectiveUpto,
         isCurrent: !effectiveUpto,
-        approvedInMeeting: data.approvedInMeeting?.trim() || null,
-        remarks: data.remarks?.trim() || null,
+        approvedInMeeting,
+        remarks,
       },
     })
 
@@ -104,8 +109,7 @@ export async function createMaintenanceRate(
     }
   } catch (err: unknown) {
     console.error("Failed to create maintenance rate:", err)
-    const message = err instanceof Error ? err.message : "Failed to create rate rule."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to create rate rule.") }
   }
 }
 
@@ -144,7 +148,6 @@ export async function deleteMaintenanceRate(
     return { success: true, message: "Tariff rule deleted." }
   } catch (err: unknown) {
     console.error("Failed to delete maintenance rate:", err)
-    const message = err instanceof Error ? err.message : "Failed to delete rate rule."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to delete rate rule.") }
   }
 }

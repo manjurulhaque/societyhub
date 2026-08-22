@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
+import { getSafeErrorMessage } from "@/lib/errors"
 import type { AssetStatus } from "@/generated/prisma/client"
 
 export type AssetActionState = {
@@ -39,7 +41,8 @@ export async function createAsset(
     const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
     const societyId = context.society.id
 
-    const name = data.name?.trim()
+    const rawName = data.name?.trim()
+    const name = sanitizeText(rawName)
     if (!name) {
       return { error: "Asset name is required (e.g. Schindler Lift 8-Passenger Block A)." }
     }
@@ -47,7 +50,7 @@ export async function createAsset(
       return { error: "Asset category is required." }
     }
 
-    const assetCode = data.assetCode?.trim() || null
+    const assetCode = data.assetCode ? sanitizeText(data.assetCode) : null
 
     if (assetCode) {
       const existing = await prisma.fixedAsset.findFirst({
@@ -68,8 +71,8 @@ export async function createAsset(
         name,
         categoryId: data.categoryId,
         assetCode,
-        location: data.location?.trim() || null,
-        serialNumber: data.serialNumber?.trim() || null,
+        location: data.location ? sanitizeText(data.location) : null,
+        serialNumber: data.serialNumber ? sanitizeText(data.serialNumber) : null,
         purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : null,
         purchaseCost: data.purchaseCost !== null && data.purchaseCost !== undefined ? data.purchaseCost : null,
         currentBookValue: data.currentBookValue !== null && data.currentBookValue !== undefined ? data.currentBookValue : data.purchaseCost || null,
@@ -102,8 +105,7 @@ export async function createAsset(
     }
   } catch (err: unknown) {
     console.error("Failed to create asset:", err)
-    const message = err instanceof Error ? err.message : "Failed to create asset."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to create asset.") }
   }
 }
 
@@ -141,12 +143,13 @@ export async function updateAsset(
       return { error: "Asset not found." }
     }
 
-    const name = data.name?.trim()
+    const rawName = data.name?.trim()
+    const name = sanitizeText(rawName)
     if (!name) {
       return { error: "Asset name is required." }
     }
 
-    const assetCode = data.assetCode?.trim() || null
+    const assetCode = data.assetCode ? sanitizeText(data.assetCode) : null
     if (assetCode && assetCode.toLowerCase() !== (existing.assetCode || "").toLowerCase()) {
       const duplicate = await prisma.fixedAsset.findFirst({
         where: {
@@ -167,8 +170,8 @@ export async function updateAsset(
         name,
         categoryId: data.categoryId,
         assetCode,
-        location: data.location?.trim() || null,
-        serialNumber: data.serialNumber?.trim() || null,
+        location: data.location ? sanitizeText(data.location) : null,
+        serialNumber: data.serialNumber ? sanitizeText(data.serialNumber) : null,
         purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : null,
         purchaseCost: data.purchaseCost !== null && data.purchaseCost !== undefined ? data.purchaseCost : null,
         currentBookValue: data.currentBookValue !== null && data.currentBookValue !== undefined ? data.currentBookValue : null,
@@ -202,8 +205,7 @@ export async function updateAsset(
     }
   } catch (err: unknown) {
     console.error("Failed to update asset:", err)
-    const message = err instanceof Error ? err.message : "Failed to update asset."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to update asset.") }
   }
 }
 
@@ -243,8 +245,7 @@ export async function deleteAsset(
     return { success: true, message: `Asset "${existing.name}" deleted successfully.` }
   } catch (err: unknown) {
     console.error("Failed to delete asset:", err)
-    const message = err instanceof Error ? err.message : "Failed to delete asset."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to delete asset.") }
   }
 }
 
@@ -263,7 +264,8 @@ export async function createAssetCategory(
     const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
     const societyId = context.society.id
 
-    const name = data.name?.trim()
+    const rawName = data.name?.trim()
+    const name = sanitizeText(rawName)
     if (!name) {
       return { error: "Category name is required (e.g. Elevators & Lifts)." }
     }
@@ -284,7 +286,7 @@ export async function createAssetCategory(
         societyId,
         name,
         depreciationRate: data.depreciationRate !== null && data.depreciationRate !== undefined ? data.depreciationRate : null,
-        description: data.description?.trim() || null,
+        description: data.description ? sanitizeText(data.description) : null,
       },
     })
 
@@ -301,8 +303,7 @@ export async function createAssetCategory(
     return { success: true, message: `Category "${name}" created successfully.` }
   } catch (err: unknown) {
     console.error("Failed to create category:", err)
-    const message = err instanceof Error ? err.message : "Failed to create category."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to create category.") }
   }
 }
 
@@ -333,7 +334,8 @@ export async function createServiceLog(
       return { error: "Asset not found." }
     }
 
-    const description = data.description?.trim()
+    const rawDesc = data.description?.trim()
+    const description = sanitizeText(rawDesc)
     if (!description) {
       return { error: "Service description is required." }
     }
@@ -347,9 +349,9 @@ export async function createServiceLog(
         serviceDate,
         description,
         cost: data.cost || 0,
-        servicedBy: data.servicedBy?.trim() || null,
+        servicedBy: data.servicedBy ? sanitizeText(data.servicedBy) : null,
         nextDueDate: data.nextDueDate ? new Date(data.nextDueDate) : null,
-        remarks: data.remarks?.trim() || null,
+        remarks: data.remarks ? sanitizeText(data.remarks) : null,
       },
     })
 
@@ -366,8 +368,7 @@ export async function createServiceLog(
     return { success: true, message: "Service record logged successfully." }
   } catch (err: unknown) {
     console.error("Failed to log service record:", err)
-    const message = err instanceof Error ? err.message : "Failed to log service record."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to log service record.") }
   }
 }
 
@@ -398,8 +399,7 @@ export async function deleteServiceLog(
     return { success: true, message: "Service log removed." }
   } catch (err: unknown) {
     console.error("Failed to delete service log:", err)
-    const message = err instanceof Error ? err.message : "Failed to delete service log."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to delete service log.") }
   }
 }
 
@@ -439,7 +439,6 @@ export async function updateAssetStatus(
     return { success: true, message: `Asset status updated to ${status}.` }
   } catch (err: unknown) {
     console.error("Failed to update asset status:", err)
-    const message = err instanceof Error ? err.message : "Failed to update asset status."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to update asset status.") }
   }
 }

@@ -3,6 +3,7 @@
 import { useState, useMemo, useTransition } from "react"
 import { AdminModal } from "@/components/admin"
 import { createVendorBill } from "./actions"
+import { maskPan } from "@/lib/masking"
 
 export type VendorOption = {
   id: string
@@ -120,7 +121,7 @@ export function CreateVendorBillModal({
             >
               {vendors.map((v) => (
                 <option key={v.id} value={v.id}>
-                  {v.name} {v.companyName ? `(${v.companyName})` : ""} {v.panNumber ? `• PAN: ${v.panNumber}` : ""}
+                  {v.name} {v.companyName ? `(${v.companyName})` : ""} {v.panNumber ? `• PAN: ${maskPan(v.panNumber)}` : ""}
                 </option>
               ))}
             </select>

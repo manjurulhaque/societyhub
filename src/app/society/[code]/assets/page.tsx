@@ -139,6 +139,7 @@ export default async function SocietyAssetsPage({
         categories={categories}
         vendors={vendors}
         canManageAssets={canManageAssets}
+        currentDateIso={new Date().toISOString()}
       />
     </div>
   )

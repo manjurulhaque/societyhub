@@ -199,6 +199,8 @@ export default async function NewPersonPage() {
 
 import { requireSuperAdmin } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
+import { encryptData } from "@/lib/crypto"
+import { sanitizeText } from "@/lib/sanitize"
 
 async function createPerson(formData: FormData) {
   "use server"
@@ -206,15 +208,24 @@ async function createPerson(formData: FormData) {
   const admin = await requireSuperAdmin()
 
   const societyId = formData.get("societyId")?.toString().trim()
-  const name = formData.get("name")?.toString().trim()
-  const phone = formData.get("phone")?.toString().trim() || null
-  const email = formData.get("email")?.toString().trim().toLowerCase() || null
-  const panNumber = formData.get("panNumber")?.toString().trim().toUpperCase() || null
-  const aadhaarNumber = formData.get("aadhaarNumber")?.toString().trim() || null
-  const occupation = formData.get("occupation")?.toString().trim() || null
-  const bloodGroup = formData.get("bloodGroup")?.toString().trim() || null
-  const emergencyContactName = formData.get("emergencyContactName")?.toString().trim() || null
-  const emergencyContactPhone = formData.get("emergencyContactPhone")?.toString().trim() || null
+  const rawName = formData.get("name")?.toString().trim()
+  const name = sanitizeText(rawName)
+  const rawPhone = formData.get("phone")?.toString().trim() || null
+  const phone = rawPhone ? sanitizeText(rawPhone) : null
+  const rawEmail = formData.get("email")?.toString().trim().toLowerCase() || null
+  const email = rawEmail ? sanitizeText(rawEmail) : null
+  const rawPan = formData.get("panNumber")?.toString().trim().toUpperCase() || null
+  const panNumber = rawPan ? encryptData(rawPan) : null
+  const rawAadhaar = formData.get("aadhaarNumber")?.toString().trim() || null
+  const aadhaarNumber = rawAadhaar ? encryptData(rawAadhaar) : null
+  const rawOccupation = formData.get("occupation")?.toString().trim() || null
+  const occupation = rawOccupation ? sanitizeText(rawOccupation) : null
+  const rawBloodGroup = formData.get("bloodGroup")?.toString().trim() || null
+  const bloodGroup = rawBloodGroup ? sanitizeText(rawBloodGroup) : null
+  const rawEmergencyName = formData.get("emergencyContactName")?.toString().trim() || null
+  const emergencyContactName = rawEmergencyName ? sanitizeText(rawEmergencyName) : null
+  const rawEmergencyPhone = formData.get("emergencyContactPhone")?.toString().trim() || null
+  const emergencyContactPhone = rawEmergencyPhone ? sanitizeText(rawEmergencyPhone) : null
 
   if (!societyId || !name) {
     throw new Error("Society and name are required")

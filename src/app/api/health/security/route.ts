@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { encryptData, decryptData, isEncrypted } from "@/lib/crypto"
 import { computeAuditSignature } from "@/lib/auditCrypto"
-import { checkRateLimit } from "@/lib/rateLimit"
+import { peekRateLimit, incrementRateLimit, resetRateLimit } from "@/lib/rateLimit"
 
 export async function GET() {
   const timestamp = new Date().toISOString()
@@ -80,18 +80,24 @@ export async function GET() {
     }
   }
 
-  // 4. In-Memory Sliding-Window Rate Limiter
+  // 4. In-Memory Sliding-Window Rate Limiter Engine
   try {
-    const rateCheck = checkRateLimit("health:probe:key", {
-      maxRequests: 100,
+    const probeKey = `health:probe:${Date.now()}`
+    const peekResult = peekRateLimit(probeKey, {
+      maxRequests: 5,
       windowSeconds: 60,
     })
+    const incResult = incrementRateLimit(probeKey, {
+      maxRequests: 5,
+      windowSeconds: 60,
+    })
+    resetRateLimit(probeKey)
 
-    if (rateCheck.allowed) {
+    if (peekResult.allowed && incResult.allowed && incResult.remaining === 4) {
       checks.rateLimiter = { status: "pass" }
     } else {
       isHealthy = false
-      checks.rateLimiter = { status: "fail", message: "Rate limit exhausted" }
+      checks.rateLimiter = { status: "fail", message: "Rate limiter cycle check failed" }
     }
   } catch (error) {
     isHealthy = false
