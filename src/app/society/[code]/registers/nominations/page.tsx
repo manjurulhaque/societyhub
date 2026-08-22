@@ -228,6 +228,7 @@ export default async function SocietyNominationsPage({
                   <th className="px-4 py-3">Nomination Date</th>
                   <th className="px-4 py-3">Guardian (if Minor)</th>
                   <th className="px-4 py-3 text-center">Status</th>
+                  <th className="px-4 py-3 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -265,9 +266,49 @@ export default async function SocietyNominationsPage({
                     </td>
 
                     <td className="px-4 py-3.5 text-center">
-                      <span className="inline-flex rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                      <span
+                        className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          n.status === "ACTIVE"
+                            ? "bg-emerald-50 border border-emerald-200 text-emerald-700"
+                            : n.status === "EXECUTED"
+                              ? "bg-purple-50 border border-purple-200 text-purple-700"
+                              : "bg-stone-100 border border-stone-200 text-stone-600"
+                        }`}
+                      >
                         {n.status}
                       </span>
+                    </td>
+
+                    <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                      {n.status === "ACTIVE" ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <form action={updateNominationStatus}>
+                            <input type="hidden" name="code" value={code} />
+                            <input type="hidden" name="nominationId" value={n.id} />
+                            <input type="hidden" name="status" value="REVOKED" />
+                            <button
+                              type="submit"
+                              className="rounded-lg border border-stone-200 bg-white px-2 py-1 text-[11px] font-semibold text-stone-500 hover:bg-red-50 hover:text-red-700 transition"
+                            >
+                              Revoke
+                            </button>
+                          </form>
+
+                          <form action={updateNominationStatus}>
+                            <input type="hidden" name="code" value={code} />
+                            <input type="hidden" name="nominationId" value={n.id} />
+                            <input type="hidden" name="status" value="EXECUTED" />
+                            <button
+                              type="submit"
+                              className="rounded-lg border border-stone-200 bg-white px-2 py-1 text-[11px] font-semibold text-purple-700 hover:bg-purple-50 transition"
+                            >
+                              Execute
+                            </button>
+                          </form>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-stone-400">Archived</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -283,6 +324,7 @@ export default async function SocietyNominationsPage({
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
+import type { NominationStatus } from "@/generated/prisma/client"
 
 async function fileNomination(formData: FormData) {
   "use server"
@@ -352,5 +394,40 @@ async function fileNomination(formData: FormData) {
   revalidatePath(`/society/${code}/registers/nominations`)
   revalidatePath(`/society/${code}/registers`)
   revalidatePath("/admin/registers")
+}
+
+async function updateNominationStatus(formData: FormData) {
+  "use server"
+
+  const code = formData.get("code")?.toString().trim()
+  const nominationId = formData.get("nominationId")?.toString().trim()
+  const nextStatus = formData.get("status")?.toString().trim() as NominationStatus
+
+  if (!code || !nominationId || !nextStatus) return
+
+  const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
+  const verifiedSocietyId = authContext.society.id
+
+  const nomination = await prisma.nomination.findFirst({
+    where: { id: nominationId, societyId: verifiedSocietyId },
+  })
+  if (!nomination) throw new Error("Nomination not found")
+
+  await prisma.nomination.update({
+    where: { id: nominationId },
+    data: { status: nextStatus },
+  })
+
+  await recordAuditLog({
+    societyId: verifiedSocietyId,
+    userId: authContext.user.id,
+    action: "STATUS_CHANGE",
+    entity: "Nomination",
+    entityId: nominationId,
+    description: `${authContext.user.email} changed nomination status for ${nomination.nomineeName} to ${nextStatus}`,
+  })
+
+  revalidatePath(`/society/${code}/registers/nominations`)
+  revalidatePath(`/society/${code}/registers`)
 }
 
