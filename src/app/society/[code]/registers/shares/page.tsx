@@ -222,6 +222,7 @@ export default async function SocietyShareCertificatesPage({
                   <th className="px-4 py-3">Distinctive Nos.</th>
                   <th className="px-4 py-3">Total Value</th>
                   <th className="px-4 py-3 text-center">Status</th>
+                  <th className="px-4 py-3 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">

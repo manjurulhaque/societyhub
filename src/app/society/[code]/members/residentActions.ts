@@ -23,6 +23,10 @@ export async function registerResident(
     email?: string | null
     panNumber?: string | null
     aadhaarNumber?: string | null
+    dob?: string | null
+    gender?: string | null
+    bloodGroup?: string | null
+    occupation?: string | null
     emergencyContactName?: string | null
     emergencyContactPhone?: string | null
     permanentAddress?: string | null
@@ -56,6 +60,10 @@ export async function registerResident(
           email,
           panNumber,
           aadhaarNumber,
+          dob: data.dob ? new Date(data.dob) : null,
+          gender: data.gender?.trim() || null,
+          bloodGroup: data.bloodGroup?.trim() || null,
+          occupation: data.occupation?.trim() || null,
           emergencyContactName: data.emergencyContactName?.trim() || null,
           emergencyContactPhone: data.emergencyContactPhone?.trim() || null,
           permanentAddress: data.permanentAddress?.trim() || null,
