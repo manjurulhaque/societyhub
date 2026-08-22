@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { maskBankAccount } from "@/lib/masking"
 import { ChequeDirection, ChequeStatus, ReconStatus, Prisma } from "@/generated/prisma"
 
 type Decimal = Prisma.Decimal
@@ -128,7 +129,7 @@ export async function getBankReconciliationStatement(params: {
     accountId: account.id,
     accountName: account.name,
     bankName: account.bankName,
-    accountNumber: account.accountNumber,
+    accountNumber: maskBankAccount(account.accountNumber),
     asOfDate: asOf.toISOString(),
     ledgerBalance: ledgerBal.toFixed(2),
     unpresentedCheques,

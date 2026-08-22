@@ -5,38 +5,42 @@ import { prisma } from "@/lib/prisma"
 /**
  * Automatically generates a unique, human-friendly society code from the society name.
  * e.g., "Palm Grove Residency" -> "PALM-GROVE-RESIDENCY" (or "PALM-GROVE-RESIDENCY-2" if collision occurs)
+ * Uses a single batch database query and in-memory resolution to avoid sequential DB roundtrips.
  */
 export async function generateUniqueSocietyCode(name: string, customCode?: string | null): Promise<string> {
-  if (customCode && customCode.trim()) {
-    return slugify(customCode.trim(), {
-      strict: true,
-      trim: true,
-    }).toUpperCase()
-  }
-
   const baseCode = (
-    slugify(name.trim(), {
-      strict: true,
-      trim: true,
-    }).toUpperCase() || "SOCIETY"
-  ).slice(0, 20)
+    customCode?.trim()
+      ? slugify(customCode.trim(), { strict: true, trim: true })
+      : slugify(name.trim(), { strict: true, trim: true }) || "SOCIETY"
+  )
+    .toUpperCase()
+    .slice(0, 30)
 
-  let candidate = baseCode
-  let count = 1
+  // Fetch all existing codes matching the base prefix in a single query
+  const existingSocieties = await prisma.society.findMany({
+    where: {
+      code: {
+        startsWith: baseCode,
+        mode: "insensitive",
+      },
+    },
+    select: { code: true },
+  })
 
-  while (true) {
-    const existing = await prisma.society.findUnique({
-      where: { code: candidate },
-      select: { id: true },
-    })
+  const existingCodes = new Set(
+    existingSocieties.map((s) => s.code?.toUpperCase()).filter((c): c is string => Boolean(c))
+  )
 
-    if (!existing) {
-      return candidate
-    }
-
-    count += 1
-    candidate = `${baseCode}-${count}`
+  if (!existingCodes.has(baseCode)) {
+    return baseCode
   }
+
+  let count = 1
+  while (existingCodes.has(`${baseCode}-${count}`)) {
+    count += 1
+  }
+
+  return `${baseCode}-${count}`
 }
 
 /**

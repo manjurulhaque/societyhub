@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { decryptData } from "@/lib/crypto"
 import { LedgerGroup, BalanceType, VoucherStatus, VoucherType, AccountType, DepositType, Prisma } from "@/generated/prisma"
 
 type Decimal = Prisma.Decimal
@@ -1241,8 +1242,8 @@ export async function getMemberDuesRegister(params: {
   for (const flat of flats) {
     const primaryPerson = flat.people[0]?.person
     const ownerName = primaryPerson?.name || "Unregistered Owner"
-    const ownerPhone = primaryPerson?.phone || null
-    const ownerEmail = primaryPerson?.email || null
+    const ownerPhone = primaryPerson?.phone ? decryptData(primaryPerson.phone) : null
+    const ownerEmail = primaryPerson?.email ? decryptData(primaryPerson.email) : null
 
     let priorBilled = new Decimal(0)
     let priorCollected = new Decimal(0)
