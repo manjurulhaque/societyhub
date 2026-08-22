@@ -10,7 +10,9 @@ import { decryptData } from "@/lib/crypto"
  * Example: "123456789012" -> "••••••••9012"
  */
 export function maskBankAccount(accountNumber: string | null | undefined): string {
-  if (!accountNumber) return "—"
+  if (!accountNumber || accountNumber === "—") return "—"
+  if (accountNumber.includes("••")) return accountNumber
+
   const decrypted = decryptData(accountNumber)
   const clean = decrypted.trim()
   if (clean.length <= 4) return "••••"
@@ -24,7 +26,9 @@ export function maskBankAccount(accountNumber: string | null | undefined): strin
  * Example: "ABCDE1234F" -> "AB••••••F"
  */
 export function maskPan(pan: string | null | undefined): string {
-  if (!pan) return "—"
+  if (!pan || pan === "—") return "—"
+  if (pan.includes("••")) return pan
+
   const decrypted = decryptData(pan)
   const clean = decrypted.trim().toUpperCase()
   if (clean.length < 5) return "•••••"
@@ -33,13 +37,14 @@ export function maskPan(pan: string | null | undefined): string {
   return `${prefix}••••••${suffix}`
 }
 
-
 /**
  * Masks a phone number, preserving the last 4 digits.
  * Example: "+919876543210" -> "••••••3210"
  */
 export function maskPhone(phone: string | null | undefined): string {
-  if (!phone) return "—"
+  if (!phone || phone === "—") return "—"
+  if (phone.includes("••")) return phone
+
   const decrypted = decryptData(phone)
   const clean = decrypted.trim()
   if (clean.length <= 4) return "••••"
@@ -52,7 +57,9 @@ export function maskPhone(phone: string | null | undefined): string {
  * Example: "manjurul@societyhub.in" -> "m••••••@societyhub.in"
  */
 export function maskEmail(email: string | null | undefined): string {
-  if (!email) return "—"
+  if (!email || email === "—") return "—"
+  if (email.includes("••")) return email
+
   const decrypted = decryptData(email)
   const clean = decrypted.trim().toLowerCase()
   const atIndex = clean.indexOf("@")
@@ -68,7 +75,9 @@ export function maskEmail(email: string | null | undefined): string {
  * Example: "123456789012" -> "•••• •••• 9012"
  */
 export function maskAadhaar(aadhaar: string | null | undefined): string {
-  if (!aadhaar) return "—"
+  if (!aadhaar || aadhaar === "—") return "—"
+  if (aadhaar.includes("••")) return aadhaar
+
   const decrypted = decryptData(aadhaar)
   const clean = decrypted.replace(/\s+/g, "")
   if (clean.length <= 4) return "•••• •••• ••••"

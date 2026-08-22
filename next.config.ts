@@ -17,6 +17,10 @@ const nextConfig: NextConfig = {
       "radix-ui",
       "@radix-ui/react-slot",
       "cmdk",
+      "sonner",
+      "vaul",
+      "react-day-picker",
+      "slugify",
     ],
   },
   images: {

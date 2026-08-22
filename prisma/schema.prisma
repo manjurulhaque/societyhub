@@ -673,6 +673,7 @@ model Block {
 
   @@unique([societyId, name])
   @@index([societyId])
+  @@index([societyId, isActive, deletedAt])
   @@index([isActive])
   @@index([deletedAt])
 }
@@ -714,6 +715,7 @@ model Flat {
 
   @@unique([blockId, number])
   @@index([blockId])
+  @@index([blockId, isActive, deletedAt])
   @@index([isActive])
   @@index([deletedAt])
 }
@@ -769,6 +771,7 @@ model Person {
   updatedAt               DateTime               @updatedAt
 
   @@index([societyId])
+  @@index([societyId, isActive, deletedAt])
   @@index([phone])
   @@index([email])
   @@index([panNumber])
@@ -1230,7 +1233,9 @@ model ChequeRegister {
   updatedAt       DateTime        @updatedAt
 
   @@index([societyId])
+  @@index([societyId, status])
   @@index([accountId])
+  @@index([accountId, chequeDate, status])
   @@index([chequeNumber])
   @@index([status])
   @@index([chequeDate])
@@ -1957,6 +1962,7 @@ model AuditLog {
 
   @@index([societyId])
   @@index([societyId, createdAt])
+  @@index([societyId, action])
   @@index([userId])
   @@index([entity, entityId])
   @@index([action])
