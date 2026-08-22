@@ -3,19 +3,37 @@ interface RateLimitRecord {
   expiresAt: number
 }
 
+const MAX_RATE_LIMIT_ENTRIES = 10000
+
 // In-memory store for rate limiting by identifier (e.g. IP, user ID, or composite key)
 const rateLimitMap = new Map<string, RateLimitRecord>()
 
+/**
+ * Sweeps expired records and ensures memory map does not exceed MAX_RATE_LIMIT_ENTRIES.
+ */
+function pruneRateLimitStore(): void {
+  const now = Date.now()
+  for (const [key, record] of rateLimitMap.entries()) {
+    if (record.expiresAt < now) {
+      rateLimitMap.delete(key)
+    }
+  }
+
+  // If still above threshold after sweeping expired keys, evict oldest entries
+  if (rateLimitMap.size > MAX_RATE_LIMIT_ENTRIES) {
+    const overflow = rateLimitMap.size - MAX_RATE_LIMIT_ENTRIES
+    let evicted = 0
+    for (const key of rateLimitMap.keys()) {
+      rateLimitMap.delete(key)
+      evicted++
+      if (evicted >= overflow) break
+    }
+  }
+}
+
 // Periodically clean up expired entries every 5 minutes
 if (typeof setInterval !== "undefined") {
-  const cleanupTimer = setInterval(() => {
-    const now = Date.now()
-    for (const [key, record] of rateLimitMap.entries()) {
-      if (record.expiresAt < now) {
-        rateLimitMap.delete(key)
-      }
-    }
-  }, 5 * 60 * 1000)
+  const cleanupTimer = setInterval(pruneRateLimitStore, 5 * 60 * 1000)
 
   if (typeof cleanupTimer === "object" && "unref" in cleanupTimer) {
     cleanupTimer.unref()

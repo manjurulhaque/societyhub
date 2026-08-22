@@ -6,13 +6,17 @@ import crypto from "crypto"
  * across chronological audit log entries (analogous to a Merkle audit ledger).
  */
 
+let cachedAuditSecret: string | null = null
+
 function getAuditHmacSecret(): string {
-  return (
-    process.env.AUDIT_SECRET_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    "societyhub-tamper-proof-audit-ledger-hmac-key"
-  )
+  if (!cachedAuditSecret) {
+    cachedAuditSecret =
+      process.env.AUDIT_SECRET_KEY ||
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      "societyhub-tamper-proof-audit-ledger-hmac-key"
+  }
+  return cachedAuditSecret
 }
 
 export interface AuditRecordPayload {

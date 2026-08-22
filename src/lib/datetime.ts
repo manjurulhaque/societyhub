@@ -28,16 +28,49 @@ export const TIMEZONE_OPTIONS: TimezoneOption[] = [
   { label: "Coordinated Universal Time (UTC)", value: "UTC", offset: "UTC+00:00" },
 ]
 
+const STATIC_TIMEZONE_OFFSETS: Record<string, number> = {
+  "Asia/Kolkata": 330,
+  "Asia/Colombo": 330,
+  "Asia/Kathmandu": 345,
+  "Asia/Dhaka": 360,
+  "Asia/Karachi": 300,
+  "Asia/Dubai": 240,
+  "Asia/Riyadh": 180,
+  "Asia/Singapore": 480,
+  "Asia/Hong_Kong": 480,
+  "Asia/Tokyo": 540,
+  UTC: 0,
+  GMT: 0,
+}
+
+const tzOffsetCache = new Map<string, number>()
+
 /**
  * Calculates the exact UTC offset in minutes for any IANA timeZone at a given date.
+ * Features $O(1)$ fast-path lookups for Indian & Asian timezones, and day-level memoization for others.
  */
 export function getTimeZoneOffsetMinutes(timeZone: string = APP_TIME_ZONE, date = new Date()): number {
+  const tz = timeZone || APP_TIME_ZONE
+
+  if (STATIC_TIMEZONE_OFFSETS[tz] !== undefined) {
+    return STATIC_TIMEZONE_OFFSETS[tz]
+  }
+
+  // Cache by timezone and day epoch to handle DST transitions without per-call Intl overhead
+  const dayKey = `${tz}:${Math.floor(date.getTime() / 86400000)}`
+  const cached = tzOffsetCache.get(dayKey)
+  if (cached !== undefined) {
+    return cached
+  }
+
   try {
     const utcStr = date.toLocaleString("en-US", { timeZone: "UTC" })
-    const tzStr = date.toLocaleString("en-US", { timeZone: timeZone || APP_TIME_ZONE })
+    const tzStr = date.toLocaleString("en-US", { timeZone: tz })
     const utcDate = new Date(utcStr)
     const tzDate = new Date(tzStr)
-    return Math.round((tzDate.getTime() - utcDate.getTime()) / 60000)
+    const offset = Math.round((tzDate.getTime() - utcDate.getTime()) / 60000)
+    tzOffsetCache.set(dayKey, offset)
+    return offset
   } catch {
     return 330 // Fallback to +05:30 (Asia/Kolkata)
   }

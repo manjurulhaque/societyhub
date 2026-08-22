@@ -893,6 +893,7 @@ model Bill {
 
   @@unique([flatId, billType, year, month, sequence])
   @@index([societyId])
+  @@index([societyId, status, dueDate])
   @@index([flatId, status])
   @@index([year, month])
   @@index([dueDate])
@@ -939,6 +940,8 @@ model Payment {
   updatedAt         DateTime        @updatedAt
 
   @@index([societyId])
+  @@index([societyId, status, paidOn])
+  @@index([billId, status])
   @@index([billId])
   @@index([flatId])
   @@index([paidById])
@@ -1373,6 +1376,7 @@ model Expense {
   updatedAt       DateTime         @updatedAt
 
   @@index([societyId])
+  @@index([societyId, status, expenseDate])
   @@index([categoryId])
   @@index([accountId])
   @@index([vendorBillId])
@@ -1559,6 +1563,8 @@ model JournalEntry {
   updatedAt       DateTime       @updatedAt
 
   @@index([societyId])
+  @@index([societyId, status, entryDate])
+  @@index([societyId, financialYearId, status])
   @@index([financialYearId])
   @@index([entryDate])
   @@index([voucherType])
@@ -1583,6 +1589,8 @@ model LedgerEntry {
 
   @@index([journalEntryId])
   @@index([ledgerId])
+  @@index([ledgerId, createdAt])
+  @@index([journalEntryId, ledgerId])
 }
 
 // ==========================================
@@ -1948,6 +1956,7 @@ model AuditLog {
   createdAt   DateTime    @default(now())
 
   @@index([societyId])
+  @@index([societyId, createdAt])
   @@index([userId])
   @@index([entity, entityId])
   @@index([action])

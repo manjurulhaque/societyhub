@@ -309,7 +309,7 @@ export async function getGeneralLedgerStatement(params: {
 
   // Add prior transactions before startDate
   if (startDate) {
-    const priorEntries = await prisma.ledgerEntry.findMany({
+    const priorAggregate = await prisma.ledgerEntry.aggregate({
       where: {
         ledgerId,
         journalEntry: {
@@ -318,12 +318,14 @@ export async function getGeneralLedgerStatement(params: {
           entryDate: { lt: startDate },
         },
       },
-      select: { debit: true, credit: true },
+      _sum: { debit: true, credit: true },
     })
 
-    for (const entry of priorEntries) {
-      priorDebit = priorDebit.plus(entry.debit ? entry.debit.toString() : 0)
-      priorCredit = priorCredit.plus(entry.credit ? entry.credit.toString() : 0)
+    if (priorAggregate._sum.debit) {
+      priorDebit = priorDebit.plus(priorAggregate._sum.debit.toString())
+    }
+    if (priorAggregate._sum.credit) {
+      priorCredit = priorCredit.plus(priorAggregate._sum.credit.toString())
     }
   }
 
@@ -751,7 +753,7 @@ export async function getCashBook(params: {
 
   // Add prior transactions if startDate is provided
   if (startDate && cashLedger) {
-    const priorEntries = await prisma.ledgerEntry.findMany({
+    const priorAggregate = await prisma.ledgerEntry.aggregate({
       where: {
         ledgerId: cashLedger.id,
         journalEntry: {
@@ -760,12 +762,14 @@ export async function getCashBook(params: {
           entryDate: { lt: startDate },
         },
       },
-      select: { debit: true, credit: true },
+      _sum: { debit: true, credit: true },
     })
 
-    for (const pe of priorEntries) {
-      priorReceipts = priorReceipts.plus(pe.debit ? pe.debit.toString() : 0)
-      priorPayments = priorPayments.plus(pe.credit ? pe.credit.toString() : 0)
+    if (priorAggregate._sum.debit) {
+      priorReceipts = priorReceipts.plus(priorAggregate._sum.debit.toString())
+    }
+    if (priorAggregate._sum.credit) {
+      priorPayments = priorPayments.plus(priorAggregate._sum.credit.toString())
     }
   }
 
@@ -993,7 +997,7 @@ export async function getBankBook(params: {
 
   // Add prior transactions before startDate
   if (startDate && bankLedger) {
-    const priorEntries = await prisma.ledgerEntry.findMany({
+    const priorAggregate = await prisma.ledgerEntry.aggregate({
       where: {
         ledgerId: bankLedger.id,
         journalEntry: {
@@ -1002,12 +1006,14 @@ export async function getBankBook(params: {
           entryDate: { lt: startDate },
         },
       },
-      select: { debit: true, credit: true },
+      _sum: { debit: true, credit: true },
     })
 
-    for (const pe of priorEntries) {
-      priorDeposits = priorDeposits.plus(pe.debit ? pe.debit.toString() : 0)
-      priorWithdrawals = priorWithdrawals.plus(pe.credit ? pe.credit.toString() : 0)
+    if (priorAggregate._sum.debit) {
+      priorDeposits = priorDeposits.plus(priorAggregate._sum.debit.toString())
+    }
+    if (priorAggregate._sum.credit) {
+      priorWithdrawals = priorWithdrawals.plus(priorAggregate._sum.credit.toString())
     }
   }
 
@@ -2086,7 +2092,7 @@ export async function getRepairFundRegister(params: {
 
   // Prior transactions before startDate
   if (startDate && repairFundLedger) {
-    const priorEntries = await prisma.ledgerEntry.findMany({
+    const priorAggregate = await prisma.ledgerEntry.aggregate({
       where: {
         ledgerId: repairFundLedger.id,
         journalEntry: {
@@ -2095,12 +2101,14 @@ export async function getRepairFundRegister(params: {
           entryDate: { lt: startDate },
         },
       },
-      select: { debit: true, credit: true },
+      _sum: { debit: true, credit: true },
     })
 
-    for (const pe of priorEntries) {
-      priorAdditions = priorAdditions.plus(pe.credit ? pe.credit.toString() : 0)
-      priorUtilizations = priorUtilizations.plus(pe.debit ? pe.debit.toString() : 0)
+    if (priorAggregate._sum.credit) {
+      priorAdditions = priorAdditions.plus(priorAggregate._sum.credit.toString())
+    }
+    if (priorAggregate._sum.debit) {
+      priorUtilizations = priorUtilizations.plus(priorAggregate._sum.debit.toString())
     }
   }
 
@@ -2518,7 +2526,7 @@ export async function getSinkingFundRegister(params: {
 
   // Prior transactions before startDate
   if (startDate && sinkingFundLedger) {
-    const priorEntries = await prisma.ledgerEntry.findMany({
+    const priorAggregate = await prisma.ledgerEntry.aggregate({
       where: {
         ledgerId: sinkingFundLedger.id,
         journalEntry: {
@@ -2527,12 +2535,14 @@ export async function getSinkingFundRegister(params: {
           entryDate: { lt: startDate },
         },
       },
-      select: { debit: true, credit: true },
+      _sum: { debit: true, credit: true },
     })
 
-    for (const pe of priorEntries) {
-      priorAdditions = priorAdditions.plus(pe.credit ? pe.credit.toString() : 0)
-      priorUtilizations = priorUtilizations.plus(pe.debit ? pe.debit.toString() : 0)
+    if (priorAggregate._sum.credit) {
+      priorAdditions = priorAdditions.plus(priorAggregate._sum.credit.toString())
+    }
+    if (priorAggregate._sum.debit) {
+      priorUtilizations = priorUtilizations.plus(priorAggregate._sum.debit.toString())
     }
   }
 

@@ -5,8 +5,12 @@ const IV_LENGTH = 12 // Standard 96-bit IV for AES-GCM
 const AUTH_TAG_LENGTH = 16
 const PREFIX = "enc:v1:"
 
+let cachedKey: Buffer | null = null
+let cachedSecret: string | null = null
+
 /**
  * Derives a 32-byte encryption key from environment secrets.
+ * Caches the derived Buffer in memory to avoid repetitive SHA-256 hashing.
  */
 function getEncryptionKey(): Buffer {
   const secret =
@@ -15,7 +19,12 @@ function getEncryptionKey(): Buffer {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     "societyhub-default-fallback-secret-key-32bytes"
 
-  return crypto.createHash("sha256").update(secret).digest()
+  if (!cachedKey || cachedSecret !== secret) {
+    cachedSecret = secret
+    cachedKey = crypto.createHash("sha256").update(secret).digest()
+  }
+
+  return cachedKey
 }
 
 /**
