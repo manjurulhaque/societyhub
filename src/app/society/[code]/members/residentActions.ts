@@ -178,3 +178,51 @@ export async function removeResident(
     return { error: message }
   }
 }
+
+/**
+ * Toggles KYC verification status for a person
+ */
+export async function toggleResidentKyc(
+  societyCode: string,
+  personId: string
+): Promise<ResidentActionState> {
+  try {
+    const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
+    const societyId = context.society.id
+
+    const person = await prisma.person.findFirst({
+      where: { id: personId, societyId, deletedAt: null },
+    })
+    if (!person) return { error: "Resident not found." }
+
+    const newKycStatus = !person.kycVerified
+
+    await prisma.person.update({
+      where: { id: personId },
+      data: {
+        kycVerified: newKycStatus,
+        kycVerifiedAt: newKycStatus ? new Date() : null,
+      },
+    })
+
+    await recordAuditLog({
+      societyId,
+      userId: context.user.id,
+      action: "STATUS_CHANGE",
+      entity: "Person",
+      entityId: personId,
+      description: `${context.user.email} marked KYC for ${person.name} as ${newKycStatus ? "VERIFIED" : "UNVERIFIED"}`,
+    })
+
+    revalidatePath(`/society/${societyCode}/members`)
+    revalidatePath(`/society/${societyCode}/flats`)
+    return {
+      success: true,
+      message: `KYC for ${person.name} marked as ${newKycStatus ? "VERIFIED" : "UNVERIFIED"}.`,
+    }
+  } catch (err: unknown) {
+    console.error("Failed to toggle KYC:", err)
+    const message = err instanceof Error ? err.message : "Failed to update KYC status."
+    return { error: message }
+  }
+}

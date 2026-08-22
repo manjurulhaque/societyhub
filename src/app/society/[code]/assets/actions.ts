@@ -402,3 +402,44 @@ export async function deleteServiceLog(
     return { error: message }
   }
 }
+
+/**
+ * Updates asset status (ACTIVE, UNDER_MAINTENANCE, DISPOSED, WRITTEN_OFF)
+ */
+export async function updateAssetStatus(
+  societyCode: string,
+  assetId: string,
+  status: AssetStatus
+): Promise<AssetActionState> {
+  try {
+    const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
+    const societyId = context.society.id
+
+    const asset = await prisma.fixedAsset.findFirst({
+      where: { id: assetId, societyId, deletedAt: null },
+    })
+    if (!asset) return { error: "Asset not found." }
+
+    await prisma.fixedAsset.update({
+      where: { id: assetId },
+      data: { status },
+    })
+
+    await recordAuditLog({
+      societyId,
+      userId: context.user.id,
+      action: "STATUS_CHANGE",
+      entity: "FixedAsset",
+      entityId: assetId,
+      description: `${context.user.email} marked asset "${asset.name}" as ${status}`,
+    })
+
+    revalidatePath(`/society/${societyCode}/assets`)
+    revalidatePath(`/society/${societyCode}/assets/${assetId}`)
+    return { success: true, message: `Asset status updated to ${status}.` }
+  } catch (err: unknown) {
+    console.error("Failed to update asset status:", err)
+    const message = err instanceof Error ? err.message : "Failed to update asset status."
+    return { error: message }
+  }
+}

@@ -263,9 +263,51 @@ export default async function SocietyShareCertificatesPage({
                       </td>
 
                       <td className="px-4 py-3.5 text-center">
-                        <span className="inline-flex rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            c.status === "ACTIVE"
+                              ? "bg-emerald-50 border border-emerald-200 text-emerald-700"
+                              : c.status === "TRANSFERRED"
+                                ? "bg-sky-50 border border-sky-200 text-sky-700"
+                                : c.status === "SURRENDERED"
+                                  ? "bg-amber-50 border border-amber-200 text-amber-800"
+                                  : "bg-rose-50 border border-rose-200 text-rose-700"
+                          }`}
+                        >
                           {c.status}
                         </span>
+                      </td>
+
+                      <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                        {c.status === "ACTIVE" ? (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <form action={updateCertificateStatus}>
+                              <input type="hidden" name="code" value={code} />
+                              <input type="hidden" name="certificateId" value={c.id} />
+                              <input type="hidden" name="status" value="SURRENDERED" />
+                              <button
+                                type="submit"
+                                className="rounded-lg border border-stone-200 bg-white px-2 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50 transition"
+                              >
+                                Surrender
+                              </button>
+                            </form>
+
+                            <form action={updateCertificateStatus}>
+                              <input type="hidden" name="code" value={code} />
+                              <input type="hidden" name="certificateId" value={c.id} />
+                              <input type="hidden" name="status" value="CANCELLED" />
+                              <button
+                                type="submit"
+                                className="rounded-lg border border-stone-200 bg-white px-2 py-1 text-[11px] font-semibold text-stone-400 hover:bg-red-50 hover:text-red-700 transition"
+                              >
+                                Cancel
+                              </button>
+                            </form>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-stone-400">Archived</span>
+                        )}
                       </td>
                     </tr>
                   )
@@ -281,6 +323,7 @@ export default async function SocietyShareCertificatesPage({
 
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
+import type { ShareStatus } from "@/generated/prisma/client"
 
 async function issueCertificate(formData: FormData) {
   "use server"
@@ -351,5 +394,40 @@ async function issueCertificate(formData: FormData) {
   revalidatePath(`/society/${code}/registers/shares`)
   revalidatePath(`/society/${code}/registers`)
   revalidatePath("/admin/registers")
+}
+
+async function updateCertificateStatus(formData: FormData) {
+  "use server"
+
+  const code = formData.get("code")?.toString().trim()
+  const certificateId = formData.get("certificateId")?.toString().trim()
+  const nextStatus = formData.get("status")?.toString().trim() as ShareStatus
+
+  if (!code || !certificateId || !nextStatus) return
+
+  const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
+  const verifiedSocietyId = authContext.society.id
+
+  const cert = await prisma.shareCertificate.findFirst({
+    where: { id: certificateId, societyId: verifiedSocietyId },
+  })
+  if (!cert) throw new Error("Certificate not found")
+
+  await prisma.shareCertificate.update({
+    where: { id: certificateId },
+    data: { status: nextStatus },
+  })
+
+  await recordAuditLog({
+    societyId: verifiedSocietyId,
+    userId: authContext.user.id,
+    action: "STATUS_CHANGE",
+    entity: "ShareCertificate",
+    entityId: certificateId,
+    description: `${authContext.user.email} updated share certificate #${cert.certificateNumber} status to ${nextStatus}`,
+  })
+
+  revalidatePath(`/society/${code}/registers/shares`)
+  revalidatePath(`/society/${code}/registers`)
 }
 

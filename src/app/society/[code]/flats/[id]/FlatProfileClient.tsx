@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import { AdminCard, AdminBadge, AdminTable } from "@/components/admin"
 import { TransferOwnershipModal, type PersonDirectoryOption } from "./TransferOwnershipModal"
 import { AddFlatPersonModal } from "./AddFlatPersonModal"
-import { removeFlatPerson } from "../actions"
+import { removeFlatPerson, refundMemberDeposit, forfeitMemberDeposit } from "../actions"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
 
 export type FlatDetailData = {
@@ -512,7 +512,14 @@ export function FlatProfileClient({
               <p className="text-xs text-stone-500 italic py-2">No security deposits held for this flat.</p>
             ) : (
               <AdminTable
-                headers={["Deposit Type", "Amount Held", "Received Date", "Status", "Refund Date"]}
+                headers={[
+                  "Deposit Type",
+                  "Amount Held",
+                  "Received Date",
+                  "Status",
+                  "Refund Date",
+                  ...(canManage ? ["Action"] : []),
+                ]}
                 rows={financial.deposits.map((dep) => (
                   <tr key={dep.id} className="border-t border-stone-100 text-xs">
                     <td className="px-4 py-3 font-semibold text-stone-900">{dep.depositType}</td>
@@ -521,13 +528,59 @@ export function FlatProfileClient({
                     </td>
                     <td className="px-4 py-3 text-stone-700">{formatDateInAppTimeZone(dep.receivedOn)}</td>
                     <td className="px-4 py-3">
-                      <AdminBadge variant={dep.status === "HELD" ? "warning" : "success"} size="sm">
+                      <AdminBadge
+                        variant={
+                          dep.status === "HELD"
+                            ? "warning"
+                            : dep.status === "REFUNDED"
+                              ? "success"
+                              : "danger"
+                        }
+                        size="sm"
+                      >
                         {dep.status}
                       </AdminBadge>
                     </td>
                     <td className="px-4 py-3 text-stone-600">
                       {dep.refundedOn ? formatDateInAppTimeZone(dep.refundedOn) : "—"}
                     </td>
+
+                    {canManage && (
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        {dep.status === "HELD" ? (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm("Mark this deposit as refunded?")) {
+                                  startTransition(async () => {
+                                    await refundMemberDeposit(societyCode, flat.id, dep.id)
+                                  })
+                                }
+                              }}
+                              className="rounded-lg border border-stone-200 bg-white px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50 transition"
+                            >
+                              Refund
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm("Mark this deposit as forfeited (e.g. damages)?")) {
+                                  startTransition(async () => {
+                                    await forfeitMemberDeposit(societyCode, flat.id, dep.id)
+                                  })
+                                }
+                              }}
+                              className="rounded-lg border border-stone-200 bg-white px-2 py-1 text-[11px] font-semibold text-stone-400 hover:bg-red-50 hover:text-red-700 transition"
+                            >
+                              Forfeit
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-stone-400">Settled</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               />

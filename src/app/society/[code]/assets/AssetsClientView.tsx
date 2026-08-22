@@ -1,11 +1,13 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useTransition } from "react"
 import Link from "next/link"
 import { AdminStatCard, AdminBadge, AdminTable } from "@/components/admin"
 import { AddAssetModal, type VendorOption } from "./AddAssetModal"
 import { AssetCategoriesModal, type AssetCategoryItem } from "./AssetCategoriesModal"
+import { updateAssetStatus } from "./actions"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
+import type { AssetStatus } from "@/generated/prisma/client"
 
 export type FixedAssetListItem = {
   id: string
@@ -48,6 +50,7 @@ export function AssetsClientView({
 }: AssetsClientViewProps) {
   const [isAddAssetOpen, setIsAddAssetOpen] = useState(false)
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
+  const [isPending, startTransition] = useTransition()
 
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategoryId, setSelectedCategoryId] = useState("ALL")
@@ -355,7 +358,9 @@ export function AssetsClientView({
                         ? "success"
                         : asset.status === "UNDER_MAINTENANCE"
                           ? "warning"
-                          : "neutral"
+                          : asset.status === "DISPOSED" || asset.status === "WRITTEN_OFF"
+                            ? "danger"
+                            : "neutral"
                     }
                     size="sm"
                   >
@@ -363,14 +368,32 @@ export function AssetsClientView({
                   </AdminBadge>
                 </td>
 
-                <td className="px-4 py-3.5 text-right">
-                  <Link
-                    href={`/society/${societyCode}/assets/${asset.id}`}
-                    className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-900 transition"
-                  >
-                    <span>View 360°</span>
-                    <span>→</span>
-                  </Link>
+                <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                  <div className="flex items-center justify-end gap-1.5">
+                    {canManageAssets && asset.status === "ACTIVE" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Mark "${asset.name}" as DISPOSED?`)) {
+                            startTransition(async () => {
+                              await updateAssetStatus(societyCode, asset.id, "DISPOSED")
+                            })
+                          }
+                        }}
+                        className="rounded-lg border border-stone-200 bg-white px-2 py-1 text-[11px] font-semibold text-stone-500 hover:bg-red-50 hover:text-red-700 transition"
+                      >
+                        Dispose
+                      </button>
+                    )}
+
+                    <Link
+                      href={`/society/${societyCode}/assets/${asset.id}`}
+                      className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-900 transition"
+                    >
+                      <span>360° Log</span>
+                      <span>→</span>
+                    </Link>
+                  </div>
                 </td>
               </tr>
             )
