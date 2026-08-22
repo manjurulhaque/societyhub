@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, COMMITTEE_ROLES, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
+import { getSafeErrorMessage } from "@/lib/errors"
 import type { UnitType, OccupancyStatus, TransferType, FlatRole } from "@/generated/prisma/client"
 
 export type FlatActionState = {
@@ -23,7 +25,8 @@ export async function createBlock(
     const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
     const societyId = context.society.id
 
-    const name = data.name.trim()
+    const rawName = data.name.trim()
+    const name = sanitizeText(rawName)
     if (!name) {
       return { error: "Block name is required (e.g. Wing A, Tower 1)." }
     }
@@ -67,8 +70,7 @@ export async function createBlock(
     }
   } catch (err: unknown) {
     console.error("Failed to create block:", err)
-    const message = err instanceof Error ? err.message : "Failed to create block."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to create block.") }
   }
 }
 
@@ -93,7 +95,8 @@ export async function createFlat(
     const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
     const societyId = context.society.id
 
-    const number = data.number.trim()
+    const rawNumber = data.number.trim()
+    const number = sanitizeText(rawNumber)
     if (!data.blockId || !number) {
       return { error: "Block selection and Flat Number are required." }
     }
@@ -127,10 +130,10 @@ export async function createFlat(
         floor: data.floor !== undefined && data.floor !== null && !isNaN(data.floor) ? data.floor : null,
         unitType: data.unitType || null,
         area: data.area && !isNaN(data.area) ? data.area : null,
-        areaUnit: data.areaUnit || "sqft",
+        areaUnit: data.areaUnit ? sanitizeText(data.areaUnit) : "sqft",
         status: data.status || "VACANT",
-        intercomNumber: data.intercomNumber?.trim() || null,
-        parkingSlot: data.parkingSlot?.trim() || null,
+        intercomNumber: data.intercomNumber ? sanitizeText(data.intercomNumber) : null,
+        parkingSlot: data.parkingSlot ? sanitizeText(data.parkingSlot) : null,
       },
     })
 
@@ -154,8 +157,7 @@ export async function createFlat(
     }
   } catch (err: unknown) {
     console.error("Failed to create flat:", err)
-    const message = err instanceof Error ? err.message : "Failed to create flat."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to create flat.") }
   }
 }
 
@@ -189,7 +191,8 @@ export async function updateFlatDetails(
       return { error: "Flat not found." }
     }
 
-    const number = data.number?.trim()
+    const rawNumber = data.number?.trim()
+    const number = sanitizeText(rawNumber)
     if (!number) {
       return { error: "Flat number is required." }
     }
@@ -201,10 +204,10 @@ export async function updateFlatDetails(
         floor: data.floor !== undefined && data.floor !== null && !isNaN(data.floor) ? data.floor : null,
         unitType: data.unitType || null,
         area: data.area && !isNaN(data.area) ? data.area : null,
-        areaUnit: data.areaUnit || "sqft",
+        areaUnit: data.areaUnit ? sanitizeText(data.areaUnit) : "sqft",
         status: data.status,
-        intercomNumber: data.intercomNumber?.trim() || null,
-        parkingSlot: data.parkingSlot?.trim() || null,
+        intercomNumber: data.intercomNumber ? sanitizeText(data.intercomNumber) : null,
+        parkingSlot: data.parkingSlot ? sanitizeText(data.parkingSlot) : null,
       },
     })
 
@@ -225,8 +228,7 @@ export async function updateFlatDetails(
     return { success: true, message: "Flat details updated successfully." }
   } catch (err: unknown) {
     console.error("Failed to update flat details:", err)
-    const message = err instanceof Error ? err.message : "Failed to update flat details."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to update flat details.") }
   }
 }
 
@@ -311,14 +313,14 @@ export async function transferFlatOwnership(
           transferDate,
           fromDate: transferDate,
           isCurrentOwner: true,
-          registeredDocNumber: data.registeredDocNumber?.trim() || null,
+          registeredDocNumber: data.registeredDocNumber ? sanitizeText(data.registeredDocNumber) : null,
           registrationDate: data.registrationDate ? new Date(data.registrationDate) : null,
           transferFeePaid: data.transferFeePaid !== null && data.transferFeePaid !== undefined ? data.transferFeePaid : 0,
-          nocReference: data.nocReference?.trim() || null,
+          nocReference: data.nocReference ? sanitizeText(data.nocReference) : null,
           nocIssuedDate: data.nocIssuedDate ? new Date(data.nocIssuedDate) : null,
-          resolutionNumber: data.resolutionNumber?.trim() || null,
+          resolutionNumber: data.resolutionNumber ? sanitizeText(data.resolutionNumber) : null,
           committeeApprovalDate: data.committeeApprovalDate ? new Date(data.committeeApprovalDate) : null,
-          remarks: data.remarks?.trim() || null,
+          remarks: data.remarks ? sanitizeText(data.remarks) : null,
         },
       })
 
@@ -378,8 +380,7 @@ export async function transferFlatOwnership(
     }
   } catch (err: unknown) {
     console.error("Failed to transfer flat ownership:", err)
-    const message = err instanceof Error ? err.message : "Failed to transfer ownership."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to transfer ownership.") }
   }
 }
 
@@ -453,8 +454,7 @@ export async function addFlatPerson(
     return { success: true, message: `${person.name} assigned to Flat ${flat.number} as ${data.role}.` }
   } catch (err: unknown) {
     console.error("Failed to add flat resident:", err)
-    const message = err instanceof Error ? err.message : "Failed to add flat resident."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to add flat resident.") }
   }
 }
 
@@ -498,8 +498,7 @@ export async function removeFlatPerson(
     return { success: true, message: `Occupancy ended for ${record.person.name}.` }
   } catch (err: unknown) {
     console.error("Failed to remove flat resident:", err)
-    const message = err instanceof Error ? err.message : "Failed to end occupancy."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to end occupancy.") }
   }
 }
 
@@ -562,8 +561,7 @@ export async function deleteFlat(
     }
   } catch (err: unknown) {
     console.error("Failed to delete flat:", err)
-    const message = err instanceof Error ? err.message : "Failed to delete flat."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to delete flat.") }
   }
 }
 
@@ -604,8 +602,8 @@ export async function recordMemberDeposit(
         amount: data.amount,
         status: "HELD",
         receivedOn: new Date(),
-        reference: data.reference?.trim() || null,
-        remarks: data.remarks?.trim() || null,
+        reference: data.reference ? sanitizeText(data.reference) : null,
+        remarks: data.remarks ? sanitizeText(data.remarks) : null,
       },
     })
 
@@ -623,8 +621,7 @@ export async function recordMemberDeposit(
     return { success: true, message: "Deposit recorded successfully." }
   } catch (err: unknown) {
     console.error("Failed to record deposit:", err)
-    const message = err instanceof Error ? err.message : "Failed to record deposit."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to record deposit.") }
   }
 }
 
@@ -666,8 +663,7 @@ export async function refundMemberDeposit(
     return { success: true, message: "Deposit marked as REFUNDED." }
   } catch (err: unknown) {
     console.error("Failed to refund deposit:", err)
-    const message = err instanceof Error ? err.message : "Failed to refund deposit."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to refund deposit.") }
   }
 }
 
@@ -706,7 +702,6 @@ export async function forfeitMemberDeposit(
     return { success: true, message: "Deposit marked as FORFEITED." }
   } catch (err: unknown) {
     console.error("Failed to forfeit deposit:", err)
-    const message = err instanceof Error ? err.message : "Failed to forfeit deposit."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to forfeit deposit.") }
   }
 }

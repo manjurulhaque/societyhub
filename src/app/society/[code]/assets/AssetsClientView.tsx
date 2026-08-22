@@ -7,7 +7,6 @@ import { AddAssetModal, type VendorOption } from "./AddAssetModal"
 import { AssetCategoriesModal, type AssetCategoryItem } from "./AssetCategoriesModal"
 import { updateAssetStatus } from "./actions"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
-import type { AssetStatus } from "@/generated/prisma/client"
 
 export type FixedAssetListItem = {
   id: string
@@ -38,6 +37,7 @@ interface AssetsClientViewProps {
   categories: AssetCategoryItem[]
   vendors: VendorOption[]
   canManageAssets: boolean
+  currentDateIso?: string
 }
 
 export function AssetsClientView({
@@ -47,17 +47,18 @@ export function AssetsClientView({
   categories,
   vendors,
   canManageAssets,
+  currentDateIso = "2026-01-01T00:00:00.000Z",
 }: AssetsClientViewProps) {
   const [isAddAssetOpen, setIsAddAssetOpen] = useState(false)
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
-  const [isPending, startTransition] = useTransition()
+  const [, startTransition] = useTransition()
 
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategoryId, setSelectedCategoryId] = useState("ALL")
   const [selectedStatus, setSelectedStatus] = useState("ALL")
   const [selectedAmcFilter, setSelectedAmcFilter] = useState("ALL")
 
-  const now = new Date()
+  const nowTimestamp = useMemo(() => new Date(currentDateIso).getTime(), [currentDateIso])
 
   // Calculate statistics
   const totalAssets = assets.length
@@ -66,13 +67,13 @@ export function AssetsClientView({
   
   const activeAmcCount = assets.filter((a) => {
     if (!a.amcEndDate) return false
-    return new Date(a.amcEndDate) >= now
+    return new Date(a.amcEndDate).getTime() >= nowTimestamp
   }).length
 
   const expiringWarrantyCount = assets.filter((a) => {
     if (!a.warrantyExpiresAt) return false
     const exp = new Date(a.warrantyExpiresAt)
-    const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    const diffDays = Math.ceil((exp.getTime() - nowTimestamp) / (1000 * 60 * 60 * 24))
     return diffDays >= 0 && diffDays <= 60
   }).length
 
@@ -83,13 +84,13 @@ export function AssetsClientView({
       if (selectedStatus !== "ALL" && asset.status !== selectedStatus) return false
 
       if (selectedAmcFilter === "ACTIVE_AMC") {
-        if (!asset.amcEndDate || new Date(asset.amcEndDate) < now) return false
+        if (!asset.amcEndDate || new Date(asset.amcEndDate).getTime() < nowTimestamp) return false
       } else if (selectedAmcFilter === "EXPIRED_AMC") {
-        if (!asset.amcEndDate || new Date(asset.amcEndDate) >= now) return false
+        if (!asset.amcEndDate || new Date(asset.amcEndDate).getTime() >= nowTimestamp) return false
       } else if (selectedAmcFilter === "NO_AMC") {
         if (asset.amcEndDate) return false
       } else if (selectedAmcFilter === "UNDER_WARRANTY") {
-        if (!asset.warrantyExpiresAt || new Date(asset.warrantyExpiresAt) < now) return false
+        if (!asset.warrantyExpiresAt || new Date(asset.warrantyExpiresAt).getTime() < nowTimestamp) return false
       }
 
       if (searchQuery.trim()) {
@@ -105,7 +106,7 @@ export function AssetsClientView({
 
       return true
     })
-  }, [assets, selectedCategoryId, selectedStatus, selectedAmcFilter, searchQuery, now])
+  }, [assets, selectedCategoryId, selectedStatus, selectedAmcFilter, searchQuery, nowTimestamp])
 
   return (
     <div className="space-y-6">
@@ -282,8 +283,8 @@ export function AssetsClientView({
             "Action",
           ]}
           rows={filteredAssets.map((asset) => {
-            const hasAmcActive = asset.amcEndDate && new Date(asset.amcEndDate) >= now
-            const isWarrantyActive = asset.warrantyExpiresAt && new Date(asset.warrantyExpiresAt) >= now
+            const hasAmcActive = asset.amcEndDate ? new Date(asset.amcEndDate).getTime() >= nowTimestamp : false
+            const isWarrantyActive = asset.warrantyExpiresAt ? new Date(asset.warrantyExpiresAt).getTime() >= nowTimestamp : false
 
             return (
               <tr key={asset.id} className="border-t border-stone-100 hover:bg-stone-50/60 transition-colors">

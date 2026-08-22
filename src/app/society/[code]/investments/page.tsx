@@ -383,6 +383,7 @@ export default async function SocietyInvestmentsPage({
 
 import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
 
 async function bookFixedDeposit(formData: FormData) {
   "use server"
@@ -393,10 +394,12 @@ async function bookFixedDeposit(formData: FormData) {
   const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
   const verifiedSocietyId = authContext.society.id
 
-
-  const bankName = formData.get("bankName")?.toString().trim()
-  const branch = formData.get("branch")?.toString().trim() || null
-  const fdNumber = formData.get("fdNumber")?.toString().trim()
+  const rawBankName = formData.get("bankName")?.toString().trim()
+  const bankName = rawBankName ? sanitizeText(rawBankName) : ""
+  const rawBranch = formData.get("branch")?.toString().trim() || null
+  const branch = rawBranch ? sanitizeText(rawBranch) : null
+  const rawFdNum = formData.get("fdNumber")?.toString().trim()
+  const fdNumber = rawFdNum ? sanitizeText(rawFdNum) : ""
   const rawPrincipal = formData.get("principalAmount")?.toString().trim()
   const rawRate = formData.get("interestRate")?.toString().trim()
   const startDateStr = formData.get("startDate")?.toString().trim()
@@ -404,7 +407,8 @@ async function bookFixedDeposit(formData: FormData) {
   const rawMaturity = formData.get("maturityAmount")?.toString().trim()
   const interestPayout = formData.get("interestPayout")?.toString().trim() || "ON_MATURITY"
   const accountId = formData.get("accountId")?.toString().trim() || null
-  const remarks = formData.get("remarks")?.toString().trim() || null
+  const rawRemarks = formData.get("remarks")?.toString().trim() || null
+  const remarks = rawRemarks ? sanitizeText(rawRemarks) : null
 
   if (!bankName || !fdNumber || !rawPrincipal || !rawRate || !startDateStr || !maturityDateStr || !rawMaturity) {
     throw new Error("All required fields must be filled")

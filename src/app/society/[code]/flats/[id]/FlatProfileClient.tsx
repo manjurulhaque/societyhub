@@ -6,6 +6,7 @@ import { TransferOwnershipModal, type PersonDirectoryOption } from "./TransferOw
 import { AddFlatPersonModal } from "./AddFlatPersonModal"
 import { removeFlatPerson, refundMemberDeposit, forfeitMemberDeposit } from "../actions"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { maskBankAccount } from "@/lib/masking"
 
 export type FlatDetailData = {
   id: string
@@ -484,7 +485,7 @@ export function FlatProfileClient({
                   rows={statutory.liens.map((lien) => (
                     <tr key={lien.id} className="border-t border-stone-100 text-xs">
                       <td className="px-4 py-3 font-semibold text-stone-950">{lien.bankName}</td>
-                      <td className="px-4 py-3 text-stone-800 font-mono">{lien.loanAccountNumber || "—"}</td>
+                      <td className="px-4 py-3 text-stone-800 font-mono">{lien.loanAccountNumber ? maskBankAccount(lien.loanAccountNumber) : "—"}</td>
                       <td className="px-4 py-3 font-mono font-semibold text-stone-900">
                         {lien.sanctionAmount !== null ? `${currencySymbol}${lien.sanctionAmount.toLocaleString("en-IN")}` : "—"}
                       </td>

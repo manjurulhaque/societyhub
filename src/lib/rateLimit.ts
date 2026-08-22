@@ -7,14 +7,20 @@ interface RateLimitRecord {
 const rateLimitMap = new Map<string, RateLimitRecord>()
 
 // Periodically clean up expired entries every 5 minutes
-setInterval(() => {
-  const now = Date.now()
-  for (const [key, record] of rateLimitMap.entries()) {
-    if (record.expiresAt < now) {
-      rateLimitMap.delete(key)
+if (typeof setInterval !== "undefined") {
+  const cleanupTimer = setInterval(() => {
+    const now = Date.now()
+    for (const [key, record] of rateLimitMap.entries()) {
+      if (record.expiresAt < now) {
+        rateLimitMap.delete(key)
+      }
     }
+  }, 5 * 60 * 1000)
+
+  if (typeof cleanupTimer === "object" && "unref" in cleanupTimer) {
+    cleanupTimer.unref()
   }
-}, 5 * 60 * 1000)
+}
 
 export interface RateLimitOptions {
   /** Maximum number of allowed requests in the time window */
@@ -30,12 +36,42 @@ export interface RateLimitResult {
 }
 
 /**
- * Checks and updates rate limit for a given key.
+ * Peeks at the current rate limit status without consuming an attempt.
+ * Useful for pre-flight probes before credential evaluation.
+ */
+export function peekRateLimit(key: string, options: RateLimitOptions): RateLimitResult {
+  const now = Date.now()
+  const current = rateLimitMap.get(key)
+
+  if (!current || current.expiresAt < now) {
+    return {
+      allowed: true,
+      remaining: options.maxRequests,
+    }
+  }
+
+  if (current.count >= options.maxRequests) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((current.expiresAt - now) / 1000))
+    return {
+      allowed: false,
+      remaining: 0,
+      retryAfterSeconds,
+    }
+  }
+
+  return {
+    allowed: true,
+    remaining: Math.max(0, options.maxRequests - current.count),
+  }
+}
+
+/**
+ * Increments and checks rate limit for a given key.
  *
  * @param key Unique key (e.g. `login:192.168.1.1` or `update-profile:user123`)
  * @param options maxRequests and windowSeconds
  */
-export function checkRateLimit(key: string, options: RateLimitOptions): RateLimitResult {
+export function incrementRateLimit(key: string, options: RateLimitOptions): RateLimitResult {
   const now = Date.now()
   const windowMs = options.windowSeconds * 1000
 
@@ -66,4 +102,18 @@ export function checkRateLimit(key: string, options: RateLimitOptions): RateLimi
     allowed: true,
     remaining: options.maxRequests - current.count,
   }
+}
+
+/**
+ * Backwards-compatible alias for incrementRateLimit.
+ */
+export function checkRateLimit(key: string, options: RateLimitOptions): RateLimitResult {
+  return incrementRateLimit(key, options)
+}
+
+/**
+ * Resets the rate limit counter for a key (e.g. upon successful authentication).
+ */
+export function resetRateLimit(key: string): void {
+  rateLimitMap.delete(key)
 }

@@ -203,7 +203,7 @@ export function CreateJournalVoucherModal({
           </div>
 
           <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-            {lines.map((line, idx) => (
+            {lines.map((line) => (
               <div key={line.id} className="grid grid-cols-12 gap-2 items-center text-xs">
                 {/* Ledger Selection */}
                 <div className="col-span-5">

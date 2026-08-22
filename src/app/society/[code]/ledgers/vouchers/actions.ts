@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
-import type { VoucherType, VoucherStatus } from "@/generated/prisma/client"
+import { sanitizeText } from "@/lib/sanitize"
+import { getSafeErrorMessage } from "@/lib/errors"
+import type { VoucherType } from "@/generated/prisma/client"
 
 export type JournalActionState = {
   success?: boolean
@@ -41,7 +43,9 @@ export async function postJournalVoucher(
       return { error: "A double-entry voucher must contain at least 2 ledger lines." }
     }
 
-    if (!data.narration || !data.narration.trim()) {
+    const rawNarration = data.narration?.trim()
+    const narration = sanitizeText(rawNarration)
+    if (!narration) {
       return { error: "Voucher narration is required." }
     }
 
@@ -87,6 +91,7 @@ export async function postJournalVoucher(
       where: { societyId, voucherType: data.voucherType },
     })
     const voucherNumber = `${voucherPrefix}-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`
+    const reference = data.reference ? sanitizeText(data.reference) : null
 
     const journal = await prisma.$transaction(async (tx) => {
       const createdJournal = await tx.journalEntry.create({
@@ -97,14 +102,14 @@ export async function postJournalVoucher(
           voucherType: data.voucherType,
           status: "POSTED",
           entryDate,
-          narration: data.narration.trim(),
-          reference: data.reference?.trim() || null,
+          narration,
+          reference,
           entries: {
             create: data.entries.map((e) => ({
               ledgerId: e.ledgerId,
               debit: Number(e.debit) || 0,
               credit: Number(e.credit) || 0,
-              narration: e.narration?.trim() || null,
+              narration: e.narration ? sanitizeText(e.narration) : null,
             })),
           },
         },
@@ -119,12 +124,12 @@ export async function postJournalVoucher(
       action: "CREATE",
       entity: "JournalEntry",
       entityId: journal.id,
-      description: `${context.user.email} posted ${data.voucherType} voucher #${voucherNumber} for ₹${totalDebits.toFixed(2)} (${data.narration})`,
+      description: `${context.user.email} posted ${data.voucherType} voucher #${voucherNumber} for ₹${totalDebits.toFixed(2)} (${narration})`,
       newData: {
         voucherNumber,
         voucherType: data.voucherType,
         totalAmount: totalDebits,
-        narration: data.narration,
+        narration,
       },
     })
 
@@ -140,8 +145,7 @@ export async function postJournalVoucher(
     }
   } catch (err: unknown) {
     console.error("Failed to post journal voucher:", err)
-    const message = err instanceof Error ? err.message : "Failed to post voucher."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to post voucher.") }
   }
 }
 
@@ -181,7 +185,6 @@ export async function voidJournalVoucher(
     return { success: true, message: "Voucher marked as VOID." }
   } catch (err: unknown) {
     console.error("Failed to void voucher:", err)
-    const message = err instanceof Error ? err.message : "Failed to void voucher."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to void voucher.") }
   }
 }

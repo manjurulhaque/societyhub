@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
+import { getSafeErrorMessage } from "@/lib/errors"
 import type { PaymentMode, PaymentStatus } from "@/generated/prisma/client"
 
 export type PaymentActionState = {
@@ -107,6 +109,9 @@ export async function recordPayment(
     const receiptSeq = (count + 1).toString().padStart(4, "0")
     const receiptNumber = `REC-${year}${monthStr}-${receiptSeq}`
 
+    const reference = data.reference ? sanitizeText(data.reference) : null
+    const remarks = data.remarks ? sanitizeText(data.remarks) : null
+
     const result = await prisma.$transaction(async (tx) => {
       // 1. Create Payment record
       const payment = await tx.payment.create({
@@ -122,8 +127,8 @@ export async function recordPayment(
           paidOn,
           mode: data.mode,
           status: "SUCCESS" as PaymentStatus,
-          reference: data.reference?.trim() || null,
-          remarks: data.remarks?.trim() || null,
+          reference,
+          remarks,
         },
       })
 
@@ -170,7 +175,7 @@ export async function recordPayment(
       action: "CREATE",
       entity: "Payment",
       entityId: result.id,
-      description: `${context.user.email} recorded payment receipt ${receiptNumber} (₹${amount.toLocaleString("en-IN")}) via ${data.mode}${data.reference ? ` [Ref: ${data.reference}]` : ""}`,
+      description: `${context.user.email} recorded payment receipt ${receiptNumber} (₹${amount.toLocaleString("en-IN")}) via ${data.mode}${reference ? ` [Ref: ${reference}]` : ""}`,
       newData: {
         receiptNumber,
         amount,
@@ -196,8 +201,7 @@ export async function recordPayment(
     }
   } catch (err: unknown) {
     console.error("Failed to record payment:", err)
-    const message = err instanceof Error ? err.message : "Failed to record payment."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to record payment.") }
   }
 }
 
@@ -232,6 +236,8 @@ export async function voidPayment(
       return { error: "This payment has already been voided." }
     }
 
+    const sanitizedReason = reason ? sanitizeText(reason) : "Cancelled by admin"
+
     await prisma.$transaction(async (tx) => {
       // 1. Mark payment as REFUNDED
       await tx.payment.update({
@@ -239,8 +245,8 @@ export async function voidPayment(
         data: {
           status: "REFUNDED" as PaymentStatus,
           remarks: payment.remarks
-            ? `${payment.remarks} [Voided: ${reason || "Cancelled by admin"}]`
-            : `Voided: ${reason || "Cancelled by admin"}`,
+            ? `${payment.remarks} [Voided: ${sanitizedReason}]`
+            : `Voided: ${sanitizedReason}`,
         },
       })
 
@@ -287,8 +293,8 @@ export async function voidPayment(
       action: "STATUS_CHANGE",
       entity: "Payment",
       entityId: paymentId,
-      description: `${context.user.email} voided payment receipt ${payment.receiptNumber || paymentId}${reason ? `: ${reason}` : ""}`,
-      newData: { status: "REFUNDED", reason },
+      description: `${context.user.email} voided payment receipt ${payment.receiptNumber || paymentId}: ${sanitizedReason}`,
+      newData: { status: "REFUNDED", reason: sanitizedReason },
     })
 
     revalidatePath(`/society/${societyCode}/payments`)
@@ -302,7 +308,6 @@ export async function voidPayment(
     }
   } catch (err: unknown) {
     console.error("Failed to void payment:", err)
-    const message = err instanceof Error ? err.message : "Failed to void payment."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to void payment.") }
   }
 }

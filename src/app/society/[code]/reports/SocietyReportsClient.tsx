@@ -29,6 +29,8 @@ import {
   AdminModal,
 } from "@/components/admin"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { maskBankAccount } from "@/lib/masking"
+import { generateSafeCsv } from "@/lib/csv"
 
 const CHART_COLORS = [
   "#059669",
@@ -527,10 +529,10 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
           "Installments Progress",
         ]
         rows = filteredOneTimeAllocations.map((a) => [
-          `"${activeCampaign?.title || "Special Assessment"}"`,
+          activeCampaign?.title || "Special Assessment",
           a.flatNumber,
           a.blockName,
-          `"${a.residentName.replace(/"/g, '""')}"`,
+          a.residentName,
           a.area || "—",
           a.totalAmount,
           a.paidAmount,
@@ -554,7 +556,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
         rows = filteredMemberDeposits.map((d) => [
           d.flatNumber,
           d.blockName,
-          `"${d.memberName.replace(/"/g, '""')}"`,
+          d.memberName,
           d.phone || "",
           d.depositType,
           d.amount,
@@ -583,7 +585,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
         d.flatNumber,
         d.blockName,
         d.occupancyStatus,
-        `"${d.residentName.replace(/"/g, '""')}"`,
+        d.residentName,
         d.residentPhone || "",
         d.residentEmail || "",
         d.unpaidBillsCount,
@@ -610,8 +612,8 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
     } else if (reportType === "budget_variance") {
       headers = ["Budget Plan", "Head Name", "Allocated (₹)", "Utilized (₹)", "Remaining (₹)", "Utilization %", "Status"]
       rows = data.budgetVariance.map((b) => [
-        `"${b.budgetName}"`,
-        `"${b.headName}"`,
+        b.budgetName,
+        b.headName,
         b.allocatedAmount,
         b.utilizedAmount,
         b.remainingAmount,
@@ -623,7 +625,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
       rows = data.statutory.shares.map((s) => [
         s.flatNumber,
         s.blockName,
-        `"${s.memberName}"`,
+        s.memberName,
         s.certificateNumber,
         s.sharesCount,
         s.distinctiveNumbers,
@@ -636,7 +638,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
       rows = data.statutory.votingList.map((v) => [
         v.flatNumber,
         v.blockName,
-        `"${v.memberName}"`,
+        v.memberName,
         v.occupancyStatus,
         v.outstandingDues,
         v.isEligible ? "ELIGIBLE" : "DISQUALIFIED",
@@ -645,8 +647,8 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
     } else if (reportType === "vendor_aging") {
       headers = ["Vendor Name", "Company", "Phone", "Total Billed (₹)", "Total Paid (₹)", "Outstanding Due (₹)", "TDS Deducted (₹)", "Pending Bills", "Aging Bucket"]
       rows = data.vendorAging.map((v) => [
-        `"${v.vendorName}"`,
-        `"${v.companyName || ""}"`,
+        v.vendorName,
+        v.companyName || "",
         v.phone || "",
         v.totalBilledAmount,
         v.totalPaidAmount,
@@ -660,7 +662,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
       rows = filteredCheques.map((c) => [
         c.chequeNumber,
         c.direction,
-        `"${c.partyName}"`,
+        c.partyName,
         c.bankName || "",
         c.amount,
         c.status,
@@ -693,9 +695,9 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
     } else if (reportType === "income_expenditure") {
       headers = ["Section", "Head / Category", "Transaction Count", "Amount (₹)"]
       rows = [
-        ...data.pnl.incomeHeads.map((h) => ["Income", `"${h.category}"`, h.count, h.amount]),
+        ...data.pnl.incomeHeads.map((h) => ["Income", h.category, h.count, h.amount]),
         ["Income Total", "Total Income", "", data.pnl.totalIncome],
-        ...data.pnl.expenseHeads.map((h) => ["Expense", `"${h.category}"`, h.count, h.amount]),
+        ...data.pnl.expenseHeads.map((h) => ["Expense", h.category, h.count, h.amount]),
         ["Expense Total", "Total Expense", "", data.pnl.totalExpense],
         ["Net Result", "Operating Surplus / (Deficit)", "", data.pnl.netSurplus],
       ]
@@ -720,7 +722,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
         u.unitType || "",
         u.area || "",
         u.occupancyStatus,
-        `"${u.residentName.replace(/"/g, '""')}"`,
+        u.residentName,
         u.totalInvoicesCount,
         u.totalBilledAmount,
         u.totalPaidAmount,
@@ -735,17 +737,16 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
       return
     }
 
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n")
-
-    const encodedUri = encodeURI(csvContent)
+    const csvString = generateSafeCsv(headers, rows)
+    const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
-    link.setAttribute("href", encodedUri)
+    link.setAttribute("href", url)
     link.setAttribute("download", filename)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 
   // Direct 1-Click PDF Download
@@ -1923,7 +1924,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                       </td>
                       <td className="px-4 py-3 text-xs text-stone-700">{acc.bankName || acc.accountType}</td>
                       <td className="px-4 py-3 font-mono text-xs text-stone-600">
-                        {acc.accountNumber ? `••••${acc.accountNumber.slice(-4)}` : "—"}
+                        {acc.accountNumber ? maskBankAccount(acc.accountNumber) : "—"}
                       </td>
                       <td className="px-4 py-3 text-xs font-extrabold text-stone-950">
                         {sym}{acc.currentBalance.toLocaleString("en-IN")}
@@ -2600,7 +2601,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                       </td>
                       <td className="px-4 py-3.5 text-xs text-stone-800">{l.memberName}</td>
                       <td className="px-4 py-3.5 text-xs font-semibold text-stone-900">{l.bankName}</td>
-                      <td className="px-4 py-3.5 font-mono text-xs text-stone-600">{l.loanAccountNumber || "—"}</td>
+                      <td className="px-4 py-3.5 font-mono text-xs text-stone-600">{l.loanAccountNumber ? maskBankAccount(l.loanAccountNumber) : "—"}</td>
                       <td className="px-4 py-3.5 text-xs font-bold text-stone-950">
                         {l.sanctionAmount ? `${sym}${l.sanctionAmount.toLocaleString("en-IN")}` : "—"}
                       </td>

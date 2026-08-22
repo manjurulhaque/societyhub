@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
+import { encryptData } from "@/lib/crypto"
+import { sanitizeText } from "@/lib/sanitize"
+import { getSafeErrorMessage } from "@/lib/errors"
 import type { FlatRole } from "@/generated/prisma/client"
 
 export type ResidentActionState = {
@@ -39,15 +42,17 @@ export async function registerResident(
     const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
     const societyId = context.society.id
 
-    const name = data.name.trim()
+    const name = sanitizeText(data.name)
     if (!name) {
       return { error: "Resident's full name is required." }
     }
 
-    const phone = data.phone?.trim() || null
-    const email = data.email?.trim().toLowerCase() || null
-    const panNumber = data.panNumber?.trim().toUpperCase() || null
-    const aadhaarNumber = data.aadhaarNumber?.trim() || null
+    const phone = data.phone ? sanitizeText(data.phone) : null
+    const email = data.email ? sanitizeText(data.email).toLowerCase() : null
+    const rawPan = data.panNumber?.trim().toUpperCase() || null
+    const panNumber = rawPan ? encryptData(rawPan) : null
+    const rawAadhaar = data.aadhaarNumber?.trim() || null
+    const aadhaarNumber = rawAadhaar ? encryptData(rawAadhaar) : null
     const role: FlatRole = data.role || "OWNER"
 
     // Create the person record
@@ -61,12 +66,12 @@ export async function registerResident(
           panNumber,
           aadhaarNumber,
           dob: data.dob ? new Date(data.dob) : null,
-          gender: data.gender?.trim() || null,
-          bloodGroup: data.bloodGroup?.trim() || null,
-          occupation: data.occupation?.trim() || null,
-          emergencyContactName: data.emergencyContactName?.trim() || null,
-          emergencyContactPhone: data.emergencyContactPhone?.trim() || null,
-          permanentAddress: data.permanentAddress?.trim() || null,
+          gender: data.gender ? sanitizeText(data.gender) : null,
+          bloodGroup: data.bloodGroup ? sanitizeText(data.bloodGroup) : null,
+          occupation: data.occupation ? sanitizeText(data.occupation) : null,
+          emergencyContactName: data.emergencyContactName ? sanitizeText(data.emergencyContactName) : null,
+          emergencyContactPhone: data.emergencyContactPhone ? sanitizeText(data.emergencyContactPhone) : null,
+          permanentAddress: data.permanentAddress ? sanitizeText(data.permanentAddress) : null,
         },
       })
 
@@ -126,8 +131,7 @@ export async function registerResident(
     }
   } catch (err: unknown) {
     console.error("Failed to register resident:", err)
-    const message = err instanceof Error ? err.message : "Failed to register resident."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to register resident.") }
   }
 }
 
@@ -182,8 +186,7 @@ export async function removeResident(
     }
   } catch (err: unknown) {
     console.error("Failed to remove resident:", err)
-    const message = err instanceof Error ? err.message : "Failed to remove resident."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to remove resident.") }
   }
 }
 
@@ -230,7 +233,6 @@ export async function toggleResidentKyc(
     }
   } catch (err: unknown) {
     console.error("Failed to toggle KYC:", err)
-    const message = err instanceof Error ? err.message : "Failed to update KYC status."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to update KYC status.") }
   }
 }

@@ -60,8 +60,9 @@ export function ExpenseCategoriesModal({
         setNewCatDesc("")
         setShowAddForm(false)
         setMessage({ type: "success", text: `Category "${newCatName.trim()}" added successfully!` })
-      } catch (err: any) {
-        setMessage({ type: "error", text: err.message || "Failed to add category" })
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Failed to add category"
+        setMessage({ type: "error", text: errorMsg })
       }
     })
   }
@@ -78,8 +79,9 @@ export function ExpenseCategoriesModal({
           type: "success",
           text: "Standard expense categories synced successfully!",
         })
-      } catch (err: any) {
-        setMessage({ type: "error", text: err.message || "Failed to sync categories" })
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Failed to sync categories"
+        setMessage({ type: "error", text: errorMsg })
       }
     })
   }

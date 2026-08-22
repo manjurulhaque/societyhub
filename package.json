@@ -9,7 +9,8 @@
     "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint",
-    "security:check": "eslint && next build"
+    "test:security": "tsx scripts/test-security.ts",
+    "security:check": "tsx scripts/test-security.ts && eslint && next build"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

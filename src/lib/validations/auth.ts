@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { validatePasswordStrength } from "@/lib/auth/passwordValidation"
 
 export const loginSchema = z.object({
   email: z
@@ -23,9 +24,16 @@ export const updatePasswordSchema = z
   .object({
     newPassword: z
       .string()
-      .min(8, "Password must be at least 8 characters long")
-      .regex(/[a-zA-Z]/, "Password must contain at least one letter")
-      .regex(/[0-9]/, "Password must contain at least one number"),
+      .min(10, "Password must be at least 10 characters long")
+      .superRefine((val, ctx) => {
+        const result = validatePasswordStrength(val)
+        if (!result.isValid && result.error) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: result.error,
+          })
+        }
+      }),
     confirmPassword: z
       .string()
       .min(1, "Please confirm your new password"),
@@ -36,4 +44,3 @@ export const updatePasswordSchema = z
   })
 
 export type UpdatePasswordInput = z.infer<typeof updatePasswordSchema>
-

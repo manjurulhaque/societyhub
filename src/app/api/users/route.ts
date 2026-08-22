@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { requireSuperAdmin } from "@/lib/auth/requireAuth"
 import { checkRateLimit } from "@/lib/rateLimit"
+import { recordAuditLog } from "@/lib/audit"
 import { z } from "zod"
 import { NextResponse, type NextRequest } from "next/server"
 
@@ -66,7 +67,6 @@ export async function POST(req: NextRequest) {
       )
     }
 
-
     const body = await req.json()
     const parsed = createUserSchema.safeParse(body)
 
@@ -100,6 +100,20 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    await recordAuditLog({
+      userId: admin.id,
+      action: "CREATE",
+      entity: "User",
+      entityId: user.id,
+      description: `Super Admin provisioned new user account for ${user.email}`,
+      newData: {
+        email: user.email,
+        appRole: user.appRole,
+      },
+      ipAddress: ip,
+      userAgent: req.headers.get("user-agent"),
+    })
+
     return NextResponse.json(user, { status: 201 })
   } catch (error: unknown) {
     const isError = error instanceof Error
@@ -110,4 +124,3 @@ export async function POST(req: NextRequest) {
     )
   }
 }
-

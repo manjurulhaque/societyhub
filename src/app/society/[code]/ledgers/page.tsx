@@ -315,6 +315,8 @@ export default async function SocietyLedgersPage({
   )
 }
 
+import { sanitizeText } from "@/lib/sanitize"
+
 async function createLedger(formData: FormData) {
   "use server"
 
@@ -324,12 +326,14 @@ async function createLedger(formData: FormData) {
   const authContext = await requireCommitteeAccess(code, FINANCIAL_ROLES)
   const verifiedSocietyId = authContext.society.id
 
-
-  const name = formData.get("name")?.toString().trim()
-  const ledgerCode = formData.get("ledgerCode")?.toString().trim() || null
+  const rawName = formData.get("name")?.toString().trim()
+  const name = sanitizeText(rawName)
+  const rawLedgerCode = formData.get("ledgerCode")?.toString().trim() || null
+  const ledgerCode = rawLedgerCode ? sanitizeText(rawLedgerCode) : null
   const group = formData.get("group")?.toString().trim() || "EXPENSE"
   const parentLedgerId = formData.get("parentLedgerId")?.toString().trim() || null
-  const description = formData.get("description")?.toString().trim() || null
+  const rawDesc = formData.get("description")?.toString().trim() || null
+  const description = rawDesc ? sanitizeText(rawDesc) : null
   const rawOpeningBalance = formData.get("openingBalance")?.toString().trim()
 
   if (!name) {

@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
+import { getSafeErrorMessage } from "@/lib/errors"
 
 export type CashClosingActionState = {
   success?: boolean
@@ -47,6 +49,8 @@ export async function recordCashClosing(
     const closingDate = new Date(data.closingDate)
     const isMatched = Math.abs(data.difference) < 0.01
 
+    const notes = data.notes ? sanitizeText(data.notes) : null
+
     const log = await prisma.cashClosingLog.create({
       data: {
         societyId,
@@ -65,7 +69,7 @@ export async function recordCashClosing(
         note20: data.note20 || 0,
         note10: data.note10 || 0,
         coins: data.coins || 0,
-        notes: data.notes?.trim() || null,
+        notes,
         verifiedBy: context.user.email || context.user.id,
       },
     })
@@ -95,7 +99,6 @@ export async function recordCashClosing(
     }
   } catch (err: unknown) {
     console.error("Failed to record cash closing log:", err)
-    const message = err instanceof Error ? err.message : "Failed to record cash count."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to record cash count.") }
   }
 }

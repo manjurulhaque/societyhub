@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useTransition } from "react"
+import { useState, useMemo } from "react"
 import Link from "next/link"
 import { AdminStatCard, AdminBadge, AdminTable } from "@/components/admin"
 import { CashClosingModal } from "./CashClosingModal"

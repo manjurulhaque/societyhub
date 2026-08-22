@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
+import { getSafeErrorMessage } from "@/lib/errors"
 import type { MeetingType } from "@/generated/prisma/client"
 
 export type MeetingActionState = {
@@ -31,7 +33,8 @@ export async function createMeeting(
     const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
     const societyId = context.society.id
 
-    const title = data.title?.trim()
+    const rawTitle = data.title?.trim()
+    const title = sanitizeText(rawTitle)
     if (!title) {
       return { error: "Meeting title is required (e.g. 12th Annual General Body Meeting)." }
     }
@@ -41,6 +44,8 @@ export async function createMeeting(
     }
 
     const meetingDate = new Date(data.meetingDate)
+    const venue = data.venue ? sanitizeText(data.venue) : null
+    const agenda = data.agenda ? sanitizeText(data.agenda) : null
 
     const meeting = await prisma.meeting.create({
       data: {
@@ -48,8 +53,8 @@ export async function createMeeting(
         title,
         meetingType: data.meetingType,
         meetingDate,
-        venue: data.venue?.trim() || null,
-        agenda: data.agenda?.trim() || null,
+        venue,
+        agenda,
         quorumMet: true,
       },
     })
@@ -73,8 +78,7 @@ export async function createMeeting(
     }
   } catch (err: unknown) {
     console.error("Failed to schedule meeting:", err)
-    const message = err instanceof Error ? err.message : "Failed to schedule meeting."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to schedule meeting.") }
   }
 }
 
@@ -104,17 +108,22 @@ export async function updateMeeting(
     })
     if (!meeting) return { error: "Meeting not found." }
 
+    const sanitizedTitle = data.title ? sanitizeText(data.title) : undefined
+    const sanitizedVenue = data.venue !== undefined ? (data.venue ? sanitizeText(data.venue) : null) : meeting.venue
+    const sanitizedAgenda = data.agenda !== undefined ? (data.agenda ? sanitizeText(data.agenda) : null) : meeting.agenda
+    const sanitizedMinutes = data.minutesNotes !== undefined ? (data.minutesNotes ? sanitizeText(data.minutesNotes) : null) : meeting.minutesNotes
+
     await prisma.meeting.update({
       where: { id: meetingId },
       data: {
-        ...(data.title ? { title: data.title.trim() } : {}),
+        ...(sanitizedTitle ? { title: sanitizedTitle } : {}),
         ...(data.meetingType ? { meetingType: data.meetingType } : {}),
         ...(data.meetingDate ? { meetingDate: new Date(data.meetingDate) } : {}),
-        venue: data.venue !== undefined ? data.venue?.trim() || null : meeting.venue,
-        agenda: data.agenda !== undefined ? data.agenda?.trim() || null : meeting.agenda,
+        venue: sanitizedVenue,
+        agenda: sanitizedAgenda,
         quorumMet: data.quorumMet !== undefined ? data.quorumMet : meeting.quorumMet,
         attendeeCount: data.attendeeCount !== undefined ? data.attendeeCount : meeting.attendeeCount,
-        minutesNotes: data.minutesNotes !== undefined ? data.minutesNotes?.trim() || null : meeting.minutesNotes,
+        minutesNotes: sanitizedMinutes,
       },
     })
 
@@ -133,8 +142,7 @@ export async function updateMeeting(
     return { success: true, message: "Meeting details & minutes saved." }
   } catch (err: unknown) {
     console.error("Failed to update meeting:", err)
-    const message = err instanceof Error ? err.message : "Failed to update meeting."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to update meeting.") }
   }
 }
 
@@ -172,8 +180,7 @@ export async function deleteMeeting(
     return { success: true, message: "Meeting deleted successfully." }
   } catch (err: unknown) {
     console.error("Failed to delete meeting:", err)
-    const message = err instanceof Error ? err.message : "Failed to delete meeting."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to delete meeting.") }
   }
 }
 
@@ -204,21 +211,27 @@ export async function createResolution(
     })
     if (!meeting) return { error: "Meeting not found." }
 
-    const title = data.title?.trim()
-    const description = data.description?.trim()
+    const rawTitle = data.title?.trim()
+    const title = sanitizeText(rawTitle)
+    const rawDesc = data.description?.trim()
+    const description = sanitizeText(rawDesc)
 
     if (!title || !description) {
       return { error: "Resolution title and description are required." }
     }
 
+    const resolutionNumber = data.resolutionNumber ? sanitizeText(data.resolutionNumber) : null
+    const proposedBy = data.proposedBy ? sanitizeText(data.proposedBy) : null
+    const secondedBy = data.secondedBy ? sanitizeText(data.secondedBy) : null
+
     const resolution = await prisma.resolution.create({
       data: {
         meetingId,
-        resolutionNumber: data.resolutionNumber?.trim() || null,
+        resolutionNumber,
         title,
         description,
-        proposedBy: data.proposedBy?.trim() || null,
-        secondedBy: data.secondedBy?.trim() || null,
+        proposedBy,
+        secondedBy,
         passed: data.passed !== false,
         passedUnanimously: Boolean(data.passedUnanimously),
         votesInFavor: data.votesInFavor || null,
@@ -240,8 +253,7 @@ export async function createResolution(
     return { success: true, message: "Resolution recorded successfully.", resolutionId: resolution.id }
   } catch (err: unknown) {
     console.error("Failed to create resolution:", err)
-    const message = err instanceof Error ? err.message : "Failed to create resolution."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to create resolution.") }
   }
 }
 
@@ -280,7 +292,6 @@ export async function deleteResolution(
     return { success: true, message: "Resolution deleted." }
   } catch (err: unknown) {
     console.error("Failed to delete resolution:", err)
-    const message = err instanceof Error ? err.message : "Failed to delete resolution."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to delete resolution.") }
   }
 }

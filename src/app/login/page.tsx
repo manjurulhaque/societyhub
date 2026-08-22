@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { createClient } from "@/lib/supabase/client"
 import { loginSchema, type LoginInput } from "@/lib/validations/auth"
+import { getSafeRedirectUrl } from "@/lib/auth/safeRedirect"
 import {
   Form,
   FormControl,
@@ -64,24 +65,48 @@ export default function LoginPage() {
       })
 
       if (signInError) {
+        // Record failed attempt in rate limiter
+        try {
+          const failRes = await fetch("/api/auth/login-limit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, action: "RECORD_FAILURE" }),
+          })
+          if (!failRes.ok) {
+            const failData = await failRes.json()
+            setError(failData.error || signInError.message)
+            setLoading(false)
+            return
+          }
+        } catch {
+          // Fall through
+        }
+
         setError(signInError.message)
         setLoading(false)
         return
       }
 
+      // 3. Clear rate limit tally upon successful authentication
+      try {
+        await fetch("/api/auth/login-limit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, action: "RESET" }),
+        })
+      } catch {
+        // Non-blocking cleanup
+      }
 
-      // If a safe relative next parameter is provided, use it (prevent open redirect attacks)
-      const isSafeRelativeUrl =
-        nextParam &&
-        nextParam.startsWith("/") &&
-        !nextParam.startsWith("//") &&
-        !nextParam.startsWith("/\\") &&
-        !nextParam.includes("://")
 
-      if (isSafeRelativeUrl) {
-        router.push(nextParam)
-        router.refresh()
-        return
+      // If a next parameter is provided, validate through Open Redirect defense
+      if (nextParam) {
+        const safeUrl = getSafeRedirectUrl(nextParam, "")
+        if (safeUrl) {
+          router.push(safeUrl)
+          router.refresh()
+          return
+        }
       }
 
 

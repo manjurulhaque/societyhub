@@ -1,11 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { checkRateLimit } from "@/lib/rateLimit"
+import { peekRateLimit, incrementRateLimit, resetRateLimit } from "@/lib/rateLimit"
 import { z } from "zod"
 
 const loginLimitSchema = z.object({
   email: z.string().email("Invalid email format"),
   action: z.enum(["CHECK", "RECORD_FAILURE", "RESET"]),
 })
+
+const LOGIN_RATE_LIMIT_OPTIONS = {
+  maxRequests: 5,
+  windowSeconds: 300, // 5 attempts per 5 minutes per IP + email
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,15 +23,39 @@ export async function POST(req: NextRequest) {
 
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1"
     const normalizedEmail = parsed.data.email.trim().toLowerCase()
-
-    // 5 attempts per 5 minutes (300 seconds) per IP + email
     const rateLimitKey = `login:${ip}:${normalizedEmail}`
-    const result = checkRateLimit(rateLimitKey, {
-      maxRequests: 5,
-      windowSeconds: 300,
-    })
+    const { action } = parsed.data
 
-    if (!result.allowed && parsed.data.action !== "RESET") {
+    if (action === "RESET") {
+      resetRateLimit(rateLimitKey)
+      return NextResponse.json({
+        allowed: true,
+        remaining: LOGIN_RATE_LIMIT_OPTIONS.maxRequests,
+      })
+    }
+
+    if (action === "CHECK") {
+      const result = peekRateLimit(rateLimitKey, LOGIN_RATE_LIMIT_OPTIONS)
+      if (!result.allowed) {
+        const waitSeconds = result.retryAfterSeconds || 60
+        return NextResponse.json(
+          {
+            allowed: false,
+            error: `Too many sign-in attempts. Account access is temporarily throttled. Please try again in ${waitSeconds} seconds.`,
+            retryAfter: waitSeconds,
+          },
+          { status: 429 }
+        )
+      }
+      return NextResponse.json({
+        allowed: true,
+        remaining: result.remaining,
+      })
+    }
+
+    // action === "RECORD_FAILURE"
+    const result = incrementRateLimit(rateLimitKey, LOGIN_RATE_LIMIT_OPTIONS)
+    if (!result.allowed) {
       const waitSeconds = result.retryAfterSeconds || 60
       return NextResponse.json(
         {

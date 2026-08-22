@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
+import { getSafeErrorMessage } from "@/lib/errors"
 import { Prisma } from "@/generated/prisma/client"
 
 export type BudgetActionState = {
@@ -36,7 +38,8 @@ export async function createBudget(
     const context = await requireCommitteeAccess(societyCode, FINANCIAL_ROLES)
     const societyId = context.society.id
 
-    const name = payload.name?.trim()
+    const rawName = payload.name?.trim()
+    const name = sanitizeText(rawName)
     const { financialYearId, items } = payload
 
     if (!name) {
@@ -137,8 +140,8 @@ export async function createBudget(
       message: `Budget plan "${name}" successfully created.`,
     }
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : "Failed to create budget."
-    return { error: errorMsg }
+    console.error("Failed to create budget:", err)
+    return { error: getSafeErrorMessage(err, "Failed to create budget.") }
   }
 }
 
@@ -157,7 +160,8 @@ export async function updateBudget(
     const context = await requireCommitteeAccess(societyCode, FINANCIAL_ROLES)
     const societyId = context.society.id
 
-    const name = payload.name?.trim()
+    const rawName = payload.name?.trim()
+    const name = sanitizeText(rawName)
     const { items } = payload
 
     if (!name) {
@@ -281,8 +285,8 @@ export async function updateBudget(
       message: `Budget "${name}" updated successfully.`,
     }
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : "Failed to update budget."
-    return { error: errorMsg }
+    console.error("Failed to update budget:", err)
+    return { error: getSafeErrorMessage(err, "Failed to update budget.") }
   }
 }
 
@@ -342,7 +346,7 @@ export async function deleteBudget(
       message: `Budget "${budget.name}" was deleted successfully.`,
     }
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : "Failed to delete budget."
-    return { error: errorMsg }
+    console.error("Failed to delete budget:", err)
+    return { error: getSafeErrorMessage(err, "Failed to delete budget.") }
   }
 }

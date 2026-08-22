@@ -324,6 +324,7 @@ export default async function SocietyShareCertificatesPage({
 
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
 import type { ShareStatus } from "@/generated/prisma/client"
 
 async function issueCertificate(formData: FormData) {
@@ -335,10 +336,10 @@ async function issueCertificate(formData: FormData) {
   const authContext = await requireCommitteeAccess(code, COMMITTEE_ROLES)
   const verifiedSocietyId = authContext.society.id
 
-
   const flatId = formData.get("flatId")?.toString().trim()
   const personId = formData.get("personId")?.toString().trim()
-  const certificateNumber = formData.get("certificateNumber")?.toString().trim()
+  const rawCertNum = formData.get("certificateNumber")?.toString().trim()
+  const certificateNumber = rawCertNum ? sanitizeText(rawCertNum) : ""
   const sharesCount = parseInt(formData.get("sharesCount")?.toString() || "5", 10)
   const rawFrom = formData.get("shareDistinctFrom")?.toString().trim()
   const rawTo = formData.get("shareDistinctTo")?.toString().trim()

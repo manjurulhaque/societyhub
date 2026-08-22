@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, EXECUTIVE_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
+import { getSafeErrorMessage } from "@/lib/errors"
 import type { SocietyType, MaintenanceType } from "@/generated/prisma/client"
 
 export type UpdateSocietySettingsState = {
@@ -24,21 +26,32 @@ export async function updateSocietySettings(
       return { error: "Tenant mismatch. The specified society does not match your active session." }
     }
 
-
-    const name = formData.get("name")?.toString().trim()
+    const rawName = formData.get("name")?.toString().trim()
+    const name = sanitizeText(rawName)
     const rawCode = formData.get("code")?.toString().trim().toUpperCase() || null
+    const code = rawCode ? sanitizeText(rawCode) : null
     const societyType = formData.get("societyType")?.toString() || "COOPERATIVE_HOUSING_SOCIETY"
-    const phone = formData.get("phone")?.toString().trim() || null
-    const email = formData.get("email")?.toString().trim().toLowerCase() || null
-    const address = formData.get("address")?.toString().trim() || null
-    const city = formData.get("city")?.toString().trim() || null
-    const state = formData.get("state")?.toString().trim() || null
-    const pincode = formData.get("pincode")?.toString().trim() || null
+    const rawPhone = formData.get("phone")?.toString().trim() || null
+    const phone = rawPhone ? sanitizeText(rawPhone) : null
+    const rawEmail = formData.get("email")?.toString().trim().toLowerCase() || null
+    const email = rawEmail ? sanitizeText(rawEmail) : null
+    const rawAddress = formData.get("address")?.toString().trim() || null
+    const address = rawAddress ? sanitizeText(rawAddress) : null
+    const rawCity = formData.get("city")?.toString().trim() || null
+    const city = rawCity ? sanitizeText(rawCity) : null
+    const rawState = formData.get("state")?.toString().trim() || null
+    const state = rawState ? sanitizeText(rawState) : null
+    const rawPincode = formData.get("pincode")?.toString().trim() || null
+    const pincode = rawPincode ? sanitizeText(rawPincode) : null
 
-    const registrationNumber = formData.get("registrationNumber")?.toString().trim() || null
-    const panNumber = formData.get("panNumber")?.toString().trim().toUpperCase() || null
-    const tanNumber = formData.get("tanNumber")?.toString().trim().toUpperCase() || null
-    const gstin = formData.get("gstin")?.toString().trim().toUpperCase() || null
+    const rawRegNum = formData.get("registrationNumber")?.toString().trim() || null
+    const registrationNumber = rawRegNum ? sanitizeText(rawRegNum) : null
+    const rawPan = formData.get("panNumber")?.toString().trim().toUpperCase() || null
+    const panNumber = rawPan ? sanitizeText(rawPan) : null
+    const rawTan = formData.get("tanNumber")?.toString().trim().toUpperCase() || null
+    const tanNumber = rawTan ? sanitizeText(rawTan) : null
+    const rawGst = formData.get("gstin")?.toString().trim().toUpperCase() || null
+    const gstin = rawGst ? sanitizeText(rawGst) : null
 
     const maintenanceType = formData.get("maintenanceType")?.toString() || "FIXED"
     const rawFixedRate = formData.get("fixedRate")?.toString().trim()
@@ -47,24 +60,26 @@ export async function updateSocietySettings(
     const rawDueDay = formData.get("dueDayOfMonth")?.toString().trim()
     const rawGraceDays = formData.get("gracePeriodDays")?.toString().trim()
     const rawLateFeeRate = formData.get("lateFeeRate")?.toString().trim()
-    const invoicePrefix = formData.get("invoicePrefix")?.toString().trim().toUpperCase() || "INV"
-    const receiptPrefix = formData.get("receiptPrefix")?.toString().trim().toUpperCase() || "RCPT"
+    const rawInvPrefix = formData.get("invoicePrefix")?.toString().trim().toUpperCase() || "INV"
+    const invoicePrefix = sanitizeText(rawInvPrefix)
+    const rawRcptPrefix = formData.get("receiptPrefix")?.toString().trim().toUpperCase() || "RCPT"
+    const receiptPrefix = sanitizeText(rawRcptPrefix)
 
     if (!name) {
       return { error: "Society name is required." }
     }
 
     // Check code uniqueness if changed
-    if (rawCode && rawCode !== context.society.code) {
+    if (code && code !== context.society.code) {
       const existing = await prisma.society.findFirst({
         where: {
-          code: { equals: rawCode, mode: "insensitive" },
+          code: { equals: code, mode: "insensitive" },
           id: { not: societyId },
         },
       })
 
       if (existing) {
-        return { error: `Society code "${rawCode}" is already taken by another society.` }
+        return { error: `Society code "${code}" is already taken by another society.` }
       }
     }
 
@@ -74,15 +89,18 @@ export async function updateSocietySettings(
     const dueDayOfMonth = rawDueDay ? parseInt(rawDueDay, 10) : 10
     const gracePeriodDays = rawGraceDays ? parseInt(rawGraceDays, 10) : 0
     const lateFeeRate = rawLateFeeRate ? parseFloat(rawLateFeeRate) : 21.0
-    const timezone = formData.get("timezone")?.toString().trim() || "Asia/Kolkata"
-    const currency = formData.get("currency")?.toString().trim() || "INR"
-    const currencySymbol = formData.get("currencySymbol")?.toString().trim() || "₹"
+    const rawTz = formData.get("timezone")?.toString().trim() || "Asia/Kolkata"
+    const timezone = sanitizeText(rawTz)
+    const rawCurr = formData.get("currency")?.toString().trim() || "INR"
+    const currency = sanitizeText(rawCurr)
+    const rawCurrSym = formData.get("currencySymbol")?.toString().trim() || "₹"
+    const currencySymbol = sanitizeText(rawCurrSym)
 
     await prisma.society.update({
       where: { id: societyId },
       data: {
         name,
-        code: rawCode,
+        code,
         societyType: societyType as SocietyType,
         timezone,
         currency,
@@ -109,7 +127,7 @@ export async function updateSocietySettings(
       },
     })
 
-    const updatedCode = rawCode || societyId
+    const updatedCode = code || societyId
 
     await recordAuditLog({
       societyId,
@@ -118,7 +136,7 @@ export async function updateSocietySettings(
       entity: "Society",
       entityId: societyId,
       description: `${context.user.email} updated society profile and settings for ${name}`,
-      newData: { name, code: rawCode, societyType, maintenanceType, timezone },
+      newData: { name, code, societyType, maintenanceType, timezone },
     })
 
     revalidatePath(`/society/${societyCode}/settings`)
@@ -132,10 +150,6 @@ export async function updateSocietySettings(
     }
   } catch (err: unknown) {
     console.error("Failed to update society settings:", err)
-    const message = err instanceof Error ? err.message : "Failed to update society settings. Please try again."
-    return {
-      error: message,
-    }
+    return { error: getSafeErrorMessage(err, "Failed to update society settings. Please try again.") }
   }
 }
-

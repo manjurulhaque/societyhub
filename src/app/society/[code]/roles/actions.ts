@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, EXECUTIVE_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
+import { sanitizeText } from "@/lib/sanitize"
+import { getSafeErrorMessage } from "@/lib/errors"
 import type { SocietyRole } from "@/generated/prisma/client"
 
 export type RoleActionState = {
@@ -28,8 +30,9 @@ export async function createCustomRole(
     const context = await requireCommitteeAccess(societyCode, EXECUTIVE_ROLES)
     const societyId = context.society.id
 
-    const name = data.name.trim()
-    const description = data.description?.trim() || null
+    const rawName = data.name.trim()
+    const name = sanitizeText(rawName)
+    const description = data.description ? sanitizeText(data.description) : null
     const code =
       data.code?.trim().toUpperCase().replace(/\s+/g, "_") ||
       name.toUpperCase().replace(/[^A-Z0-9]+/g, "_")
@@ -91,8 +94,7 @@ export async function createCustomRole(
     }
   } catch (err: unknown) {
     console.error("Failed to create custom role:", err)
-    const message = err instanceof Error ? err.message : "Failed to create role. Please try again."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to create role. Please try again.") }
   }
 }
 
@@ -129,8 +131,9 @@ export async function updateRole(
       return { error: "Access denied. Role belongs to another society." }
     }
 
-    const name = data.name.trim()
-    const description = data.description?.trim() || null
+    const rawName = data.name.trim()
+    const name = sanitizeText(rawName)
+    const description = data.description ? sanitizeText(data.description) : null
 
     if (!name) {
       return { error: "Role name cannot be empty." }
@@ -183,8 +186,7 @@ export async function updateRole(
     }
   } catch (err: unknown) {
     console.error("Failed to update role:", err)
-    const message = err instanceof Error ? err.message : "Failed to update role. Please try again."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to update role. Please try again.") }
   }
 }
 
@@ -250,8 +252,7 @@ export async function deleteCustomRole(
     }
   } catch (err: unknown) {
     console.error("Failed to delete role:", err)
-    const message = err instanceof Error ? err.message : "Failed to delete role. Please try again."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to delete role. Please try again.") }
   }
 }
 
@@ -325,8 +326,7 @@ export async function updateMemberRoleAssignment(
     }
   } catch (err: unknown) {
     console.error("Failed to update member role assignment:", err)
-    const message = err instanceof Error ? err.message : "Failed to update member assignment."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to update member assignment.") }
   }
 }
 
@@ -345,7 +345,8 @@ export async function addCommitteeMember(
     const context = await requireCommitteeAccess(societyCode, EXECUTIVE_ROLES)
     const societyId = context.society.id
 
-    const email = data.email.trim().toLowerCase()
+    const rawEmail = data.email.trim().toLowerCase()
+    const email = sanitizeText(rawEmail)
     if (!email) {
       return { error: "User email is required." }
     }
@@ -418,8 +419,7 @@ export async function addCommitteeMember(
     }
   } catch (err: unknown) {
     console.error("Failed to add committee member:", err)
-    const message = err instanceof Error ? err.message : "Failed to add member."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to add member.") }
   }
 }
 
@@ -482,7 +482,6 @@ export async function removeCommitteeMember(
     }
   } catch (err: unknown) {
     console.error("Failed to remove committee member:", err)
-    const message = err instanceof Error ? err.message : "Failed to remove member."
-    return { error: message }
+    return { error: getSafeErrorMessage(err, "Failed to remove member.") }
   }
 }
