@@ -39,6 +39,13 @@ export function RegisterResidentModal({
   const [emergencyContactName, setEmergencyContactName] = useState("")
   const [emergencyContactPhone, setEmergencyContactPhone] = useState("")
 
+  // Demographic fields
+  const [dob, setDob] = useState("")
+  const [gender, setGender] = useState("")
+  const [bloodGroup, setBloodGroup] = useState("")
+  const [occupation, setOccupation] = useState("")
+  const [showDemographics, setShowDemographics] = useState(false)
+
   const [flatId, setFlatId] = useState(availableFlats[0]?.id || "")
   const [role, setRole] = useState<FlatRole>("OWNER")
   const [fromDate, setFromDate] = useState(new Date().toISOString().split("T")[0])
@@ -64,6 +71,10 @@ export function RegisterResidentModal({
           email: email.trim() || undefined,
           panNumber: panNumber.trim() || undefined,
           aadhaarNumber: aadhaarNumber.trim() || undefined,
+          dob: dob || undefined,
+          gender: gender || undefined,
+          bloodGroup: bloodGroup || undefined,
+          occupation: occupation.trim() || undefined,
           permanentAddress: permanentAddress.trim() || undefined,
           emergencyContactName: emergencyContactName.trim() || undefined,
           emergencyContactPhone: emergencyContactPhone.trim() || undefined,
@@ -81,6 +92,10 @@ export function RegisterResidentModal({
           setPanNumber("")
           setAadhaarNumber("")
           setPermanentAddress("")
+          setDob("")
+          setGender("")
+          setBloodGroup("")
+          setOccupation("")
           onClose()
         }
       } catch (err: unknown) {
@@ -239,6 +254,98 @@ export function RegisterResidentModal({
                 />
               </div>
             </div>
+          </div>
+
+          {/* Additional Demographics (Collapsible) */}
+          <div className="border-t border-stone-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setShowDemographics(!showDemographics)}
+              className="flex w-full items-center justify-between text-xs font-bold uppercase tracking-wider text-stone-700 hover:text-stone-900 transition"
+            >
+              <span>Additional Details (Optional)</span>
+              <svg
+                className={`h-4 w-4 transition-transform ${showDemographics ? "rotate-180" : ""}`}
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5.22 8.22a.75.75 0 011.06 0L10 11.94l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 9.28a.75.75 0 010-1.06z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+
+            {showDemographics && (
+              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1.5">
+                    Date of Birth
+                  </label>
+                  <input
+                    type="date"
+                    value={dob}
+                    onChange={(e) => setDob(e.target.value)}
+                    disabled={isPending}
+                    className="w-full rounded-xl border border-stone-200 bg-stone-50/50 px-3.5 py-2.5 text-xs text-stone-900 focus:border-stone-900 focus:bg-white focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1.5">
+                    Gender
+                  </label>
+                  <select
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value)}
+                    disabled={isPending}
+                    className="w-full rounded-xl border border-stone-200 bg-stone-50/50 px-3.5 py-2.5 text-xs text-stone-900 focus:border-stone-900 focus:bg-white focus:outline-none"
+                  >
+                    <option value="">Not specified</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1.5">
+                    Blood Group
+                  </label>
+                  <select
+                    value={bloodGroup}
+                    onChange={(e) => setBloodGroup(e.target.value)}
+                    disabled={isPending}
+                    className="w-full rounded-xl border border-stone-200 bg-stone-50/50 px-3.5 py-2.5 text-xs text-stone-900 focus:border-stone-900 focus:bg-white focus:outline-none"
+                  >
+                    <option value="">Not specified</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A−</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B−</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB−</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O−</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1.5">
+                    Occupation
+                  </label>
+                  <input
+                    type="text"
+                    value={occupation}
+                    onChange={(e) => setOccupation(e.target.value)}
+                    disabled={isPending}
+                    placeholder="e.g. Software Engineer, Retired, Homemaker"
+                    className="w-full rounded-xl border border-stone-200 bg-stone-50/50 px-3.5 py-2.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Flat Assignment Section */}

@@ -158,6 +158,7 @@ export default async function SocietyMembersPage({
       aadhaarNumber: r.aadhaarNumber,
       primaryRole,
       flatsDisplay: flatList,
+      kycVerified: Boolean(r.kycVerified),
     }
   })
 

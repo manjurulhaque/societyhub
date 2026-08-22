@@ -27,6 +27,8 @@ import {
 import { TIMEZONE_OPTIONS, formatCurrentTimeInTimeZone } from "@/lib/datetime"
 import { updateSocietySettings, type UpdateSocietySettingsState } from "./actions"
 
+import { CURRENCY_OPTIONS } from "@/lib/currency"
+
 type SocietySettingsFormProps = {
   society: {
     id: string
@@ -34,6 +36,8 @@ type SocietySettingsFormProps = {
     code: string | null
     societyType: string
     timezone?: string | null
+    currency?: string | null
+    currencySymbol?: string | null
     phone: string | null
     email: string | null
     address: string | null
@@ -86,6 +90,8 @@ export function SocietySettingsForm({ society, currentCode }: SocietySettingsFor
       gracePeriodDays: society.gracePeriodDays || 0,
       lateFeeRate: society.lateFeeRate ?? 21.0,
       timezone: society.timezone || "Asia/Kolkata",
+      currency: society.currency || "INR",
+      currencySymbol: society.currencySymbol || "₹",
       invoicePrefix: society.invoicePrefix || "INV",
       receiptPrefix: society.receiptPrefix || "RCPT",
     },
@@ -502,12 +508,67 @@ export function SocietySettingsForm({ society, currentCode }: SocietySettingsFor
               </div>
             </div>
 
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 border-t border-stone-100 pt-4">
+              <div className="sm:col-span-2">
+                <FormField
+                  control={form.control}
+                  name="currency"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-semibold uppercase tracking-wider text-stone-700">
+                        Default Accounting Currency
+                      </FormLabel>
+                      <FormControl>
+                        <AdminSelect
+                          options={CURRENCY_OPTIONS.map((c) => ({
+                            label: c.name,
+                            value: c.code,
+                          }))}
+                          {...field}
+                          onChange={(e) => {
+                            field.onChange(e)
+                            const selected = CURRENCY_OPTIONS.find((c) => c.code === e.target.value)
+                            if (selected) {
+                              form.setValue("currencySymbol", selected.symbol)
+                            }
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div>
+                <FormField
+                  control={form.control}
+                  name="currencySymbol"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-semibold uppercase tracking-wider text-stone-700">
+                        Currency Display Symbol
+                      </FormLabel>
+                      <FormControl>
+                        <AdminInput
+                          placeholder="e.g. ₹, $, €, AED"
+                          className="font-mono font-bold"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
             <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
               <svg className="h-4 w-4 shrink-0 text-amber-700 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>
-                All statutory financial statements, PDF receipt generation timestamps, audit log trails, and meeting notices for this society will be computed according to this selected timezone.
+                All statutory financial statements, PDF receipt generation timestamps, currency notations, audit log trails, and meeting notices for this society will be computed according to these selected regional settings.
               </span>
             </div>
           </div>

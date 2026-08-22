@@ -113,6 +113,8 @@ export default async function SocietySettingsPage({
           invoicePrefix: society.invoicePrefix,
           receiptPrefix: society.receiptPrefix,
           timezone: society.timezone || "Asia/Kolkata",
+          currency: society.currency || "INR",
+          currencySymbol: society.currencySymbol || "₹",
         }}
       />
     </div>

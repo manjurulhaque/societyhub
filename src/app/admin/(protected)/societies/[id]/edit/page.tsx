@@ -100,6 +100,30 @@ export default async function EditSocietyPage({
             </select>
           </AdminFormField>
 
+          <div className="grid gap-4 md:grid-cols-2">
+            <AdminFormField label="Default Currency">
+              <select
+                name="currency"
+                defaultValue={society.currency || "INR"}
+                className="w-full rounded-xl border border-stone-300 px-3 py-2 outline-none ring-0"
+              >
+                {CURRENCY_OPTIONS.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </AdminFormField>
+
+            <AdminFormField label="Currency Symbol">
+              <input
+                name="currencySymbol"
+                defaultValue={society.currencySymbol || "₹"}
+                className="w-full rounded-xl border border-stone-300 px-3 py-2 outline-none ring-0"
+              />
+            </AdminFormField>
+          </div>
+
           <AdminPrimaryButton type="submit">Update Society</AdminPrimaryButton>
         </AdminFormCard>
       </form>
@@ -110,6 +134,7 @@ export default async function EditSocietyPage({
 import { requireSuperAdmin } from "@/lib/auth/requireAuth"
 import { recordAuditLog } from "@/lib/audit"
 import { TIMEZONE_OPTIONS } from "@/lib/datetime"
+import { CURRENCY_OPTIONS } from "@/lib/currency"
 
 async function updateSociety(id: string, formData: FormData) {
   "use server"
@@ -121,6 +146,8 @@ async function updateSociety(id: string, formData: FormData) {
   const address = formData.get("address")?.toString().trim() || null
   const maintenanceType = formData.get("maintenanceType")?.toString()
   const timezone = formData.get("timezone")?.toString().trim() || "Asia/Kolkata"
+  const currency = formData.get("currency")?.toString().trim() || "INR"
+  const currencySymbol = formData.get("currencySymbol")?.toString().trim() || "₹"
 
   if (!name) {
     throw new Error("Society name is required")
@@ -128,16 +155,14 @@ async function updateSociety(id: string, formData: FormData) {
 
   const existingSociety = await prisma.society.findUnique({
     where: { id },
-    select: { id: true, name: true, code: true, address: true, maintenanceType: true, timezone: true },
   })
 
   if (!existingSociety) {
     throw new Error("Society not found")
   }
 
-  // If code is not changed, keep it. If changed or cleared, generate/sanitize.
-  let code = existingSociety?.code
-  if (rawCode !== existingSociety?.code) {
+  let code = existingSociety.code
+  if (rawCode !== existingSociety.code) {
     code = await generateUniqueSocietyCode(name, rawCode)
   }
 
@@ -148,6 +173,8 @@ async function updateSociety(id: string, formData: FormData) {
       code,
       address,
       timezone,
+      currency,
+      currencySymbol,
       maintenanceType:
         maintenanceType === "PER_SQFT"
           ? "PER_SQFT"

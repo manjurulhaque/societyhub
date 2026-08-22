@@ -3,7 +3,7 @@
 import { useState, useMemo, useTransition } from "react"
 import { AdminTable, AdminBadge } from "@/components/admin"
 import { RegisterResidentModal, type FlatOption } from "./RegisterResidentModal"
-import { removeResident } from "./residentActions"
+import { removeResident, toggleResidentKyc } from "./residentActions"
 
 export type ResidentItem = {
   id: string
@@ -14,6 +14,7 @@ export type ResidentItem = {
   aadhaarNumber: string | null
   primaryRole: string
   flatsDisplay: string
+  kycVerified: boolean
 }
 
 interface ResidentsDirectoryClientProps {
@@ -36,6 +37,7 @@ export function ResidentsDirectoryClient({
   const [deletingResident, setDeletingResident] = useState<ResidentItem | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [isDeleting, startDeleteTransition] = useTransition()
+  const [isTogglingKyc, startKycTransition] = useTransition()
 
   const filteredResidents = useMemo(() => {
     return residents.filter((r) => {
@@ -67,116 +69,107 @@ export function ResidentsDirectoryClient({
           setDeletingResident(null)
         }
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Failed to remove resident."
-        setDeleteError(msg)
+        const message = err instanceof Error ? err.message : "Failed to delete resident."
+        setDeleteError(message)
       }
     })
   }
 
+  const handleToggleKyc = (residentId: string) => {
+    startKycTransition(async () => {
+      await toggleResidentKyc(societyCode, residentId)
+    })
+  }
+
+  const tableHeaders = [
+    "Resident Name",
+    "Contact Details",
+    "Identity / Docs",
+    "Assigned Flats",
+    "Primary Role",
+    "KYC Status",
+    ...(canManageResidents ? ["Action"] : []),
+  ]
+
   return (
     <div className="space-y-4">
-      {/* Header Toolbar */}
+      {/* Search & Actions Bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="text-sm font-bold text-stone-900">
-            Registered Residents & People ({residents.length})
-          </h3>
-          <p className="text-xs text-stone-500">
-            Property owners, co-owners, tenants, and family members residing in this society.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {canManageResidents ? (
-            <button
-              type="button"
-              onClick={() => setIsModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 transition"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-              </svg>
-              <span>+ Register Resident</span>
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      {/* Search and Filters */}
-      <div className="flex flex-wrap items-center gap-2 pt-1">
-        <div className="relative">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             type="text"
+            placeholder="Search residents, flats, phone..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by name, flat, phone..."
-            className="w-56 sm:w-64 rounded-xl border border-stone-200 bg-stone-50/50 px-3.5 py-1.5 pl-8 text-xs text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none"
+            className="w-full rounded-xl border border-stone-200 bg-stone-50/50 px-3 py-1.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none sm:w-64"
           />
-          <svg
-            className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-stone-400"
-            viewBox="0 0 20 20"
-            fill="currentColor"
+
+          <select
+            value={selectedRole}
+            onChange={(e) => setSelectedRole(e.target.value)}
+            className="rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-700 focus:border-stone-900 focus:outline-none"
           >
-            <path
-              fillRule="evenodd"
-              d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
-              clipRule="evenodd"
-            />
-          </svg>
+            <option value="ALL">All Roles</option>
+            <option value="OWNER">Owners</option>
+            <option value="TENANT">Tenants</option>
+            <option value="FAMILY">Family Members</option>
+          </select>
         </div>
 
-        <select
-          value={selectedRole}
-          onChange={(e) => setSelectedRole(e.target.value)}
-          className="rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 focus:border-stone-900 focus:outline-none"
-        >
-          <option value="ALL">All Roles</option>
-          <option value="OWNER">Owners</option>
-          <option value="JOINT_OWNER">Joint Owners</option>
-          <option value="TENANT">Tenants</option>
-          <option value="FAMILY">Family</option>
-        </select>
+        {canManageResidents ? (
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-stone-900 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 transition"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+            </svg>
+            <span>+ Register Resident</span>
+          </button>
+        ) : null}
       </div>
 
-      {/* Table */}
+      {/* Residents Table */}
       {filteredResidents.length === 0 ? (
-        <p className="py-8 text-center text-xs text-stone-500 border border-dashed border-stone-200 rounded-2xl">
-          {searchQuery || selectedRole !== "ALL"
-            ? "No residents match your filter."
-            : "No residents registered in this society yet. Click \"+ Register Resident\" to add one."}
-        </p>
+        <div className="rounded-2xl border border-dashed border-stone-200 bg-white p-8 text-center">
+          <p className="text-xs text-stone-500">
+            {searchQuery || selectedRole !== "ALL"
+              ? "No residents match your filter criteria."
+              : "No residents registered yet."}
+          </p>
+        </div>
       ) : (
         <AdminTable
-          headers={[
-            "Name",
-            "Phone",
-            "Email",
-            "Associated Flat(s)",
-            "Occupancy Role",
-            ...(canManageResidents ? ["Actions"] : []),
-          ]}
+          headers={tableHeaders}
           rows={filteredResidents.map((r) => (
-            <tr key={r.id} className="border-t border-stone-100 hover:bg-stone-50/60 transition-colors">
-              <td className="px-4 py-3.5 text-xs font-semibold text-stone-950">
-                {r.name}
+            <tr key={r.id} className="border-t border-stone-100 text-xs hover:bg-stone-50/50 transition">
+              <td className="px-4 py-3.5">
+                <span className="font-bold text-stone-900 block">{r.name}</span>
               </td>
-              <td className="px-4 py-3.5 text-xs text-stone-600 font-mono">
-                {r.phone || "—"}
+              <td className="px-4 py-3.5">
+                <div className="space-y-0.5 text-stone-600">
+                  {r.phone ? <p className="font-mono">{r.phone}</p> : null}
+                  {r.email ? <p className="text-stone-400">{r.email}</p> : null}
+                  {!r.phone && !r.email ? <p className="text-stone-400 italic">No contact</p> : null}
+                </div>
               </td>
-              <td className="px-4 py-3.5 text-xs text-stone-600">
-                {r.email || "—"}
+              <td className="px-4 py-3.5">
+                <div className="space-y-0.5 text-[11px] font-mono text-stone-600">
+                  {r.panNumber ? <p>PAN: {r.panNumber}</p> : null}
+                  {r.aadhaarNumber ? <p>UID: •••• {r.aadhaarNumber.slice(-4)}</p> : null}
+                  {!r.panNumber && !r.aadhaarNumber ? (
+                    <span className="text-stone-400 italic font-sans">—</span>
+                  ) : null}
+                </div>
               </td>
-              <td className="px-4 py-3.5 text-xs text-stone-800">
-                {r.flatsDisplay ? (
-                  <span className="font-medium text-stone-900">{r.flatsDisplay}</span>
-                ) : (
-                  <span className="text-stone-400">None assigned</span>
-                )}
+              <td className="px-4 py-3.5 text-stone-700 font-medium">
+                {r.flatsDisplay || <span className="text-stone-400 italic">Unassigned</span>}
               </td>
               <td className="px-4 py-3.5">
                 <AdminBadge
                   variant={
-                    r.primaryRole === "OWNER" || r.primaryRole === "JOINT_OWNER"
+                    r.primaryRole === "OWNER"
                       ? "info"
                       : r.primaryRole === "TENANT"
                         ? "warning"
@@ -187,8 +180,34 @@ export function ResidentsDirectoryClient({
                   {r.primaryRole.replace(/_/g, " ")}
                 </AdminBadge>
               </td>
+              <td className="px-4 py-3.5 whitespace-nowrap">
+                {canManageResidents ? (
+                  <button
+                    type="button"
+                    disabled={isTogglingKyc}
+                    onClick={() => handleToggleKyc(r.id)}
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold transition border ${
+                      r.kycVerified
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                        : "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100"
+                    }`}
+                  >
+                    <span>{r.kycVerified ? "✓ KYC VERIFIED" : "⏳ KYC PENDING"}</span>
+                  </button>
+                ) : (
+                  <span
+                    className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
+                      r.kycVerified
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-amber-50 text-amber-800 border-amber-200"
+                    }`}
+                  >
+                    {r.kycVerified ? "✓ VERIFIED" : "PENDING"}
+                  </span>
+                )}
+              </td>
               {canManageResidents ? (
-                <td className="px-4 py-3.5">
+                <td className="px-4 py-3.5 text-right whitespace-nowrap">
                   <button
                     type="button"
                     onClick={() => setDeletingResident(r)}

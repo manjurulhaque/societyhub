@@ -44,6 +44,8 @@ export const societySettingsSchema = z.object({
     .max(100, "Cannot exceed 100%")
     .default(21.0),
   timezone: z.string().default("Asia/Kolkata"),
+  currency: z.string().default("INR"),
+  currencySymbol: z.string().default("₹"),
   invoicePrefix: z.string().default("INV"),
   receiptPrefix: z.string().default("RCPT"),
 })

@@ -65,12 +65,20 @@ export default async function SocietyAccountsPage({
           </p>
         </div>
 
-        <Link
-          href={`/society/${code}/accounts/new`}
-          className="inline-flex items-center justify-center rounded-full bg-stone-950 px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-stone-800"
-        >
-          + Add Account
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/society/${code}/accounts/reconciliation`}
+            className="inline-flex items-center justify-center rounded-full border border-stone-200 bg-white px-4 py-2.5 text-xs font-semibold text-stone-700 shadow-xs transition hover:bg-stone-50"
+          >
+            ⚖️ Bank Reconciliation (BRS) →
+          </Link>
+          <Link
+            href={`/society/${code}/accounts/new`}
+            className="inline-flex items-center justify-center rounded-full bg-stone-950 px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-stone-800"
+          >
+            + Add Account
+          </Link>
+        </div>
       </div>
 
       {/* KPI Stats */}

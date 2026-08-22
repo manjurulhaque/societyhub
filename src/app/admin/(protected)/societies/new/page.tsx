@@ -16,6 +16,7 @@ import {
   AdminButton,
 } from "@/components/admin"
 import { TIMEZONE_OPTIONS } from "@/lib/datetime"
+import { CURRENCY_OPTIONS } from "@/lib/currency"
 
 export default function NewSocietyPage() {
   return (
@@ -288,6 +289,31 @@ export default function NewSocietyPage() {
                 }))}
               />
             </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                Default Currency
+              </label>
+              <AdminSelect
+                name="currency"
+                defaultValue="INR"
+                options={CURRENCY_OPTIONS.map((c) => ({
+                  label: c.name,
+                  value: c.code,
+                }))}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1.5">
+                Currency Symbol
+              </label>
+              <AdminInput
+                name="currencySymbol"
+                defaultValue="₹"
+                placeholder="₹"
+              />
+            </div>
           </div>
         </AdminCard>
 
@@ -337,6 +363,8 @@ async function createSociety(formData: FormData) {
   const rawRatePerSqft = formData.get("ratePerSqft")?.toString().trim()
   const rawDueDay = formData.get("dueDayOfMonth")?.toString().trim()
   const rawLateFee = formData.get("lateFeeRate")?.toString().trim()
+  const currency = formData.get("currency")?.toString().trim() || "INR"
+  const currencySymbol = formData.get("currencySymbol")?.toString().trim() || "₹"
   const invoicePrefix = formData.get("invoicePrefix")?.toString().trim().toUpperCase() || "INV"
 
   if (!name) {
@@ -356,6 +384,8 @@ async function createSociety(formData: FormData) {
       code,
       societyType: societyType as SocietyType,
       timezone,
+      currency,
+      currencySymbol,
 
       phone,
       email,
