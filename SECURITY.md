@@ -107,8 +107,10 @@ SocietyHub implements a 6-tier functional role hierarchy with strict separation 
   - **Financial Accounts**: Bank Account Number (`accountNumber`) and IFSC codes in the `Account` table.
   - **Vendor PII**: Vendor PAN numbers (`panNumber`) in the `Vendor` table.
   - **Property Liens**: Loan Account Numbers (`loanAccountNumber`) in the `PropertyLien` table.
-- Ciphertext format: `enc:v1:<iv_hex>:<auth_tag_hex>:<ciphertext_hex>`.
-- In the event of a raw PostgreSQL database breach or backup snapshot leakage, stored government identity numbers and bank accounts remain protected ciphertext.
+- **Ciphertext Format**: `enc:v1:<iv_hex>:<auth_tag_hex>:<ciphertext_hex>`.
+- **Database Breach Protection**: In the event of a raw PostgreSQL database dump or backup snapshot leakage, stored government identity numbers and bank accounts remain protected ciphertext.
+- **In-Memory LRU Decryption Cache**: Features an in-memory LRU cache (`DECRYPT_CACHE_MAX = 2000`) for $O(1)$ fast-path lookups on repeated reads across high-density tables and statutory reports, eliminating repetitive cipher initialization overhead.
+- **Key Derivation Memoization**: 32-byte SHA-256 derived keys are memoized in memory, avoiding redundant cryptographic hashing of environment secrets per operation.
 - **Backward-Compatible Decryption**: `decryptData(val)` transparently decrypts encrypted envelopes while gracefully handling legacy plaintext records during database migrations.
 
 ### F. PII & Financial Identifier Masking
@@ -118,6 +120,8 @@ SocietyHub implements a 6-tier functional role hierarchy with strict separation 
   - **Bank & Loan Account Numbers**: `••••1234` via `maskBankAccount()` (e.g. Flat Profile Mortgages, Financial Reports, Account Setup).
   - **Phone Number**: `••••••1234` via `maskPhone()`.
   - **Email Address**: `m••••••@example.com` via `maskEmail()`.
+- **Accounting Reports PII Shielding**: All member phone and email contacts rendered in statutory reporting registers (such as Member Dues Register and Corpus Fund Register) are dynamically decrypted on the server before masking, preventing raw ciphertext leakage to clients.
+- **Short-Circuit Fast Paths**: Masking functions include $O(1)$ guards for empty values, placeholders (`—`), and already-masked tokens.
 
 ### G. Brute-Force Rate Limiting & Account Lockout Defense
 - **Sliding-Window In-Memory Rate Limiter (`@/lib/rateLimit.ts`)**:
@@ -177,8 +181,9 @@ SocietyHub implements a 6-tier functional role hierarchy with strict separation 
 - **Super Admin Audit Explorer** (`/admin/audit-logs`): Real-time mathematical chain verification that detects any record modification, backdating, or unauthorized deletion.
 - **Society Audit Explorer** (`/society/[code]/audit-logs`): Tenant-isolated audit trails for committee transparency and statutory compliance.
 
-### M. Production Error Sanitization & Environment Validation
+### M. Production Error Sanitization, Compiler Stripping & Environment Validation
 - **Safe Error Handling (`@/lib/errors.ts`)**: In production, `getSafeErrorMessage(err)` suppresses raw PostgreSQL/Prisma error details, table names, foreign key constraints, and internal stack traces, returning sanitized, safe user feedback.
+- **Production Console Stripping**: Configured via Next.js compiler in `next.config.ts` to automatically strip `console.log` and `console.debug` statements in production builds to prevent accidental client-side log inspection.
 - **Runtime Environment Validator (`@/lib/env.ts`)**: Verifies required environment secrets (`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ENCRYPTION_SECRET_KEY`, `AUDIT_HMAC_SECRET_KEY`) at boot time using Zod schemas.
 
 ### N. Security Health & Diagnostics Probe
@@ -199,7 +204,7 @@ npm run security:check
 ```
 
 This script executes:
-1. **Automated Cryptographic & Security Self-Tests (`tsx scripts/test-security.ts`)**: Mathematically validates all 8 cryptographic, rate limiting, sanitization, redirect, and password subsystems.
+1. **Automated Cryptographic & Security Self-Tests (`tsx scripts/test-security.ts`)**: Mathematically validates **47 security assertions across 8 core test suites** (AES-256-GCM, HMAC-SHA256 audit chaining, rate limiter, CSV DDE escaping, XSS sanitization, open redirect defense, NIST password policy, and recursive PII redaction).
 2. **ESLint Rule Validation**: Codebase-wide linting with 0 errors and 0 warnings.
 3. **Next.js Production Build**: TypeScript type-checking and static/dynamic optimization across all 42 App Router routes.
 
@@ -217,3 +222,4 @@ We take the security of SocietyHub and its residents seriously. If you discover 
    - Affected URLs, routes, or endpoints.
 
 We will acknowledge reports within **48 hours** and provide regular progress updates through remediation and deployment.
+
