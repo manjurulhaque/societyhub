@@ -58,55 +58,53 @@ export async function getTrialBalance(params: {
 }): Promise<TrialBalanceReport> {
   const { societyId, financialYearId, startDate, endDate } = params
 
-  const society = await prisma.society.findUnique({
-    where: { id: societyId },
-    select: { name: true },
-  })
-
-  if (!society) {
-    throw new Error(`Society with ID ${societyId} not found`)
-  }
-
-  let financialYearName: string | undefined
-  if (financialYearId) {
-    const fy = await prisma.financialYear.findUnique({
-      where: { id: financialYearId },
-      select: { name: true },
-    })
-    financialYearName = fy?.name
-  }
-
-  // Fetch all active ledgers for the society
-  const ledgers = await prisma.ledger.findMany({
-    where: {
-      societyId,
-      isActive: true,
-    },
-    orderBy: [{ code: "asc" }, { name: "asc" }],
-  })
-
   // Build entry date filters
   const dateFilter: { gte?: Date; lte?: Date } = {}
   if (startDate) dateFilter.gte = startDate
   if (endDate) dateFilter.lte = endDate
 
-  // Fetch all posted ledger entries within the period
-  const entries = await prisma.ledgerEntry.findMany({
-    where: {
-      ledger: { societyId },
-      journalEntry: {
+  // Parallelize independent queries
+  const [society, financialYear, ledgers, entries] = await Promise.all([
+    prisma.society.findUnique({
+      where: { id: societyId },
+      select: { name: true },
+    }),
+    financialYearId
+      ? prisma.financialYear.findUnique({
+          where: { id: financialYearId },
+          select: { name: true },
+        })
+      : null,
+    prisma.ledger.findMany({
+      where: {
         societyId,
-        status: VoucherStatus.POSTED,
-        ...(financialYearId ? { financialYearId } : {}),
-        ...(Object.keys(dateFilter).length > 0 ? { entryDate: dateFilter } : {}),
+        isActive: true,
       },
-    },
-    select: {
-      ledgerId: true,
-      debit: true,
-      credit: true,
-    },
-  })
+      orderBy: [{ code: "asc" }, { name: "asc" }],
+    }),
+    prisma.ledgerEntry.findMany({
+      where: {
+        ledger: { societyId },
+        journalEntry: {
+          societyId,
+          status: VoucherStatus.POSTED,
+          ...(financialYearId ? { financialYearId } : {}),
+          ...(Object.keys(dateFilter).length > 0 ? { entryDate: dateFilter } : {}),
+        },
+      },
+      select: {
+        ledgerId: true,
+        debit: true,
+        credit: true,
+      },
+    }),
+  ])
+
+  if (!society) {
+    throw new Error(`Society with ID ${societyId} not found`)
+  }
+
+  const financialYearName = financialYear?.name
 
   // Aggregate debit and credit totals per ledger
   const activityMap = new Map<string, { debitTotal: Decimal; creditTotal: Decimal }>()
@@ -516,53 +514,54 @@ export async function getJournalRegister(params: {
 }): Promise<JournalRegisterReport> {
   const { societyId, financialYearId, voucherType, status, startDate, endDate } = params
 
-  const society = await prisma.society.findUnique({
-    where: { id: societyId },
-    select: { name: true },
-  })
+  const dateFilter: { gte?: Date; lte?: Date } = {}
+  if (startDate) dateFilter.gte = startDate
+  if (endDate) dateFilter.lte = endDate
+
+  // Parallelize independent queries
+  const [society, financialYear, journalEntries] = await Promise.all([
+    prisma.society.findUnique({
+      where: { id: societyId },
+      select: { name: true },
+    }),
+    financialYearId
+      ? prisma.financialYear.findUnique({
+          where: { id: financialYearId },
+          select: { name: true },
+        })
+      : null,
+    prisma.journalEntry.findMany({
+      where: {
+        societyId,
+        ...(voucherType ? { voucherType } : {}),
+        ...(status ? { status } : {}),
+        ...(financialYearId ? { financialYearId } : {}),
+        ...(Object.keys(dateFilter).length > 0 ? { entryDate: dateFilter } : {}),
+      },
+      include: {
+        entries: {
+          include: {
+            ledger: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                group: true,
+              },
+            },
+          },
+          orderBy: [{ debit: "desc" }, { credit: "desc" }],
+        },
+      },
+      orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
+    }),
+  ])
 
   if (!society) {
     throw new Error(`Society with ID ${societyId} not found`)
   }
 
-  let financialYearName: string | undefined
-  if (financialYearId) {
-    const fy = await prisma.financialYear.findUnique({
-      where: { id: financialYearId },
-      select: { name: true },
-    })
-    financialYearName = fy?.name
-  }
-
-  const dateFilter: { gte?: Date; lte?: Date } = {}
-  if (startDate) dateFilter.gte = startDate
-  if (endDate) dateFilter.lte = endDate
-
-  const journalEntries = await prisma.journalEntry.findMany({
-    where: {
-      societyId,
-      ...(voucherType ? { voucherType } : {}),
-      ...(status ? { status } : {}),
-      ...(financialYearId ? { financialYearId } : {}),
-      ...(Object.keys(dateFilter).length > 0 ? { entryDate: dateFilter } : {}),
-    },
-    include: {
-      entries: {
-        include: {
-          ledger: {
-            select: {
-              id: true,
-              name: true,
-              code: true,
-              group: true,
-            },
-          },
-        },
-        orderBy: [{ debit: "desc" }, { credit: "desc" }],
-      },
-    },
-    orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
-  })
+  const financialYearName = financialYear?.name
 
   let grandTotalDebit = new Decimal(0)
   let grandTotalCredit = new Decimal(0)
@@ -1485,32 +1484,45 @@ export async function getBudgetRegister(params: {
 
   const items: BudgetItemVarianceRow[] = []
 
+  // Batch-fetch ALL ledger entries for all budget item ledgers in ONE query (eliminates N+1)
+  const budgetLedgerIds = budget.items.map((item) => item.ledgerId)
+  const allBudgetEntries = await prisma.ledgerEntry.findMany({
+    where: {
+      ledgerId: { in: budgetLedgerIds },
+      journalEntry: {
+        societyId,
+        status: VoucherStatus.POSTED,
+        entryDate: {
+          gte: fyStartDate,
+          lte: fyEndDate,
+        },
+      },
+    },
+    select: { ledgerId: true, debit: true, credit: true },
+  })
+
+  // Aggregate debit/credit totals per ledger in-memory
+  const budgetActivityMap = new Map<string, { debitTotal: Decimal; creditTotal: Decimal }>()
+  for (const e of allBudgetEntries) {
+    const current = budgetActivityMap.get(e.ledgerId) || {
+      debitTotal: new Decimal(0),
+      creditTotal: new Decimal(0),
+    }
+    current.debitTotal = current.debitTotal.plus(e.debit ? e.debit.toString() : 0)
+    current.creditTotal = current.creditTotal.plus(e.credit ? e.credit.toString() : 0)
+    budgetActivityMap.set(e.ledgerId, current)
+  }
+
   for (const item of budget.items) {
     const allocated = new Decimal(item.allocatedAmount ? item.allocatedAmount.toString() : 0)
     grandAllocated = grandAllocated.plus(allocated)
 
-    // Calculate actual posted expenses for this ledger during the FY
-    const entries = await prisma.ledgerEntry.findMany({
-      where: {
-        ledgerId: item.ledgerId,
-        journalEntry: {
-          societyId,
-          status: VoucherStatus.POSTED,
-          entryDate: {
-            gte: fyStartDate,
-            lte: fyEndDate,
-          },
-        },
-      },
-      select: { debit: true, credit: true },
-    })
-
-    let actualExpenses = new Decimal(0)
-    for (const e of entries) {
-      const d = new Decimal(e.debit ? e.debit.toString() : 0)
-      const c = new Decimal(e.credit ? e.credit.toString() : 0)
-      actualExpenses = actualExpenses.plus(d).minus(c)
+    // Look up pre-aggregated actuals from the batch query
+    const activity = budgetActivityMap.get(item.ledgerId) || {
+      debitTotal: new Decimal(0),
+      creditTotal: new Decimal(0),
     }
+    const actualExpenses = activity.debitTotal.minus(activity.creditTotal)
 
     grandUtilized = grandUtilized.plus(actualExpenses)
 
@@ -1604,58 +1616,56 @@ export async function getIncomeExpenditureAccount(params: {
 }): Promise<IncomeExpenditureReport> {
   const { societyId, financialYearId, startDate, endDate } = params
 
-  const society = await prisma.society.findUnique({
-    where: { id: societyId },
-    select: { name: true },
-  })
+  const dateFilter: { gte?: Date; lte?: Date } = {}
+  if (startDate) dateFilter.gte = startDate
+  if (endDate) dateFilter.lte = endDate
+
+  // Parallelize independent queries
+  const [society, financialYear, ledgers, entries] = await Promise.all([
+    prisma.society.findUnique({
+      where: { id: societyId },
+      select: { name: true },
+    }),
+    financialYearId
+      ? prisma.financialYear.findUnique({
+          where: { id: financialYearId },
+          select: { name: true },
+        })
+      : null,
+    prisma.ledger.findMany({
+      where: {
+        societyId,
+        group: { in: [LedgerGroup.INCOME, LedgerGroup.EXPENSE] },
+        isActive: true,
+      },
+      orderBy: [{ code: "asc" }, { name: "asc" }],
+    }),
+    prisma.ledgerEntry.findMany({
+      where: {
+        ledger: {
+          societyId,
+          group: { in: [LedgerGroup.INCOME, LedgerGroup.EXPENSE] },
+        },
+        journalEntry: {
+          societyId,
+          status: VoucherStatus.POSTED,
+          ...(financialYearId ? { financialYearId } : {}),
+          ...(Object.keys(dateFilter).length > 0 ? { entryDate: dateFilter } : {}),
+        },
+      },
+      select: {
+        ledgerId: true,
+        debit: true,
+        credit: true,
+      },
+    }),
+  ])
 
   if (!society) {
     throw new Error(`Society with ID ${societyId} not found`)
   }
 
-  let financialYearName: string | undefined
-  if (financialYearId) {
-    const fy = await prisma.financialYear.findUnique({
-      where: { id: financialYearId },
-      select: { name: true },
-    })
-    financialYearName = fy?.name
-  }
-
-  const dateFilter: { gte?: Date; lte?: Date } = {}
-  if (startDate) dateFilter.gte = startDate
-  if (endDate) dateFilter.lte = endDate
-
-  // Fetch all Income & Expense ledgers for the society
-  const ledgers = await prisma.ledger.findMany({
-    where: {
-      societyId,
-      group: { in: [LedgerGroup.INCOME, LedgerGroup.EXPENSE] },
-      isActive: true,
-    },
-    orderBy: [{ code: "asc" }, { name: "asc" }],
-  })
-
-  // Fetch all posted transactions in the period for these ledgers
-  const entries = await prisma.ledgerEntry.findMany({
-    where: {
-      ledger: {
-        societyId,
-        group: { in: [LedgerGroup.INCOME, LedgerGroup.EXPENSE] },
-      },
-      journalEntry: {
-        societyId,
-        status: VoucherStatus.POSTED,
-        ...(financialYearId ? { financialYearId } : {}),
-        ...(Object.keys(dateFilter).length > 0 ? { entryDate: dateFilter } : {}),
-      },
-    },
-    select: {
-      ledgerId: true,
-      debit: true,
-      credit: true,
-    },
-  })
+  const financialYearName = financialYear?.name
 
   const activityMap = new Map<string, { debitTotal: Decimal; creditTotal: Decimal }>()
   for (const entry of entries) {
@@ -1781,68 +1791,67 @@ export async function getBalanceSheet(params: {
   const { societyId, financialYearId } = params
   const asOf = params.asOfDate || new Date()
 
-  const society = await prisma.society.findUnique({
-    where: { id: societyId },
-    select: { name: true },
-  })
+  // Parallelize independent lookups
+  const [society, financialYear] = await Promise.all([
+    prisma.society.findUnique({
+      where: { id: societyId },
+      select: { name: true },
+    }),
+    financialYearId
+      ? prisma.financialYear.findUnique({
+          where: { id: financialYearId },
+          select: { name: true, startDate: true },
+        })
+      : null,
+  ])
 
   if (!society) {
     throw new Error(`Society with ID ${societyId} not found`)
   }
 
-  let financialYearName: string | undefined
-  let fyStartDate: Date | undefined
-  if (financialYearId) {
-    const fy = await prisma.financialYear.findUnique({
-      where: { id: financialYearId },
-      select: { name: true, startDate: true },
-    })
-    financialYearName = fy?.name
-    fyStartDate = fy?.startDate
-  }
+  const financialYearName = financialYear?.name
+  const fyStartDate = financialYear?.startDate
 
-  // 1. Calculate Current Period Surplus / Deficit from Income & Expenditure
-  const ieReport = await getIncomeExpenditureAccount({
-    societyId,
-    financialYearId,
-    startDate: fyStartDate,
-    endDate: asOf,
-  })
+  // Parallelize I&E calculation, ledgers, and entries (all independent once fyStartDate is known)
+  const [ieReport, ledgers, entries] = await Promise.all([
+    getIncomeExpenditureAccount({
+      societyId,
+      financialYearId,
+      startDate: fyStartDate,
+      endDate: asOf,
+    }),
+    prisma.ledger.findMany({
+      where: {
+        societyId,
+        group: { in: [LedgerGroup.ASSET, LedgerGroup.LIABILITY, LedgerGroup.EQUITY] },
+        isActive: true,
+      },
+      orderBy: [{ code: "asc" }, { name: "asc" }],
+    }),
+    prisma.ledgerEntry.findMany({
+      where: {
+        ledger: {
+          societyId,
+          group: { in: [LedgerGroup.ASSET, LedgerGroup.LIABILITY, LedgerGroup.EQUITY] },
+        },
+        journalEntry: {
+          societyId,
+          status: VoucherStatus.POSTED,
+          entryDate: { lte: asOf },
+        },
+      },
+      select: {
+        ledgerId: true,
+        debit: true,
+        credit: true,
+      },
+    }),
+  ])
 
   const currentPeriodSurplusVal = new Decimal(ieReport.netResult)
   const currentPeriodSigned = ieReport.resultType === "SURPLUS"
     ? currentPeriodSurplusVal
     : currentPeriodSurplusVal.negated()
-
-  // 2. Fetch Balance Sheet Ledgers (ASSET, LIABILITY, EQUITY)
-  const ledgers = await prisma.ledger.findMany({
-    where: {
-      societyId,
-      group: { in: [LedgerGroup.ASSET, LedgerGroup.LIABILITY, LedgerGroup.EQUITY] },
-      isActive: true,
-    },
-    orderBy: [{ code: "asc" }, { name: "asc" }],
-  })
-
-  // Fetch all posted entries up to asOf
-  const entries = await prisma.ledgerEntry.findMany({
-    where: {
-      ledger: {
-        societyId,
-        group: { in: [LedgerGroup.ASSET, LedgerGroup.LIABILITY, LedgerGroup.EQUITY] },
-      },
-      journalEntry: {
-        societyId,
-        status: VoucherStatus.POSTED,
-        entryDate: { lte: asOf },
-      },
-    },
-    select: {
-      ledgerId: true,
-      debit: true,
-      credit: true,
-    },
-  })
 
   const activityMap = new Map<string, { debitTotal: Decimal; creditTotal: Decimal }>()
   for (const entry of entries) {
@@ -2047,42 +2056,43 @@ export async function getRepairFundRegister(params: {
   endDate?: Date
 }): Promise<RepairFundRegisterReport> {
   const { societyId, financialYearId, startDate, endDate } = params
-
-  const society = await prisma.society.findUnique({
-    where: { id: societyId },
-    select: { name: true },
-  })
+  // Parallelize independent lookups
+  const [society, financialYear, repairFundLedgerPrimary] = await Promise.all([
+    prisma.society.findUnique({
+      where: { id: societyId },
+      select: { name: true },
+    }),
+    financialYearId
+      ? prisma.financialYear.findUnique({
+          where: { id: financialYearId },
+          select: { name: true },
+        })
+      : null,
+    prisma.ledger.findFirst({
+      where: {
+        societyId,
+        OR: [
+          { code: "3300" },
+          { name: { contains: "Repair", mode: "insensitive" } },
+        ],
+        group: LedgerGroup.EQUITY,
+      },
+    }),
+  ])
 
   if (!society) {
     throw new Error(`Society with ID ${societyId} not found`)
   }
 
-  // Find the Repair Fund Equity Ledger
-  const repairFundLedger = await prisma.ledger.findFirst({
-    where: {
-      societyId,
-      OR: [
-        { code: "3300" },
-        { name: { contains: "Repair", mode: "insensitive" } },
-      ],
-      group: LedgerGroup.EQUITY,
-    },
-  }) ||
-  await prisma.ledger.findFirst({
+  const financialYearName = financialYear?.name
+
+  // Fallback to any equity ledger if specific repair fund ledger not found
+  const repairFundLedger = repairFundLedgerPrimary || await prisma.ledger.findFirst({
     where: {
       societyId,
       group: LedgerGroup.EQUITY,
     },
   })
-
-  let financialYearName: string | undefined
-  if (financialYearId) {
-    const fy = await prisma.financialYear.findUnique({
-      where: { id: financialYearId },
-      select: { name: true },
-    })
-    financialYearName = fy?.name
-  }
 
   const initialOpening = new Decimal(
     repairFundLedger?.openingBalance ? repairFundLedger.openingBalance.toString() : 0
@@ -2340,8 +2350,8 @@ export async function getCorpusFundRegister(params: {
   for (const flat of flats) {
     const primaryPerson = flat.people[0]?.person
     const ownerName = primaryPerson?.name || "Unregistered Owner"
-    const ownerPhone = primaryPerson?.phone || null
-    const ownerEmail = primaryPerson?.email || null
+    const ownerPhone = primaryPerson?.phone ? decryptData(primaryPerson.phone) : null
+    const ownerEmail = primaryPerson?.email ? decryptData(primaryPerson.email) : null
 
     const corpusDeposit = flat.memberDeposits[0]
 
@@ -2481,42 +2491,43 @@ export async function getSinkingFundRegister(params: {
   endDate?: Date
 }): Promise<SinkingFundRegisterReport> {
   const { societyId, financialYearId, startDate, endDate } = params
-
-  const society = await prisma.society.findUnique({
-    where: { id: societyId },
-    select: { name: true },
-  })
+  // Parallelize independent lookups
+  const [society, financialYear, sinkingFundLedgerPrimary] = await Promise.all([
+    prisma.society.findUnique({
+      where: { id: societyId },
+      select: { name: true },
+    }),
+    financialYearId
+      ? prisma.financialYear.findUnique({
+          where: { id: financialYearId },
+          select: { name: true },
+        })
+      : null,
+    prisma.ledger.findFirst({
+      where: {
+        societyId,
+        OR: [
+          { code: "3200" },
+          { name: { contains: "Sinking", mode: "insensitive" } },
+        ],
+        group: LedgerGroup.EQUITY,
+      },
+    }),
+  ])
 
   if (!society) {
     throw new Error(`Society with ID ${societyId} not found`)
   }
 
-  // Find the Sinking Fund Equity Ledger
-  const sinkingFundLedger = await prisma.ledger.findFirst({
-    where: {
-      societyId,
-      OR: [
-        { code: "3200" },
-        { name: { contains: "Sinking", mode: "insensitive" } },
-      ],
-      group: LedgerGroup.EQUITY,
-    },
-  }) ||
-  await prisma.ledger.findFirst({
+  const financialYearName = financialYear?.name
+
+  // Fallback to any equity ledger if specific sinking fund ledger not found
+  const sinkingFundLedger = sinkingFundLedgerPrimary || await prisma.ledger.findFirst({
     where: {
       societyId,
       group: LedgerGroup.EQUITY,
     },
   })
-
-  let financialYearName: string | undefined
-  if (financialYearId) {
-    const fy = await prisma.financialYear.findUnique({
-      where: { id: financialYearId },
-      select: { name: true },
-    })
-    financialYearName = fy?.name
-  }
 
   const initialOpening = new Decimal(
     sinkingFundLedger?.openingBalance ? sinkingFundLedger.openingBalance.toString() : 0
