@@ -79,7 +79,7 @@ export default async function ProtectedAdminLayout({
         {sidebarContent}
       </aside>
 
-      <main className="flex-1 bg-gray-50">{children}</main>
+      <main className="flex-1 min-w-0 w-full overflow-y-auto bg-gray-50">{children}</main>
     </div>
   )
 }
@@ -210,7 +210,7 @@ function SidebarLink({
   children: React.ReactNode
 }) {
   return (
-    <Link href={href} className="text-gray-600 hover:text-black transition">
+    <Link href={href} prefetch={true} className="text-gray-600 hover:text-black transition">
       {children}
     </Link>
   )

@@ -673,6 +673,7 @@ model Block {
 
   @@unique([societyId, name])
   @@index([societyId])
+  @@index([societyId, isActive, deletedAt])
   @@index([isActive])
   @@index([deletedAt])
 }
@@ -714,6 +715,7 @@ model Flat {
 
   @@unique([blockId, number])
   @@index([blockId])
+  @@index([blockId, isActive, deletedAt])
   @@index([isActive])
   @@index([deletedAt])
 }
@@ -769,6 +771,7 @@ model Person {
   updatedAt               DateTime               @updatedAt
 
   @@index([societyId])
+  @@index([societyId, isActive, deletedAt])
   @@index([phone])
   @@index([email])
   @@index([panNumber])
@@ -893,6 +896,7 @@ model Bill {
 
   @@unique([flatId, billType, year, month, sequence])
   @@index([societyId])
+  @@index([societyId, status, dueDate])
   @@index([flatId, status])
   @@index([year, month])
   @@index([dueDate])
@@ -939,6 +943,8 @@ model Payment {
   updatedAt         DateTime        @updatedAt
 
   @@index([societyId])
+  @@index([societyId, status, paidOn])
+  @@index([billId, status])
   @@index([billId])
   @@index([flatId])
   @@index([paidById])
@@ -1227,7 +1233,9 @@ model ChequeRegister {
   updatedAt       DateTime        @updatedAt
 
   @@index([societyId])
+  @@index([societyId, status])
   @@index([accountId])
+  @@index([accountId, chequeDate, status])
   @@index([chequeNumber])
   @@index([status])
   @@index([chequeDate])
@@ -1373,6 +1381,7 @@ model Expense {
   updatedAt       DateTime         @updatedAt
 
   @@index([societyId])
+  @@index([societyId, status, expenseDate])
   @@index([categoryId])
   @@index([accountId])
   @@index([vendorBillId])
@@ -1559,6 +1568,8 @@ model JournalEntry {
   updatedAt       DateTime       @updatedAt
 
   @@index([societyId])
+  @@index([societyId, status, entryDate])
+  @@index([societyId, financialYearId, status])
   @@index([financialYearId])
   @@index([entryDate])
   @@index([voucherType])
@@ -1583,6 +1594,8 @@ model LedgerEntry {
 
   @@index([journalEntryId])
   @@index([ledgerId])
+  @@index([ledgerId, createdAt])
+  @@index([journalEntryId, ledgerId])
 }
 
 // ==========================================
@@ -1948,6 +1961,8 @@ model AuditLog {
   createdAt   DateTime    @default(now())
 
   @@index([societyId])
+  @@index([societyId, createdAt])
+  @@index([societyId, action])
   @@index([userId])
   @@index([entity, entityId])
   @@index([action])

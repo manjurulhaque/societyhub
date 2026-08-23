@@ -344,7 +344,7 @@ export default async function SocietyPortalLayout({
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="flex-1 min-w-0 w-full overflow-y-auto">{children}</main>
     </div>
   )
 }

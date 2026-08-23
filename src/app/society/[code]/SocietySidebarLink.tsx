@@ -16,6 +16,7 @@ export function SocietySidebarLink({ href, children }: SocietySidebarLinkProps) 
   return (
     <Link
       href={href}
+      prefetch={true}
       className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all text-xs font-medium ${
         isActive
           ? "bg-stone-950 text-white shadow-sm font-semibold"

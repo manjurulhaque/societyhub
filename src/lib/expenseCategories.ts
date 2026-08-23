@@ -404,31 +404,20 @@ export async function ensureStandardExpenseCategories(societyId: string): Promis
     }
   }
 
-  // 6. Batch create any missing standard/COA categories
+  // 6. Batch create any missing standard/COA categories in a single bulk query
   if (categoriesToCreate.length > 0) {
-    for (const item of categoriesToCreate) {
-      try {
-        await prisma.expenseCategory.upsert({
-          where: {
-            societyId_name: {
-              societyId,
-              name: item.name,
-            },
-          },
-          update: {
-            isActive: true,
-            deletedAt: null,
-          },
-          create: {
-            societyId,
-            name: item.name,
-            description: item.description,
-            isActive: true,
-          },
-        })
-      } catch {
-        // Continue safely on unique constraint race
-      }
+    try {
+      await prisma.expenseCategory.createMany({
+        data: categoriesToCreate.map((item) => ({
+          societyId,
+          name: item.name,
+          description: item.description ?? null,
+          isActive: true,
+        })),
+        skipDuplicates: true,
+      })
+    } catch {
+      // Continue safely on unique constraint race
     }
   }
 

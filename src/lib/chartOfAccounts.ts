@@ -761,18 +761,17 @@ export const STANDARD_CHART_OF_ACCOUNTS: StandardAccountNode[] = [
 /**
  * Automatically seeds the complete standard Chart of Accounts for a Housing Society.
  * Supports hierarchical sub-ledgers, idempotent upserting, and system flags.
+ * Pre-fetches all existing ledgers in one query to eliminate 70+ sequential findUnique round-trips.
  */
 export async function seedSocietyChartOfAccounts(societyId: string): Promise<void> {
+  const existingLedgers = await prisma.ledger.findMany({
+    where: { societyId },
+  })
+  const existingByName = new Map(existingLedgers.map((l) => [l.name, l]))
+
   async function createNodes(nodes: StandardAccountNode[], parentLedgerId?: string) {
     for (const node of nodes) {
-      const existing = await prisma.ledger.findUnique({
-        where: {
-          societyId_name: {
-            societyId,
-            name: node.name,
-          },
-        },
-      })
+      const existing = existingByName.get(node.name)
 
       const ledger = existing
         ? await prisma.ledger.update({
@@ -798,6 +797,8 @@ export async function seedSocietyChartOfAccounts(societyId: string): Promise<voi
               isSystem: true,
             },
           })
+
+      existingByName.set(ledger.name, ledger)
 
       if (node.subLedgers && node.subLedgers.length > 0) {
         await createNodes(node.subLedgers, ledger.id)

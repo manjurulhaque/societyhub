@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
   reactStrictMode: true,
+  compiler: {
+    removeConsole:
+      process.env.NODE_ENV === "production" ? { exclude: ["error", "warn"] } : false,
+  },
   experimental: {
     optimizePackageImports: [
       "lucide-react",
@@ -17,6 +21,10 @@ const nextConfig: NextConfig = {
       "radix-ui",
       "@radix-ui/react-slot",
       "cmdk",
+      "sonner",
+      "vaul",
+      "react-day-picker",
+      "slugify",
     ],
   },
   images: {
@@ -34,6 +42,15 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      {
+        source: "/favicon.ico",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=86400, stale-while-revalidate=604800",
+          },
+        ],
+      },
       {
         source: "/:path*",
         headers: [
@@ -80,8 +97,6 @@ const nextConfig: NextConfig = {
         ],
       },
     ];
-
-
   },
 };
 

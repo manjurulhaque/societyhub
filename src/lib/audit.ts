@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { sanitizeAuditPayload } from "@/lib/auditSanitizer"
-import type { AuditAction } from "@/generated/prisma/client"
+import type { Prisma, AuditAction } from "@/generated/prisma/client"
 
 export interface AuditLogPayload {
   societyId?: string | null
@@ -33,8 +33,8 @@ export async function recordAuditLog(payload: AuditLogPayload): Promise<void> {
         action: payload.action,
         entity: payload.entity,
         entityId: payload.entityId ?? null,
-        oldData: sanitizedOldData ? JSON.parse(JSON.stringify(sanitizedOldData)) : undefined,
-        newData: sanitizedNewData ? JSON.parse(JSON.stringify(sanitizedNewData)) : undefined,
+        oldData: (sanitizedOldData !== undefined ? sanitizedOldData : undefined) as Prisma.InputJsonValue | undefined,
+        newData: (sanitizedNewData !== undefined ? sanitizedNewData : undefined) as Prisma.InputJsonValue | undefined,
         ipAddress: payload.ipAddress ?? null,
         userAgent: payload.userAgent ?? null,
         description: payload.description ?? null,

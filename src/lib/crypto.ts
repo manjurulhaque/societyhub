@@ -5,8 +5,12 @@ const IV_LENGTH = 12 // Standard 96-bit IV for AES-GCM
 const AUTH_TAG_LENGTH = 16
 const PREFIX = "enc:v1:"
 
+let cachedKey: Buffer | null = null
+let cachedSecret: string | null = null
+
 /**
  * Derives a 32-byte encryption key from environment secrets.
+ * Caches the derived Buffer in memory to avoid repetitive SHA-256 hashing.
  */
 function getEncryptionKey(): Buffer {
   const secret =
@@ -15,7 +19,12 @@ function getEncryptionKey(): Buffer {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     "societyhub-default-fallback-secret-key-32bytes"
 
-  return crypto.createHash("sha256").update(secret).digest()
+  if (!cachedKey || cachedSecret !== secret) {
+    cachedSecret = secret
+    cachedKey = crypto.createHash("sha256").update(secret).digest()
+  }
+
+  return cachedKey
 }
 
 /**
@@ -54,9 +63,12 @@ export function encryptData(plainText: string | null | undefined): string {
   }
 }
 
+const DECRYPT_CACHE_MAX = 2000
+const decryptCache = new Map<string, string>()
+
 /**
  * Decrypts AES-256-GCM authenticated ciphertext back to original plain text.
- * Gracefully handles legacy unencrypted plaintext.
+ * Gracefully handles legacy unencrypted plaintext and utilizes an in-memory LRU cache for O(1) repeated lookups.
  *
  * @param cipherText Ciphertext or legacy plaintext
  * @returns Decrypted plain text
@@ -64,6 +76,11 @@ export function encryptData(plainText: string | null | undefined): string {
 export function decryptData(cipherText: string | null | undefined): string {
   if (!cipherText) return ""
   if (!isEncrypted(cipherText)) return cipherText // Backward compatible with plaintext
+
+  const cached = decryptCache.get(cipherText)
+  if (cached !== undefined) {
+    return cached
+  }
 
   try {
     const payload = cipherText.slice(PREFIX.length)
@@ -85,6 +102,12 @@ export function decryptData(cipherText: string | null | undefined): string {
 
     let decrypted = decipher.update(encryptedHex, "hex", "utf8")
     decrypted += decipher.final("utf8")
+
+    if (decryptCache.size >= DECRYPT_CACHE_MAX) {
+      const firstKey = decryptCache.keys().next().value
+      if (firstKey) decryptCache.delete(firstKey)
+    }
+    decryptCache.set(cipherText, decrypted)
 
     return decrypted
   } catch {
