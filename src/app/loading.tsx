@@ -9,7 +9,7 @@ export default function Loading() {
             aria-label="Loading"
           />
           <p className="mt-6 text-xs font-semibold uppercase tracking-[0.22em] text-stone-500">
-            SocietyHub
+            SARWS Connect
           </p>
           <p className="mt-2 text-lg font-semibold text-stone-950">Loading...</p>
           <p className="mt-1 text-sm text-stone-500">

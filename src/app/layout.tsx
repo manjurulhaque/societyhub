@@ -21,11 +21,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "SocietyHub | Society & Community Management",
-    template: "%s | SocietyHub",
+    default: "SARWS Connect | Syndicate Arena Residents' Welfare Society",
+    template: "%s | SARWS Connect",
   },
   description:
-    "Modern society management platform for housing societies, resident welfare associations, billing, member management, and community operations.",
+    "Official resident and community management platform for Syndicate Arena Residents' Welfare Society (SARWS).",
 };
 
 export default function RootLayout({

@@ -24,7 +24,7 @@ export default function NewSocietyPage() {
       <AdminPageHeader
         eyebrow="Society Onboarding"
         title="Create New Society"
-        description="Onboard a new housing society, apartment association, or commercial complex onto SocietyHub."
+        description="Onboard a new housing society, apartment association, or commercial complex onto SARWS Connect."
         action={
           <Link
             href="/admin/societies"

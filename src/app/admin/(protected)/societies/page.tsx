@@ -51,7 +51,7 @@ export default async function SocietiesPage() {
       <AdminPageHeader
         eyebrow="Platform Management"
         title="Housing Societies"
-        description="Onboard, configure, and manage all housing societies, apartment associations, and commercial complexes on SocietyHub."
+        description="Onboard, configure, and manage housing societies and apartment associations on SARWS Connect."
         action={
           <AdminButton href="/admin/societies/new" variant="primary" size="md">
             + New Society
@@ -110,7 +110,7 @@ export default async function SocietiesPage() {
       {societies.length === 0 ? (
         <AdminEmptyState
           title="No housing societies found"
-          description="Get started by creating your first housing society or apartment association on SocietyHub."
+          description="Get started by creating your first housing society or apartment association on SARWS Connect."
           action={
             <AdminButton href="/admin/societies/new" variant="primary">
               + Create First Society
