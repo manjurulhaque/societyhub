@@ -70,6 +70,8 @@ export function MemberRoleModal({
   )
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [createdSetupLink, setCreatedSetupLink] = useState<{ email: string; link: string } | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const existingEmailSet = useMemo(() => {
     return new Set(existingMembers.map((m) => m.email.toLowerCase().trim()))
@@ -113,6 +115,16 @@ export function MemberRoleModal({
       setResidentEmailInput("")
     }
     setError(null)
+  }
+
+  const handleCopyLink = async (link: string) => {
+    try {
+      await navigator.clipboard.writeText(link)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    } catch {
+      // Fallback
+    }
   }
 
   const handleSave = () => {
@@ -176,6 +188,8 @@ export function MemberRoleModal({
 
         if (res.error) {
           setError(res.error)
+        } else if (res.setupLink) {
+          setCreatedSetupLink({ email: targetEmail, link: res.setupLink })
         } else {
           onClose()
         }
@@ -201,30 +215,107 @@ export function MemberRoleModal({
       />
 
       <div className="relative z-10 flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-2xl transition-all">
-        {/* Header */}
-        <div className="flex shrink-0 items-start justify-between border-b border-stone-100 px-6 py-5">
+        {createdSetupLink ? (
+          /* Success Screen with Copy Link */
           <div>
-            <h3 className="text-xl font-bold tracking-tight text-stone-950">
-              {isEditing ? `Edit Role & Permissions` : "Add Committee / Staff Member"}
-            </h3>
-            <p className="mt-1 text-xs text-stone-500">
-              {isEditing
-                ? `Assign statutory designation and dynamic custom roles to ${member?.name || member?.email}.`
-                : "Select a registered resident or invite operational staff to the Managing Committee."}
-            </p>
-          </div>
+            <div className="flex shrink-0 items-start justify-between border-b border-stone-100 px-6 py-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
+                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-stone-950">Member Added Successfully</h3>
+                  <p className="text-xs text-stone-500">
+                    Assigned {createdSetupLink.email} to Managing Committee
+                  </p>
+                </div>
+              </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition"
-            aria-label="Close"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-            </svg>
-          </button>
-        </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-emerald-900">
+                  <span>✉️ Email Invitation Dispatched</span>
+                </div>
+                <p className="text-xs text-emerald-800 leading-relaxed">
+                  An activation email with a password setup link was dispatched to{" "}
+                  <strong>{createdSetupLink.email}</strong>.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-stone-700">
+                  Instant Account Setup Link (WhatsApp / Message)
+                </label>
+                <p className="text-xs text-stone-500">
+                  In addition to the email, you can copy this direct link and send it directly to the member:
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={createdSetupLink.link}
+                    className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-700 select-all font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleCopyLink(createdSetupLink.link)}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-stone-900 px-4 py-2 text-xs font-semibold text-white hover:bg-stone-800 transition"
+                  >
+                    {copied ? "✓ Copied!" : "Copy Link"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end border-t border-stone-100 bg-stone-50/50 px-6 py-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl bg-stone-900 px-5 py-2 text-xs font-semibold text-white hover:bg-stone-800 transition"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Header */}
+            <div className="flex shrink-0 items-start justify-between border-b border-stone-100 px-6 py-5">
+              <div>
+                <h3 className="text-xl font-bold tracking-tight text-stone-950">
+                  {isEditing ? `Edit Role & Permissions` : "Add Committee / Staff Member"}
+                </h3>
+                <p className="mt-1 text-xs text-stone-500">
+                  {isEditing
+                    ? `Assign statutory designation and dynamic custom roles to ${member?.name || member?.email}.`
+                    : "Select a registered resident or invite operational staff to the Managing Committee."}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition"
+                aria-label="Close"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                </svg>
+              </button>
+            </div>
 
         {/* Form Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
@@ -594,6 +685,8 @@ export function MemberRoleModal({
             )}
           </button>
         </div>
+          </>
+        )}
       </div>
     </div>
   )
