@@ -339,6 +339,7 @@ export async function addCommitteeMember(
     email: string
     designation: SocietyRole
     customRoleIds: string[]
+    personId?: string | null
   }
 ): Promise<RoleActionState> {
   try {
@@ -349,6 +350,39 @@ export async function addCommitteeMember(
     const email = sanitizeText(rawEmail)
     if (!email) {
       return { error: "User email is required." }
+    }
+
+    // If personId provided, fetch and validate person
+    let person = null
+    if (data.personId) {
+      person = await prisma.person.findFirst({
+        where: {
+          id: data.personId,
+          societyId,
+          deletedAt: null,
+        },
+      })
+
+      if (!person) {
+        return { error: "Selected resident not found in this society." }
+      }
+
+      // If person has no email recorded, update it
+      if (!person.email) {
+        await prisma.person.update({
+          where: { id: person.id },
+          data: { email },
+        })
+      }
+    } else {
+      // Check if person exists with this email in this society
+      person = await prisma.person.findFirst({
+        where: {
+          societyId,
+          email,
+          deletedAt: null,
+        },
+      })
     }
 
     // Find user in database
@@ -363,6 +397,14 @@ export async function addCommitteeMember(
           email,
           appRole: "USER",
         },
+      })
+    }
+
+    // Link Person to User if not already linked
+    if (person && !person.userId) {
+      await prisma.person.update({
+        where: { id: person.id },
+        data: { userId: user.id },
       })
     }
 
@@ -400,14 +442,16 @@ export async function addCommitteeMember(
       })
     }
 
+    const identifier = person ? `${person.name} (${email})` : email
+
     await recordAuditLog({
       societyId,
       userId: context.user.id,
       action: "CREATE",
       entity: "SocietyMember",
       entityId: newMember.id,
-      description: `${context.user.email} added ${email} to Managing Committee with designation ${data.designation}`,
-      newData: { email, designation: data.designation, customRoleIds: data.customRoleIds },
+      description: `${context.user.email} added ${identifier} to Managing Committee with designation ${data.designation}`,
+      newData: { email, personId: data.personId, designation: data.designation, customRoleIds: data.customRoleIds },
     })
 
     revalidatePath(`/society/${societyCode}/members`)
@@ -415,7 +459,7 @@ export async function addCommitteeMember(
 
     return {
       success: true,
-      message: `${email} was added as ${data.designation.replace(/_/g, " ")}.`,
+      message: `${identifier} was added as ${data.designation.replace(/_/g, " ")}.`,
     }
   } catch (err: unknown) {
     console.error("Failed to add committee member:", err)

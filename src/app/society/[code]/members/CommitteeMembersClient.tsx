@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react"
 import { AdminTable, AdminBadge } from "@/components/admin"
 import { MemberRoleModal, type MemberData, type AvailableRole } from "./MemberRoleModal"
+import { type ResidentItem } from "./ResidentsDirectoryClient"
 import { removeCommitteeMember } from "../roles/actions"
 import type { SocietyRole } from "@/generated/prisma/client"
 
@@ -10,6 +11,9 @@ export type CommitteeMemberItem = {
   id: string
   userId: string
   email: string
+  name?: string | null
+  phone?: string | null
+  flatsDisplay?: string | null
   designation: SocietyRole
   appRole: string
   createdAt: string
@@ -24,6 +28,7 @@ interface CommitteeMembersClientProps {
   societyCode: string
   members: CommitteeMemberItem[]
   availableRoles: AvailableRole[]
+  residents?: ResidentItem[]
   canManageMembers: boolean
 }
 
@@ -31,6 +36,7 @@ export function CommitteeMembersClient({
   societyCode,
   members,
   availableRoles,
+  residents = [],
   canManageMembers,
 }: CommitteeMembersClientProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -49,6 +55,7 @@ export function CommitteeMembersClient({
     setSelectedMember({
       id: m.id,
       email: m.email,
+      name: m.name,
       designation: m.designation,
       customRoleIds: m.customRoles.map((r) => r.id),
     })
@@ -109,7 +116,7 @@ export function CommitteeMembersClient({
       ) : (
         <AdminTable
           headers={[
-            "User / Email",
+            "Member / User",
             "Statutory Designation",
             "Assigned Custom Roles",
             "Platform Role",
@@ -123,8 +130,26 @@ export function CommitteeMembersClient({
 
             return (
               <tr key={m.id} className="border-t border-stone-100 hover:bg-stone-50/60 transition-colors">
-                <td className="px-4 py-3.5 text-xs font-semibold text-stone-950">
-                  {m.email}
+                <td className="px-4 py-3.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-xs font-bold text-stone-700">
+                      {(m.name || m.email).slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-stone-950 truncate">
+                        {m.name || m.email}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-stone-500 truncate">
+                        {m.name ? <span>{m.email}</span> : null}
+                        {m.flatsDisplay ? (
+                          <>
+                            {m.name ? <span>•</span> : null}
+                            <span className="font-medium text-stone-600">{m.flatsDisplay}</span>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
                 </td>
 
                 <td className="px-4 py-3.5">
@@ -206,6 +231,8 @@ export function CommitteeMembersClient({
           societyCode={societyCode}
           member={selectedMember}
           availableRoles={availableRoles}
+          residents={residents}
+          existingMembers={members}
         />
       ) : null}
 
