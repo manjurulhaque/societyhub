@@ -1958,6 +1958,9 @@ model AuditLog {
   userAgent   String?
   description String?     // Human-readable action description
 
+  signature         String?     // HMAC-SHA256 cryptographic seal
+  previousSignature String?     // Previous record's HMAC signature (genesis if first)
+
   createdAt   DateTime    @default(now())
 
   @@index([societyId])

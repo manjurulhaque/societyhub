@@ -108,22 +108,58 @@ export default async function AuditLogsPage({
       />
 
       {/* Cryptographic Ledger Integrity Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 sm:p-5 text-emerald-950">
+      <div
+        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border p-4 sm:p-5 transition-all ${
+          !integrity.isValid
+            ? "border-rose-300 bg-rose-50 text-rose-950 shadow-sm"
+            : logs.length === 0
+            ? "border-stone-200 bg-stone-50/80 text-stone-800"
+            : "border-emerald-200 bg-emerald-50/70 text-emerald-950"
+        }`}
+      >
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white font-bold">
-            ✓
+          <div
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold text-white shadow-sm ${
+              !integrity.isValid
+                ? "bg-rose-600 animate-pulse text-base"
+                : logs.length === 0
+                ? "bg-stone-500 text-sm"
+                : "bg-emerald-600 text-base"
+            }`}
+          >
+            {!integrity.isValid ? "⚠️" : logs.length === 0 ? "ℹ" : "✓"}
           </div>
           <div>
-            <h3 className="text-sm font-bold text-emerald-950">
-              Cryptographic Audit Trail Integrity: Verified
+            <h3 className="text-sm font-bold">
+              {!integrity.isValid
+                ? "Cryptographic Integrity Compromised: Tamper Detected"
+                : logs.length === 0
+                ? "Audit Ledger: Genesis State"
+                : "Cryptographic Audit Trail Integrity: Verified"}
             </h3>
-            <p className="text-xs text-emerald-800">
-              HMAC-SHA256 hash chaining active. All {integrity.verifiedCount} fetched audit records mathematically verified against tampering.
+            <p className="text-xs opacity-90 mt-0.5">
+              {!integrity.isValid
+                ? integrity.message
+                : logs.length === 0
+                ? "No audit events found. The cryptographic hash chain is at its initial genesis state."
+                : `HMAC-SHA256 hash chaining active. All ${integrity.verifiedCount} fetched audit records mathematically verified against tampering.`}
             </p>
           </div>
         </div>
-        <span className="self-start sm:self-auto rounded-full bg-emerald-100 border border-emerald-300 px-3 py-1 text-xs font-bold text-emerald-800">
-          Unbroken Chain
+        <span
+          className={`self-start sm:self-auto rounded-full border px-3 py-1 text-xs font-bold whitespace-nowrap ${
+            !integrity.isValid
+              ? "border-rose-300 bg-rose-100 text-rose-800"
+              : logs.length === 0
+              ? "border-stone-300 bg-stone-100 text-stone-700"
+              : "border-emerald-300 bg-emerald-100 text-emerald-800"
+          }`}
+        >
+          {!integrity.isValid
+            ? "Chain Broken"
+            : logs.length === 0
+            ? "Genesis State"
+            : "Unbroken Chain"}
         </span>
       </div>
 
@@ -212,20 +248,33 @@ export default async function AuditLogsPage({
                 "Tenant Scope",
                 "IP Address",
               ]}
-              rows={logs.map((log) => (
-                <tr
-                  key={log.id}
-                  className="border-t border-stone-100 transition-colors hover:bg-stone-50/70"
-                >
-                  <td className="px-4 py-3.5 text-xs font-medium text-stone-600 whitespace-nowrap">
-                    {formatDateInAppTimeZone(log.createdAt)}
-                  </td>
+              rows={logs.map((log) => {
+                const isTampered = !integrity.isValid && integrity.tamperedLogId === log.id
+                return (
+                  <tr
+                    key={log.id}
+                    className={`border-t border-stone-100 transition-colors ${
+                      isTampered
+                        ? "bg-rose-50/90 border-l-4 border-l-rose-600"
+                        : "hover:bg-stone-50/70"
+                    }`}
+                  >
+                    <td className="px-4 py-3.5 text-xs font-medium text-stone-600 whitespace-nowrap">
+                      {formatDateInAppTimeZone(log.createdAt)}
+                    </td>
 
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    <AdminBadge variant={getActionBadgeVariant(log.action)}>
-                      {log.action}
-                    </AdminBadge>
-                  </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <AdminBadge variant={getActionBadgeVariant(log.action)}>
+                          {log.action}
+                        </AdminBadge>
+                        {isTampered && (
+                          <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white uppercase">
+                            Tampered
+                          </span>
+                        )}
+                      </div>
+                    </td>
 
                   <td className="px-4 py-3.5 whitespace-nowrap font-mono text-xs font-bold text-stone-900">
                     {log.entity}
@@ -269,8 +318,9 @@ export default async function AuditLogsPage({
                   <td className="px-4 py-3.5 font-mono text-[11px] text-stone-500 whitespace-nowrap">
                     {log.ipAddress || "—"}
                   </td>
-                </tr>
-              ))}
+                  </tr>
+                )
+              })}
             />
           </div>
         )}

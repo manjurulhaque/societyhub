@@ -56,11 +56,13 @@ export interface AuditIntegrityResult {
   isValid: boolean
   verifiedCount: number
   tamperedIndex: number | null
+  tamperedLogId?: string | null
   message: string
 }
 
 /**
  * Mathematically validates the cryptographic hash chain of an array of audit logs.
+ * Checks both individual HMAC-SHA256 signature validity and chronological chain continuity.
  *
  * @param logs Audit logs ordered chronologically (or reverse)
  */
@@ -72,6 +74,8 @@ export function verifyAuditTrailIntegrity(
     entityId?: string | null
     userId?: string | null
     societyId?: string | null
+    signature?: string | null
+    previousSignature?: string | null
     createdAt: Date | string
   }>
 ): AuditIntegrityResult {
@@ -89,22 +93,62 @@ export function verifyAuditTrailIntegrity(
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   )
 
-  let previousSignature: string | null = "GENESIS"
+  let expectedPrevSig: string | null = null
 
   for (let i = 0; i < sorted.length; i++) {
     const entry = sorted[i]
-    const expectedSignature = computeAuditSignature({
-      id: entry.id,
-      action: entry.action,
-      entity: entry.entity,
-      entityId: entry.entityId,
-      userId: entry.userId,
-      societyId: entry.societyId,
-      createdAt: entry.createdAt,
-      previousSignature,
-    })
 
-    previousSignature = expectedSignature
+    // If persisted signature is present on the record:
+    if (entry.signature) {
+      // 1. Recompute expected signature using this record's stored previousSignature (or GENESIS if first)
+      const computed = computeAuditSignature({
+        id: entry.id,
+        action: entry.action,
+        entity: entry.entity,
+        entityId: entry.entityId,
+        userId: entry.userId,
+        societyId: entry.societyId,
+        createdAt: entry.createdAt,
+        previousSignature: entry.previousSignature || "GENESIS",
+      })
+
+      // 2. Check if the record content was tampered with
+      if (computed !== entry.signature) {
+        return {
+          isValid: false,
+          verifiedCount: i,
+          tamperedIndex: i,
+          tamperedLogId: entry.id,
+          message: `Cryptographic tamper detected at record #${i + 1} (ID: ${entry.id.slice(0, 8)}...). Stored HMAC-SHA256 signature does not match record payload.`,
+        }
+      }
+
+      // 3. Check chain continuity if we have a known previous signature in this sorted slice
+      if (expectedPrevSig !== null && entry.previousSignature && entry.previousSignature !== expectedPrevSig) {
+        return {
+          isValid: false,
+          verifiedCount: i,
+          tamperedIndex: i,
+          tamperedLogId: entry.id,
+          message: `Hash chain continuity broken at record #${i + 1} (ID: ${entry.id.slice(0, 8)}...). Expected previous signature does not match (potential record deletion or insertion).`,
+        }
+      }
+
+      expectedPrevSig = entry.signature
+    } else {
+      // For legacy records without stored signature, compute on the fly
+      const fallbackSig = computeAuditSignature({
+        id: entry.id,
+        action: entry.action,
+        entity: entry.entity,
+        entityId: entry.entityId,
+        userId: entry.userId,
+        societyId: entry.societyId,
+        createdAt: entry.createdAt,
+        previousSignature: expectedPrevSig || "GENESIS",
+      })
+      expectedPrevSig = fallbackSig
+    }
   }
 
   return {
