@@ -119,7 +119,7 @@ export default async function PeoplePage() {
       {people.length === 0 ? (
         <AdminEmptyState
           title="No residents or people registered yet"
-          description="Register your first flat owner, tenant, or committee resident into SocietyHub."
+          description="Register your first flat owner, tenant, or committee resident into SARWS Connect."
           action={
             <AdminButton href="/admin/people/new" variant="primary">
               + Register First Person

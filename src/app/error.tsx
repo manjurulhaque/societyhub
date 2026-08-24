@@ -19,7 +19,7 @@ export default function Error({ error, reset }: ErrorPageProps) {
             This page could not be loaded.
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-stone-600">
-            SocietyHub encountered an unexpected error while loading this view. You can try again or return to the dashboard.
+            SARWS Connect encountered an unexpected error while loading this view. You can try again or return to the dashboard.
           </p>
 
           {process.env.NODE_ENV === "development" && error.message ? (

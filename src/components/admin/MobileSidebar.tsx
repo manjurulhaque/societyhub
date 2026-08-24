@@ -14,7 +14,7 @@ type MobileSidebarProps = {
 
 export function MobileSidebar({
   children,
-  title = "SocietyHub",
+  title = "SARWS Connect",
   subtitle,
 }: MobileSidebarProps) {
   const [isOpen, setIsOpen] = useState(false)

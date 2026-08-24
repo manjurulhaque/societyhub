@@ -142,10 +142,10 @@ export default function LoginPage() {
             S
           </div>
           <h1 className="mt-4 text-2xl font-bold tracking-tight text-stone-950 sm:text-3xl">
-            Welcome to SocietyHub
+            Welcome to SARWS Connect
           </h1>
           <p className="mt-2 text-sm text-stone-600">
-            Sign in to access your society portal & dashboard
+            Sign in to access Syndicate Arena resident portal & dashboard
           </p>
         </div>
 
@@ -256,7 +256,7 @@ export default function LoginPage() {
 
         {/* Footer info */}
         <p className="text-center text-xs text-stone-500">
-          SocietyHub &bull; Modern Society & Community Management
+          SARWS Connect &bull; Syndicate Arena Residents&apos; Welfare Society
         </p>
       </div>
     </div>

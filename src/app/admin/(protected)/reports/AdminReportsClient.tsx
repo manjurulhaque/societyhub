@@ -145,8 +145,8 @@ export function AdminReportsClient({ data }: { data: AdminReportData }) {
     const { generateReportPDF } = await import("@/lib/pdf/reportPdfGenerator")
     generateReportPDF({
       society: {
-        name: "SocietyHub Central Platform Administration",
-        address: "Multi-Society Portfolio Performance & Financial Audit",
+        name: "SARWS Connect Central Administration",
+        address: "Syndicate Arena Portfolio Performance & Financial Audit",
         currencySymbol: "₹",
       },
       reportTitle: "Society Financial Health & Recovery Leaderboard",
