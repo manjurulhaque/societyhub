@@ -35,6 +35,24 @@ export default async function SocietyMembersPage({
             id: true,
             email: true,
             appRole: true,
+            person: {
+              select: {
+                id: true,
+                name: true,
+                phone: true,
+                flats: {
+                  where: { toDate: null },
+                  include: {
+                    flat: {
+                      select: {
+                        number: true,
+                        block: { select: { name: true } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
         customRoles: {
@@ -114,19 +132,29 @@ export default async function SocietyMembersPage({
     }),
   ])
 
-  const committeeMembers: CommitteeMemberItem[] = rawCommitteeMembers.map((m) => ({
-    id: m.id,
-    userId: m.user.id,
-    email: m.user.email,
-    designation: m.designation,
-    appRole: m.user.appRole,
-    createdAt: m.createdAt.toISOString(),
-    customRoles: m.customRoles.map((cr) => ({
-      id: cr.role.id,
-      name: cr.role.name,
-      isSystem: cr.role.isSystem,
-    })),
-  }))
+  const committeeMembers: CommitteeMemberItem[] = rawCommitteeMembers.map((m) => {
+    const person = m.user.person
+    const flatsDisplay = person?.flats?.length
+      ? person.flats.map((f) => `${f.flat.block.name} - ${f.flat.number}`).join(", ")
+      : null
+
+    return {
+      id: m.id,
+      userId: m.user.id,
+      email: m.user.email,
+      name: person?.name || null,
+      phone: person?.phone || null,
+      flatsDisplay,
+      designation: m.designation,
+      appRole: m.user.appRole,
+      createdAt: m.createdAt.toISOString(),
+      customRoles: m.customRoles.map((cr) => ({
+        id: cr.role.id,
+        name: cr.role.name,
+        isSystem: cr.role.isSystem,
+      })),
+    }
+  })
 
   const availableRoles = availableRolesData.map((r) => ({
     id: r.id,
@@ -179,6 +207,7 @@ export default async function SocietyMembersPage({
           societyCode={code}
           members={committeeMembers}
           availableRoles={availableRoles}
+          residents={residents}
           canManageMembers={canManage}
         />
       </AdminCard>

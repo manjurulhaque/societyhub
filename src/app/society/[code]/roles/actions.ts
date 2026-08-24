@@ -8,10 +8,13 @@ import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
 import type { SocietyRole } from "@/generated/prisma/client"
 
+import { createAdminClient } from "@/lib/supabase/admin"
+
 export type RoleActionState = {
   success?: boolean
   error?: string
   message?: string
+  setupLink?: string
 }
 
 /**
@@ -339,6 +342,7 @@ export async function addCommitteeMember(
     email: string
     designation: SocietyRole
     customRoleIds: string[]
+    personId?: string | null
   }
 ): Promise<RoleActionState> {
   try {
@@ -349,6 +353,39 @@ export async function addCommitteeMember(
     const email = sanitizeText(rawEmail)
     if (!email) {
       return { error: "User email is required." }
+    }
+
+    // If personId provided, fetch and validate person
+    let person = null
+    if (data.personId) {
+      person = await prisma.person.findFirst({
+        where: {
+          id: data.personId,
+          societyId,
+          deletedAt: null,
+        },
+      })
+
+      if (!person) {
+        return { error: "Selected resident not found in this society." }
+      }
+
+      // If person has no email recorded, update it
+      if (!person.email) {
+        await prisma.person.update({
+          where: { id: person.id },
+          data: { email },
+        })
+      }
+    } else {
+      // Check if person exists with this email in this society
+      person = await prisma.person.findFirst({
+        where: {
+          societyId,
+          email,
+          deletedAt: null,
+        },
+      })
     }
 
     // Find user in database
@@ -363,6 +400,14 @@ export async function addCommitteeMember(
           email,
           appRole: "USER",
         },
+      })
+    }
+
+    // Link Person to User if not already linked
+    if (person && !person.userId) {
+      await prisma.person.update({
+        where: { id: person.id },
+        data: { userId: user.id },
       })
     }
 
@@ -400,26 +445,141 @@ export async function addCommitteeMember(
       })
     }
 
+    const identifier = person ? `${person.name} (${email})` : email
+
     await recordAuditLog({
       societyId,
       userId: context.user.id,
       action: "CREATE",
       entity: "SocietyMember",
       entityId: newMember.id,
-      description: `${context.user.email} added ${email} to Managing Committee with designation ${data.designation}`,
-      newData: { email, designation: data.designation, customRoleIds: data.customRoleIds },
+      description: `${context.user.email} added ${identifier} to Managing Committee with designation ${data.designation}`,
+      newData: { email, personId: data.personId, designation: data.designation, customRoleIds: data.customRoleIds },
     })
+
+    let setupLink: string | undefined = undefined
+
+    // Trigger Supabase Auth invitation / activation email & generate setup link
+    try {
+      if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        const supabaseAdmin = createAdminClient()
+        const appUrl =
+          process.env.NEXT_PUBLIC_SITE_URL ||
+          process.env.NEXT_PUBLIC_APP_URL ||
+          "http://localhost:3000"
+        const redirectTo = `${appUrl}/auth/callback?next=/auth/set-password`
+
+        // 1. Generate direct setup link
+        try {
+          const linkRes = await supabaseAdmin.auth.admin.generateLink({
+            type: "invite",
+            email,
+            options: {
+              redirectTo,
+            },
+          })
+
+          if (!linkRes.error && linkRes.data?.properties?.action_link) {
+            setupLink = linkRes.data.properties.action_link
+          }
+        } catch (linkErr) {
+          console.log("Direct link note:", linkErr)
+        }
+
+        // 2. Also dispatch outbound email
+        try {
+          const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+            redirectTo,
+            data: {
+              name: person?.name || undefined,
+              societyName: context.society.name,
+              designation: data.designation,
+            },
+          })
+
+          if (inviteError) {
+            console.log(`Supabase invite note for ${email}:`, inviteError.message)
+          }
+        } catch (inviteErr) {
+          console.warn("Outbound invite email could not be sent:", inviteErr)
+        }
+      }
+    } catch (authErr) {
+      console.warn("Supabase auth integration note:", authErr)
+    }
 
     revalidatePath(`/society/${societyCode}/members`)
     revalidatePath(`/society/${societyCode}/roles`)
 
     return {
       success: true,
-      message: `${email} was added as ${data.designation.replace(/_/g, " ")}.`,
+      setupLink,
+      message: `${identifier} was added as ${data.designation.replace(/_/g, " ")}.`,
     }
   } catch (err: unknown) {
     console.error("Failed to add committee member:", err)
     return { error: getSafeErrorMessage(err, "Failed to add member.") }
+  }
+}
+
+/**
+ * Generates an activation or password recovery link for a committee member on demand.
+ */
+export async function getMemberActivationLink(
+  societyCode: string,
+  email: string
+): Promise<{ success?: boolean; error?: string; setupLink?: string }> {
+  try {
+    await requireCommitteeAccess(societyCode, EXECUTIVE_ROLES)
+    const rawEmail = email.trim().toLowerCase()
+
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return { error: "Supabase service role key is not configured in .env." }
+    }
+
+    const supabaseAdmin = createAdminClient()
+    const appUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      "http://localhost:3000"
+    const redirectTo = `${appUrl}/auth/callback?next=/auth/set-password`
+
+    // 1. Try generating an invite link
+    const inviteRes = await supabaseAdmin.auth.admin.generateLink({
+      type: "invite",
+      email: rawEmail,
+      options: {
+        redirectTo,
+      },
+    })
+
+    if (!inviteRes.error && inviteRes.data?.properties?.action_link) {
+      return {
+        success: true,
+        setupLink: inviteRes.data.properties.action_link,
+      }
+    }
+
+    // 2. If user already exists in Supabase Auth, generate a recovery link
+    const recoveryRes = await supabaseAdmin.auth.admin.generateLink({
+      type: "recovery",
+      email: rawEmail,
+      options: {
+        redirectTo,
+      },
+    })
+
+    if (recoveryRes.error) {
+      return { error: recoveryRes.error.message }
+    }
+
+    return {
+      success: true,
+      setupLink: recoveryRes.data?.properties?.action_link,
+    }
+  } catch (err: unknown) {
+    console.error("Failed to generate activation link:", err)
+    return { error: getSafeErrorMessage(err, "Failed to generate link.") }
   }
 }
 
