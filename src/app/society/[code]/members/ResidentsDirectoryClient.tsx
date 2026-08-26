@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useTransition } from "react"
+import Link from "next/link"
 import { AdminTable, AdminBadge } from "@/components/admin"
 import { maskPan, maskAadhaar } from "@/lib/masking"
 import { RegisterResidentModal, type FlatOption } from "./RegisterResidentModal"
@@ -101,7 +102,7 @@ export function ResidentsDirectoryClient({
     "Assigned Flats",
     "Primary Role",
     "KYC Status",
-    ...(canManageResidents ? ["Action"] : []),
+    "Action",
   ]
 
   return (
@@ -158,7 +159,12 @@ export function ResidentsDirectoryClient({
           rows={filteredResidents.map((r) => (
             <tr key={r.id} className="border-t border-stone-100 text-xs hover:bg-stone-50/50 transition">
               <td className="px-4 py-3.5">
-                <span className="font-bold text-stone-900 block">{r.name}</span>
+                <Link
+                  href={`/society/${societyCode}/members/${r.id}`}
+                  className="font-bold text-stone-950 hover:text-blue-600 transition block"
+                >
+                  {r.name}
+                </Link>
               </td>
               <td className="px-4 py-3.5">
                 <div className="space-y-0.5 text-stone-600">
@@ -219,44 +225,54 @@ export function ResidentsDirectoryClient({
                   </span>
                 )}
               </td>
-              {canManageResidents ? (
-                <td className="px-4 py-3.5 text-right whitespace-nowrap">
-                  <div className="flex items-center justify-end gap-1.5">
-                    <EntityAuditDrawer
-                      entity="Person"
-                      entityId={r.id}
-                      entityTitle={r.name}
-                      buttonVariant="compact"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setEditingResident(r)}
-                      className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-900 transition"
-                      title="Edit Resident Profile"
-                      aria-label={`Edit profile for ${r.name}`}
-                    >
-                      <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeletingResident(r)}
-                      className="rounded-lg p-1.5 text-stone-400 hover:bg-red-50 hover:text-red-600 transition"
-                      title="Remove Resident"
-                      aria-label={`Remove ${r.name}`}
-                    >
-                      <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path
-                          fillRule="evenodd"
-                          d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </td>
-              ) : null}
+              <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                <div className="flex items-center justify-end gap-1.5">
+                  <Link
+                    href={`/society/${societyCode}/members/${r.id}`}
+                    className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2 py-1 text-[11px] font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-900 transition"
+                    title="View Resident 360° Profile"
+                  >
+                    <span>View 360°</span>
+                    <span>→</span>
+                  </Link>
+                  <EntityAuditDrawer
+                    entity="Person"
+                    entityId={r.id}
+                    entityTitle={r.name}
+                    buttonVariant="compact"
+                  />
+                  {canManageResidents && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setEditingResident(r)}
+                        className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-900 transition"
+                        title="Edit Resident Profile"
+                        aria-label={`Edit profile for ${r.name}`}
+                      >
+                        <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeletingResident(r)}
+                        className="rounded-lg p-1.5 text-stone-400 hover:bg-red-50 hover:text-red-600 transition"
+                        title="Remove Resident"
+                        aria-label={`Remove ${r.name}`}
+                      >
+                        <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path
+                            fillRule="evenodd"
+                            d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      </button>
+                    </>
+                  )}
+                </div>
+              </td>
             </tr>
           ))}
         />

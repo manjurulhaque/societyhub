@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import Link from "next/link"
 import { AdminCard, AdminBadge, AdminTable } from "@/components/admin"
 import { TransferOwnershipModal, type PersonDirectoryOption } from "./TransferOwnershipModal"
 import { AddFlatPersonModal } from "./AddFlatPersonModal"
@@ -224,7 +225,12 @@ export function FlatProfileClient({
               rows={occupants.map((occ) => (
                 <tr key={occ.id} className="border-t border-stone-100 text-xs">
                   <td className="px-4 py-3.5">
-                    <span className="font-bold text-stone-950 block">{occ.personName}</span>
+                    <Link
+                      href={`/society/${societyCode}/members/${occ.personId}`}
+                      className="font-bold text-stone-950 hover:text-blue-600 transition block"
+                    >
+                      {occ.personName}
+                    </Link>
                     {occ.isPrimary && (
                       <span className="text-[10px] text-blue-700 font-semibold bg-blue-50 border border-blue-200 rounded px-1.5 py-0.2">
                         Primary Point of Contact
