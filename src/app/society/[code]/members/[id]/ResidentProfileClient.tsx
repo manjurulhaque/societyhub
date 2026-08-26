@@ -8,6 +8,7 @@ import { formatDateInAppTimeZone } from "@/lib/datetime"
 import { toggleResidentKyc } from "../residentActions"
 import { EditResidentModal, type EditableResident } from "../EditResidentModal"
 import { RecordConsolidatedPaymentModal, type AccountOption } from "./RecordConsolidatedPaymentModal"
+import { MapFlatToResidentModal, type AvailableFlatOption } from "./MapFlatToResidentModal"
 import { generateResidentStatementPDF, type SocietyLetterheadInfo } from "@/lib/pdf/residentStatementPdfGenerator"
 import { EntityAuditDrawer } from "@/components/audit/EntityAuditDrawer"
 
@@ -165,6 +166,7 @@ interface ResidentProfileClientProps {
   payments: ResidentPaymentItem[]
   statutory: ResidentStatutoryData
   accounts?: AccountOption[]
+  allSocietyFlats?: AvailableFlatOption[]
   societyInfo?: SocietyLetterheadInfo
   canManage: boolean
 }
@@ -179,12 +181,14 @@ export function ResidentProfileClient({
   payments,
   statutory,
   accounts = [],
+  allSocietyFlats = [],
   societyInfo,
   canManage,
 }: ResidentProfileClientProps) {
   const [activeTab, setActiveTab] = useState<string>("flats")
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
+  const [isMapFlatModalOpen, setIsMapFlatModalOpen] = useState(false)
   const [isTogglingKyc, startKycTransition] = useTransition()
   const [showFullKyc, setShowFullKyc] = useState(false)
 
@@ -580,20 +584,44 @@ export function ResidentProfileClient({
       {/* TAB 1: PROPERTIES & FLATS PORTFOLIO */}
       {activeTab === "flats" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-stone-900">
-              Owned & Occupied Flat Portfolio ({flats.length})
-            </h2>
-            <span className="text-xs text-stone-500">
-              Complete view of all apartments, commercial shops, and units registered under {resident.name}
-            </span>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-stone-900">
+                Owned & Occupied Flat Portfolio ({flats.length})
+              </h2>
+              <p className="text-xs text-stone-500">
+                Complete view of all apartments, commercial shops, and units registered under {resident.name}
+              </p>
+            </div>
+
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => setIsMapFlatModalOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 transition"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+                </svg>
+                <span>+ Map Additional Flat</span>
+              </button>
+            )}
           </div>
 
           {flats.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-stone-200 bg-white p-12 text-center shadow-xs">
+            <div className="rounded-3xl border border-dashed border-stone-200 bg-white p-12 text-center shadow-xs space-y-3">
               <p className="text-xs text-stone-500">
                 No flats are currently mapped to this resident.
               </p>
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => setIsMapFlatModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 transition"
+                >
+                  <span>+ Map First Flat</span>
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -1208,6 +1236,19 @@ export function ResidentProfileClient({
           bills={bills}
           flats={flats}
           accounts={accounts}
+        />
+      ) : null}
+
+      {/* Map Flat to Resident Modal */}
+      {isMapFlatModalOpen ? (
+        <MapFlatToResidentModal
+          isOpen={isMapFlatModalOpen}
+          onClose={() => setIsMapFlatModalOpen(false)}
+          societyCode={societyCode}
+          personId={resident.id}
+          personName={resident.name}
+          allSocietyFlats={allSocietyFlats}
+          alreadyMappedFlatIds={flats.map((f) => f.flatId)}
         />
       ) : null}
     </div>
