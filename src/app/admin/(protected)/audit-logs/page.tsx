@@ -5,7 +5,7 @@ import {
   AdminStatCard,
   AdminEmptyState,
 } from "@/components/admin"
-import { verifyAuditTrailIntegrity } from "@/lib/auditCrypto"
+import { verifyAuditTrailIntegrity, computeAuditSignature } from "@/lib/auditCrypto"
 import { AuditLogTableClient } from "@/components/audit/AuditLogTableClient"
 import type { AuditAction } from "@/generated/prisma/client"
 
@@ -240,10 +240,26 @@ export default async function AuditLogsPage({
           />
         ) : (
           <AuditLogTableClient
-            logs={logs.map((log) => ({
-              ...log,
-              createdAt: log.createdAt.toISOString(),
-            }))}
+            logs={logs.map((log) => {
+              const isSealValid = log.signature
+                ? computeAuditSignature({
+                    id: log.id,
+                    action: log.action,
+                    entity: log.entity,
+                    entityId: log.entityId,
+                    userId: log.userId,
+                    societyId: log.societyId,
+                    createdAt: log.createdAt,
+                    previousSignature: log.previousSignature || "GENESIS",
+                  }) === log.signature
+                : false
+
+              return {
+                ...log,
+                createdAt: log.createdAt.toISOString(),
+                isSealValid,
+              }
+            })}
             totalCount={totalCount}
             societyInfo={{
               name: "SocietyHub Global Audit Trail",

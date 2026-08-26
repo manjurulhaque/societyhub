@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dialog"
 import { AdminBadge } from "@/components/admin"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
-import { computeAuditSignature } from "@/lib/auditCrypto"
 import type { AuditAction } from "@/generated/prisma/client"
 import { Check, Copy, ShieldCheck, ShieldAlert } from "lucide-react"
 
@@ -29,6 +28,7 @@ export interface AuditLogDetailData {
   signature?: string | null
   previousSignature?: string | null
   createdAt: string | Date
+  isSealValid?: boolean
   user?: {
     id: string
     email: string
@@ -60,26 +60,13 @@ export function AuditLogDetailModal({
     setTimeout(() => setCopiedField(null), 2000)
   }
 
-  // Validate cryptographic seal in real-time
-  let isSealValid = false
-  let sealMessage = "Legacy unsealed record"
-
-  if (log.signature) {
-    const computed = computeAuditSignature({
-      id: log.id,
-      action: log.action,
-      entity: log.entity,
-      entityId: log.entityId,
-      userId: log.userId,
-      societyId: log.societyId,
-      createdAt: log.createdAt,
-      previousSignature: log.previousSignature || "GENESIS",
-    })
-    isSealValid = computed === log.signature
-    sealMessage = isSealValid
-      ? "Mathematical HMAC-SHA256 Seal Valid"
-      : "CRITICAL: Signature Mismatch - Tamper Detected"
-  }
+  // Validate cryptographic seal (evaluated on server with AUDIT_SECRET_KEY)
+  const isSealValid = Boolean(log.signature && log.isSealValid)
+  const sealMessage = !log.signature
+    ? "Legacy unsealed record"
+    : isSealValid
+    ? "Mathematical HMAC-SHA256 Seal Valid"
+    : "CRITICAL: Signature Mismatch - Tamper Detected"
 
   const getActionBadgeVariant = (act: AuditAction) => {
     switch (act) {
