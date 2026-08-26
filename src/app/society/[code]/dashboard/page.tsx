@@ -134,7 +134,7 @@ export default async function SocietyDashboardPage({
     <div className="mx-auto max-w-7xl space-y-8 px-4 py-6 sm:px-6 sm:py-8 md:px-8">
       {/* Header */}
       <AdminPageHeader
-        eyebrow="Society Overview"
+        eyebrow={`Logged in as ${context.user.name || context.user.email} (${designation})`}
         title={society.name}
         description={`Manage properties, residents, monthly maintenance billing, and payments for ${society.name}.`}
         action={

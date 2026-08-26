@@ -3,7 +3,7 @@ import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { getAdmin } from "@/lib/auth/getAdmin"
 import { CurrentIpDisplay } from "./CurrentIpDisplay"
-import { MobileSidebar } from "@/components/admin"
+import { MobileSidebar, AdminBadge } from "@/components/admin"
 
 export default async function ProtectedAdminLayout({
   children,
@@ -24,10 +24,13 @@ export default async function ProtectedAdminLayout({
   const sidebarContent = (
     <>
       <div>
-        <Link href="/admin/profile" className="group block">
+        <Link href="/admin/profile" className="group block rounded-xl p-2 -mx-2 hover:bg-stone-50 border border-transparent hover:border-stone-200 transition">
           <h2 className="font-bold text-lg text-stone-900 group-hover:text-stone-700 transition">Admin Panel</h2>
-          <p className="text-xs text-gray-500 mt-1 break-all group-hover:text-stone-700 transition">{admin.email}</p>
-          <p className="text-xs text-blue-600 font-medium">{admin.role}</p>
+          <div className="flex items-center justify-between gap-1.5 mt-1.5">
+            <span className="font-bold text-xs text-stone-900 truncate">{admin.name || admin.email.split("@")[0]}</span>
+            <AdminBadge variant="purple" size="sm" dot>{admin.role}</AdminBadge>
+          </div>
+          <p className="text-[11px] text-stone-500 mt-0.5 break-all group-hover:text-stone-700 transition">{admin.email}</p>
         </Link>
         <p className="text-xs text-gray-500 mt-3">Current IP</p>
         <CurrentIpDisplay initialIp={requestIp.value} initialSource={requestIp.source} />

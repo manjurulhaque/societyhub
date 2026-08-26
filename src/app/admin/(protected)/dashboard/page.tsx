@@ -119,7 +119,7 @@ export default async function DashboardPage() {
     <div className="mx-auto max-w-7xl space-y-8 px-4 py-6 sm:px-6 sm:py-8 md:px-8">
       {/* Header */}
       <AdminPageHeader
-        eyebrow="Platform Administration"
+        eyebrow={`Welcome, ${admin.name || admin.email} (Super Admin)`}
         title="Super Admin Dashboard"
         description="Global command center for managing housing societies, properties, residents, billing, and accounting operations."
         action={

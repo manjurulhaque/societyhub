@@ -28,6 +28,13 @@ export const getCurrentUser = cache(async () => {
       appRole: true,
       createdAt: true,
       updatedAt: true,
+      person: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+        },
+      },
       memberships: {
         select: {
           id: true,
@@ -49,8 +56,15 @@ export const getCurrentUser = cache(async () => {
     return null
   }
 
+  const name =
+    dbUser.person?.name ||
+    user.user_metadata?.full_name ||
+    user.user_metadata?.name ||
+    null
+
   return {
     ...dbUser,
+    name,
     supabaseUser: user,
   }
 })

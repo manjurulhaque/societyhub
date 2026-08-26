@@ -59,13 +59,18 @@ export default async function SocietyPortalLayout({
 
         <Link
           href={`/society/${societyCode}/profile`}
-          className="group flex flex-wrap items-center gap-1.5 pt-1 hover:opacity-80 transition"
+          className="group block pt-1 rounded-xl p-2 -mx-2 hover:bg-stone-50 border border-transparent hover:border-stone-200 transition"
           title="View My Profile & Security Credentials"
         >
-          <AdminBadge variant={isSuperAdmin ? "purple" : "info"} size="sm" dot>
-            {designation}
-          </AdminBadge>
-          <p className="text-xs text-stone-500 group-hover:text-stone-900 group-hover:underline truncate transition" title={user.email}>
+          <div className="flex items-center justify-between gap-1">
+            <span className="font-bold text-xs text-stone-900 group-hover:text-stone-950 truncate">
+              {user.name || user.email.split("@")[0]}
+            </span>
+            <AdminBadge variant={isSuperAdmin ? "purple" : "info"} size="sm" dot>
+              {designation}
+            </AdminBadge>
+          </div>
+          <p className="text-[11px] text-stone-500 group-hover:text-stone-700 truncate mt-0.5" title={user.email}>
             {user.email}
           </p>
         </Link>
