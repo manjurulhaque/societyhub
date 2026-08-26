@@ -236,3 +236,131 @@ export async function toggleResidentKyc(
     return { error: getSafeErrorMessage(err, "Failed to update KYC status.") }
   }
 }
+
+/**
+ * Updates an existing resident / person's profile details.
+ */
+export async function updateResident(
+  societyCode: string,
+  personId: string,
+  data: {
+    name: string
+    phone?: string | null
+    email?: string | null
+    panNumber?: string | null
+    aadhaarNumber?: string | null
+    passportNumber?: string | null
+    voterId?: string | null
+    dob?: string | null
+    gender?: string | null
+    bloodGroup?: string | null
+    occupation?: string | null
+    emergencyContactName?: string | null
+    emergencyContactPhone?: string | null
+    permanentAddress?: string | null
+    kycVerified?: boolean
+  }
+): Promise<ResidentActionState> {
+  try {
+    const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
+    const societyId = context.society.id
+
+    const name = sanitizeText(data.name)
+    if (!name) {
+      return { error: "Resident's full name is required." }
+    }
+
+    const existingPerson = await prisma.person.findFirst({
+      where: { id: personId, societyId, deletedAt: null },
+    })
+
+    if (!existingPerson) {
+      return { error: "Resident record not found." }
+    }
+
+    const phone = data.phone ? sanitizeText(data.phone) : null
+    const email = data.email ? sanitizeText(data.email).toLowerCase() : null
+
+    const rawPan = data.panNumber?.trim().toUpperCase() || null
+    const panNumber = rawPan ? encryptData(rawPan) : null
+
+    const rawAadhaar = data.aadhaarNumber?.trim() || null
+    const aadhaarNumber = rawAadhaar ? encryptData(rawAadhaar) : null
+
+    const passportNumber = data.passportNumber ? sanitizeText(data.passportNumber).toUpperCase() : null
+    const voterId = data.voterId ? sanitizeText(data.voterId).toUpperCase() : null
+    const gender = data.gender ? sanitizeText(data.gender) : null
+    const bloodGroup = data.bloodGroup ? sanitizeText(data.bloodGroup) : null
+    const occupation = data.occupation ? sanitizeText(data.occupation) : null
+    const emergencyContactName = data.emergencyContactName ? sanitizeText(data.emergencyContactName) : null
+    const emergencyContactPhone = data.emergencyContactPhone ? sanitizeText(data.emergencyContactPhone) : null
+    const permanentAddress = data.permanentAddress ? sanitizeText(data.permanentAddress) : null
+    const dob = data.dob ? new Date(data.dob) : null
+
+    const kycVerified = data.kycVerified !== undefined ? Boolean(data.kycVerified) : existingPerson.kycVerified
+    const kycVerifiedAt =
+      kycVerified !== existingPerson.kycVerified
+        ? kycVerified
+          ? new Date()
+          : null
+        : existingPerson.kycVerifiedAt
+
+    const updatedPerson = await prisma.person.update({
+      where: { id: personId },
+      data: {
+        name,
+        phone,
+        email,
+        panNumber,
+        aadhaarNumber,
+        passportNumber,
+        voterId,
+        dob,
+        gender,
+        bloodGroup,
+        occupation,
+        emergencyContactName,
+        emergencyContactPhone,
+        permanentAddress,
+        kycVerified,
+        kycVerifiedAt,
+      },
+    })
+
+    await recordAuditLog({
+      societyId,
+      userId: context.user.id,
+      action: "UPDATE",
+      entity: "Person",
+      entityId: personId,
+      description: `${context.user.email} updated profile for resident "${name}"`,
+      oldData: {
+        name: existingPerson.name,
+        phone: existingPerson.phone,
+        email: existingPerson.email,
+        kycVerified: existingPerson.kycVerified,
+      },
+      newData: {
+        name: updatedPerson.name,
+        phone: updatedPerson.phone,
+        email: updatedPerson.email,
+        kycVerified: updatedPerson.kycVerified,
+      },
+    })
+
+    revalidatePath(`/society/${societyCode}/members`)
+    revalidatePath(`/society/${societyCode}/flats`)
+    revalidatePath(`/society/${societyCode}/dashboard`)
+    revalidatePath(`/admin/people`)
+    revalidatePath(`/admin/people/${personId}`)
+
+    return {
+      success: true,
+      message: `Profile for "${name}" updated successfully.`,
+    }
+  } catch (err: unknown) {
+    console.error("Failed to update resident profile:", err)
+    return { error: getSafeErrorMessage(err, "Failed to update resident profile.") }
+  }
+}
+

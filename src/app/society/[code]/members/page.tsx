@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { prisma } from "@/lib/prisma"
+import { decryptData } from "@/lib/crypto"
 import { AdminPageHeader, AdminCard } from "@/components/admin"
 import { CommitteeMembersClient, type CommitteeMemberItem } from "./CommitteeMembersClient"
 import { ResidentsDirectoryClient, type ResidentItem } from "./ResidentsDirectoryClient"
@@ -177,13 +178,25 @@ export default async function SocietyMembersPage({
 
     const primaryRole = r.flats[0]?.role || "RESIDENT"
 
+    const decryptedPan = r.panNumber ? decryptData(r.panNumber) : null
+    const decryptedAadhaar = r.aadhaarNumber ? decryptData(r.aadhaarNumber) : null
+
     return {
       id: r.id,
       name: r.name,
       phone: r.phone,
       email: r.email,
-      panNumber: r.panNumber,
-      aadhaarNumber: r.aadhaarNumber,
+      panNumber: decryptedPan,
+      aadhaarNumber: decryptedAadhaar,
+      passportNumber: r.passportNumber,
+      voterId: r.voterId,
+      dob: r.dob ? r.dob.toISOString() : null,
+      gender: r.gender,
+      bloodGroup: r.bloodGroup,
+      occupation: r.occupation,
+      permanentAddress: r.permanentAddress,
+      emergencyContactName: r.emergencyContactName,
+      emergencyContactPhone: r.emergencyContactPhone,
       primaryRole,
       flatsDisplay: flatList,
       kycVerified: Boolean(r.kycVerified),

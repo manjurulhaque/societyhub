@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import type { EmailOtpType } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/client"
 import { validatePasswordStrength } from "@/lib/auth/passwordValidation"
 
@@ -77,7 +78,7 @@ export default function SetPasswordPage() {
           const searchParams = new URLSearchParams(window.location.search)
           const code = searchParams.get("code")
           const tokenHash = searchParams.get("token_hash")
-          const type = (searchParams.get("type") || "recovery") as any
+          const type = (searchParams.get("type") || "recovery") as EmailOtpType
 
           if (code) {
             const { data, error: codeErr } = await supabase.auth.exchangeCodeForSession(code)
