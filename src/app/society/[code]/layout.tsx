@@ -57,14 +57,18 @@ export default async function SocietyPortalLayout({
           {society.name}
         </h1>
 
-        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+        <Link
+          href={`/society/${societyCode}/profile`}
+          className="group flex flex-wrap items-center gap-1.5 pt-1 hover:opacity-80 transition"
+          title="View My Profile & Security Credentials"
+        >
           <AdminBadge variant={isSuperAdmin ? "purple" : "info"} size="sm" dot>
             {designation}
           </AdminBadge>
-          <p className="text-xs text-stone-500 truncate" title={user.email}>
+          <p className="text-xs text-stone-500 group-hover:text-stone-900 group-hover:underline truncate transition" title={user.email}>
             {user.email}
           </p>
-        </div>
+        </Link>
 
         {currentFY && (
           <div className="pt-1">
@@ -291,6 +295,13 @@ export default async function SocietyPortalLayout({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
           Society Settings
+        </SocietySidebarLink>
+
+        <SocietySidebarLink href={`/society/${societyCode}/profile`}>
+          <svg className="h-4 w-4 shrink-0 text-stone-400 group-hover:text-stone-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+          My Profile & Security
         </SocietySidebarLink>
 
       </nav>
