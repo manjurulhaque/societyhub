@@ -290,10 +290,15 @@ export function AuditLogDetailModal({
             <span className="text-[10px] uppercase font-bold text-stone-500 block">
               Network IP & User Agent
             </span>
-            <span className="text-xs font-mono text-stone-900 block">
-              {log.ipAddress || "—"}
+            <span className="text-xs font-mono font-bold text-stone-900 block">
+              {log.ipAddress || "Not Recorded (Legacy)"}
+              {log.ipAddress === "127.0.0.1" && (
+                <span className="text-[10px] font-sans font-normal text-stone-500 ml-1.5">
+                  (Localhost)
+                </span>
+              )}
             </span>
-            <span className="text-[10px] text-stone-500 truncate block">
+            <span className="text-[10px] text-stone-500 truncate block mt-0.5" title={log.userAgent || undefined}>
               {log.userAgent || "Internal Server Context"}
             </span>
           </div>

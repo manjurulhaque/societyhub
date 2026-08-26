@@ -213,8 +213,15 @@ export function AuditLogTableClient({
                     <p className="line-clamp-2">{log.description || "—"}</p>
                   </td>
 
-                  <td className="px-4 py-3.5 font-mono text-[11px] text-stone-500 whitespace-nowrap">
-                    {log.ipAddress || "—"}
+                  <td className="px-4 py-3.5 font-mono text-[11px] text-stone-600 whitespace-nowrap">
+                    {log.ipAddress ? (
+                      <span className="inline-flex items-center gap-1.5 font-semibold text-stone-800">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        {log.ipAddress}
+                      </span>
+                    ) : (
+                      <span className="text-stone-400">—</span>
+                    )}
                   </td>
 
                   <td className="px-4 py-3.5 text-right whitespace-nowrap">

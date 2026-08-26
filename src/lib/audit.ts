@@ -20,22 +20,65 @@ export interface AuditLogPayload {
 }
 
 /**
- * Extracts client IP and User-Agent from active Next.js request headers.
- * Safely handles server actions, route handlers, and non-request contexts (CLI/scripts).
+ * Normalizes client IP addresses by stripping IPv4-mapped IPv6 prefixes (::ffff:),
+ * converting loopbacks (::1 -> 127.0.0.1), and removing proxy ports.
+ */
+export function normalizeIpAddress(rawIp?: string | null): string | null {
+  if (!rawIp) return null
+
+  let ip = rawIp.trim()
+
+  // Strip IPv4-mapped IPv6 prefix (e.g., ::ffff:127.0.0.1 -> 127.0.0.1)
+  if (ip.startsWith("::ffff:")) {
+    ip = ip.substring(7)
+  }
+
+  // Normalize IPv6 loopback to standard IPv4 localhost
+  if (ip === "::1") {
+    return "127.0.0.1"
+  }
+
+  // Remove port if present on IPv4 (e.g. 127.0.0.1:54321 -> 127.0.0.1)
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$/.test(ip)) {
+    ip = ip.split(":")[0]
+  }
+
+  return ip || null
+}
+
+/**
+ * Extracts and normalizes client IP and User-Agent from active Next.js request headers.
+ * Supports Cloudflare (cf-connecting-ip), AWS/Nginx (x-forwarded-for, x-real-ip),
+ * Akamai (true-client-ip), and standard server action contexts.
  */
 async function getClientRequestMeta(): Promise<{ ipAddress: string | null; userAgent: string | null }> {
   try {
     const headerStore = await headers()
+    
     const cfConnectingIp = headerStore.get("cf-connecting-ip")
+    const trueClientIp = headerStore.get("true-client-ip")
+    const xRealIp = headerStore.get("x-real-ip")
+    const xClientIp = headerStore.get("x-client-ip")
     const forwardedFor = headerStore.get("x-forwarded-for")
-    const realIp = headerStore.get("x-real-ip")
     const userAgent = headerStore.get("user-agent") || null
 
-    const ipAddress =
-      cfConnectingIp ||
-      (forwardedFor ? forwardedFor.split(",")[0].trim() : null) ||
-      realIp ||
-      null
+    let rawIp: string | null = null
+
+    if (cfConnectingIp) {
+      rawIp = cfConnectingIp.trim()
+    } else if (trueClientIp) {
+      rawIp = trueClientIp.trim()
+    } else if (xRealIp) {
+      rawIp = xRealIp.trim()
+    } else if (xClientIp) {
+      rawIp = xClientIp.trim()
+    } else if (forwardedFor) {
+      // x-forwarded-for may be "client, proxy1, proxy2" -> first is original client
+      const ips = forwardedFor.split(",").map((s) => s.trim()).filter(Boolean)
+      rawIp = ips[0] || null
+    }
+
+    const ipAddress = normalizeIpAddress(rawIp)
 
     return { ipAddress, userAgent }
   } catch {
