@@ -35,7 +35,8 @@ export async function GET() {
         entity: "User",
         entityId: user.id,
         userId: user.id,
-        societyId: user.memberships?.[0]?.societyId || null,
+        // Super Admins are platform-global: never log against specific society ledgers
+        societyId: user.appRole === "SUPER_ADMIN" ? null : user.memberships?.[0]?.societyId || null,
         description: `User ${user.email} signed in (${user.appRole})`,
       })
     }
