@@ -443,12 +443,26 @@ export default async function SocietyResidentProfilePage({
 
   const currencySymbol = society.currencySymbol || "₹"
 
+  const societyInfo = {
+    name: society.name,
+    code: society.code,
+    address: society.address,
+    city: society.city,
+    state: society.state,
+    pincode: society.pincode,
+    registrationNumber: society.registrationNumber,
+    panNumber: society.panNumber,
+    gstin: society.gstin,
+    currencySymbol,
+  }
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-6 py-8 md:px-8">
       <ResidentProfileClient
         societyCode={code}
         societyId={society.id}
         currencySymbol={currencySymbol}
+        societyInfo={societyInfo}
         resident={residentProfile}
         flats={flats}
         bills={bills}

@@ -8,6 +8,7 @@ import { formatDateInAppTimeZone } from "@/lib/datetime"
 import { toggleResidentKyc } from "../residentActions"
 import { EditResidentModal, type EditableResident } from "../EditResidentModal"
 import { RecordConsolidatedPaymentModal, type AccountOption } from "./RecordConsolidatedPaymentModal"
+import { generateResidentStatementPDF, type SocietyLetterheadInfo } from "@/lib/pdf/residentStatementPdfGenerator"
 import { EntityAuditDrawer } from "@/components/audit/EntityAuditDrawer"
 
 export type FlatPortfolioItem = {
@@ -164,6 +165,7 @@ interface ResidentProfileClientProps {
   payments: ResidentPaymentItem[]
   statutory: ResidentStatutoryData
   accounts?: AccountOption[]
+  societyInfo?: SocietyLetterheadInfo
   canManage: boolean
 }
 
@@ -177,6 +179,7 @@ export function ResidentProfileClient({
   payments,
   statutory,
   accounts = [],
+  societyInfo,
   canManage,
 }: ResidentProfileClientProps) {
   const [activeTab, setActiveTab] = useState<string>("flats")
@@ -195,6 +198,111 @@ export function ResidentProfileClient({
   const handleToggleKyc = () => {
     startKycTransition(async () => {
       await toggleResidentKyc(societyCode, resident.id)
+    })
+  }
+
+  const handleDownloadStatement = () => {
+    // Collect unified financial ledger events
+    const rawEvents: {
+      date: string
+      flat: string
+      description: string
+      refNumber: string
+      debit: number
+      credit: number
+      status: string
+    }[] = []
+
+    // 1. Add all bills (demands)
+    for (const b of bills) {
+      rawEvents.push({
+        date: b.dueDate || b.createdAt,
+        flat: `${b.blockName}-${b.flatNumber}`,
+        description: `Demand: ${b.billType.replace(/_/g, " ")} (${b.month}/${b.year})`,
+        refNumber: b.billNumber || "—",
+        debit: b.amount,
+        credit: 0,
+        status: b.status,
+      })
+    }
+
+    // 2. Add all payments (credits)
+    for (const p of payments) {
+      rawEvents.push({
+        date: p.paidOn,
+        flat: p.blockName && p.flatNumber ? `${p.blockName}-${p.flatNumber}` : "General / All Units",
+        description: `Payment via ${p.mode}${p.remarks ? ` - ${p.remarks}` : ""}`,
+        refNumber: p.receiptNumber || p.referenceNumber || "—",
+        debit: 0,
+        credit: p.amount,
+        status: p.status,
+      })
+    }
+
+    // Sort chronologically ascending
+    rawEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+    let runningBalance = 0
+    const financialLedger = rawEvents.map((evt) => {
+      runningBalance += evt.debit - evt.credit
+      return {
+        ...evt,
+        balance: runningBalance,
+      }
+    })
+
+    const totalDemanded = bills.reduce((sum, b) => sum + b.amount, 0)
+    const totalPaid = payments.filter((p) => p.status === "SUCCESS").reduce((sum, p) => sum + p.amount, 0)
+
+    generateResidentStatementPDF({
+      society: societyInfo || {
+        name: "Cooperative Housing Society",
+        code: societyCode,
+        currencySymbol,
+      },
+      resident: {
+        name: resident.name,
+        phone: resident.phone,
+        email: resident.email,
+        panNumber: resident.panNumber,
+        aadhaarNumber: resident.aadhaarNumber,
+        permanentAddress: resident.permanentAddress,
+        occupation: resident.occupation,
+        emergencyContactName: resident.emergencyContactName,
+        emergencyContactPhone: resident.emergencyContactPhone,
+        kycVerified: resident.kycVerified,
+      },
+      flats: flats.map((f) => ({
+        number: f.number,
+        blockName: f.blockName,
+        role: f.role,
+        area: f.area,
+        areaUnit: f.areaUnit,
+        status: f.status,
+        shareCertificateNumber: f.shareCertificateNumber,
+      })),
+      financialLedger,
+      summary: {
+        totalDemanded,
+        totalPaid,
+        currentOutstanding: totalUnpaidDues,
+        activeDeposits: totalActiveDeposits,
+      },
+      statutory: {
+        shareCertificates: statutory.shareCertificates.map((s) => ({
+          certificateNumber: s.certificateNumber,
+          flat: `${s.blockName}-${s.flatNumber}`,
+          sharesCount: s.sharesCount,
+          distinctiveRange: s.distinctiveRange,
+          faceValue: s.faceValue,
+        })),
+        nominations: statutory.nominations.map((n) => ({
+          nomineeName: n.nomineeName,
+          relationship: n.relationship,
+          percentageShare: n.percentageShare,
+          flat: `${n.blockName}-${n.flatNumber}`,
+        })),
+      },
     })
   }
 
@@ -332,6 +440,18 @@ export function ResidentProfileClient({
 
           {/* Action Tools */}
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDownloadStatement}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-xs font-semibold text-stone-700 shadow-xs hover:bg-stone-50 hover:text-stone-900 transition"
+              title="Export official resident statement and financial ledger (PDF)"
+            >
+              <svg className="h-4 w-4 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>Download Statement (PDF)</span>
+            </button>
+
             <EntityAuditDrawer
               entity="Person"
               entityId={resident.id}
