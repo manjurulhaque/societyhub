@@ -2,13 +2,11 @@ import { requireSuperAdmin } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import {
   AdminPageHeader,
-  AdminTable,
-  AdminBadge,
   AdminStatCard,
   AdminEmptyState,
 } from "@/components/admin"
-import { formatDateInAppTimeZone } from "@/lib/datetime"
 import { verifyAuditTrailIntegrity } from "@/lib/auditCrypto"
+import { AuditLogTableClient } from "@/components/audit/AuditLogTableClient"
 import type { AuditAction } from "@/generated/prisma/client"
 
 export default async function AuditLogsPage({
@@ -100,21 +98,6 @@ export default async function AuditLogsPage({
   const chainIntegrity = verifyAuditTrailIntegrity(recentChainLogs)
   const displayedIntegrity = verifyAuditTrailIntegrity(logs, { allowNonConsecutive: true })
   const integrity = !displayedIntegrity.isValid ? displayedIntegrity : chainIntegrity
-
-  const getActionBadgeVariant = (act: AuditAction) => {
-    switch (act) {
-      case "CREATE":
-        return "success"
-      case "UPDATE":
-        return "info"
-      case "DELETE":
-        return "danger"
-      case "STATUS_CHANGE":
-        return "warning"
-      default:
-        return "neutral"
-    }
-  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-6 py-8 md:px-8">
@@ -256,92 +239,17 @@ export default async function AuditLogsPage({
             description="No recorded security or mutation logs match your filter criteria."
           />
         ) : (
-          <div className="overflow-x-auto">
-            <AdminTable
-              headers={[
-                "Timestamp",
-                "Action",
-                "Entity",
-                "Actor / Operator",
-                "Description",
-                "Tenant Scope",
-                "IP Address",
-              ]}
-              rows={logs.map((log) => {
-                const isTampered = !integrity.isValid && integrity.tamperedLogId === log.id
-                return (
-                  <tr
-                    key={log.id}
-                    className={`border-t border-stone-100 transition-colors ${
-                      isTampered
-                        ? "bg-rose-50/90 border-l-4 border-l-rose-600"
-                        : "hover:bg-stone-50/70"
-                    }`}
-                  >
-                    <td className="px-4 py-3.5 text-xs font-medium text-stone-600 whitespace-nowrap">
-                      {formatDateInAppTimeZone(log.createdAt)}
-                    </td>
-
-                    <td className="px-4 py-3.5 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        <AdminBadge variant={getActionBadgeVariant(log.action)}>
-                          {log.action}
-                        </AdminBadge>
-                        {isTampered && (
-                          <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white uppercase">
-                            Tampered
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
-                  <td className="px-4 py-3.5 whitespace-nowrap font-mono text-xs font-bold text-stone-900">
-                    {log.entity}
-                    {log.entityId ? (
-                      <span className="block text-[10px] font-normal text-stone-400 truncate max-w-[120px]">
-                        {log.entityId}
-                      </span>
-                    ) : null}
-                  </td>
-
-                  <td className="px-4 py-3.5 text-xs text-stone-800">
-                    <span className="font-semibold block">
-                      {log.user?.email || "System"}
-                    </span>
-                    {log.user?.appRole ? (
-                      <span className="text-[10px] text-stone-500">
-                        {log.user.appRole}
-                      </span>
-                    ) : null}
-                  </td>
-
-                  <td className="px-4 py-3.5 text-xs text-stone-700 max-w-xs">
-                    <p className="line-clamp-2">{log.description || "—"}</p>
-                  </td>
-
-                  <td className="px-4 py-3.5 text-xs text-stone-600 whitespace-nowrap">
-                    {log.society ? (
-                      <div>
-                        <span className="font-semibold block text-stone-900">
-                          {log.society.name}
-                        </span>
-                        <span className="font-mono text-[10px] text-stone-500">
-                          {log.society.code || log.society.id}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-stone-400">Global / System</span>
-                    )}
-                  </td>
-
-                  <td className="px-4 py-3.5 font-mono text-[11px] text-stone-500 whitespace-nowrap">
-                    {log.ipAddress || "—"}
-                  </td>
-                  </tr>
-                )
-              })}
-            />
-          </div>
+          <AuditLogTableClient
+            logs={logs.map((log) => ({
+              ...log,
+              createdAt: log.createdAt.toISOString(),
+            }))}
+            totalCount={totalCount}
+            societyInfo={{
+              name: "SocietyHub Global Audit Trail",
+            }}
+            integrityStatus={integrity}
+          />
         )}
       </div>
     </div>
