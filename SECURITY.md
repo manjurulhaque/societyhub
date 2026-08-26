@@ -205,7 +205,18 @@ SocietyHub implements a 6-tier functional role hierarchy with strict separation 
 - **Production Console Stripping**: Configured via Next.js compiler in `next.config.ts` to automatically strip `console.log` and `console.debug` statements in production builds to prevent accidental client-side log inspection.
 - **Runtime Environment Validator (`@/lib/env.ts`)**: Verifies required environment secrets (`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ENCRYPTION_SECRET_KEY`, `AUDIT_HMAC_SECRET_KEY`) at boot time using Zod schemas.
 
-### N. Security Health & Diagnostics Probe
+### N. High-Risk Alert Webhooks & Real-Time SIEM Notifications
+- **Automated Risk Engine (`@/lib/auditAlerts.ts`)**:
+  - Classifies audit events in real time by severity (`CRITICAL`, `HIGH`, `MEDIUM`, `INFO`):
+    - **CRITICAL**: Disbursements and expenses $\ge ₹50,000$, Bank Account deletion, Management Committee member removal, Bounced cheques.
+    - **HIGH**: Disbursements $\ge ₹10,000$, Bank Account additions/modifications, new Committee member provisioning, Society statutory settings alterations.
+    - **MEDIUM**: General record deletions across any database table.
+- **HMAC-SHA256 Signed Multi-Target Dispatcher**:
+  - Automatically formats payloads for **Generic JSON / SIEM Webhooks**, **Slack Block Kit**, and **Discord Rich Embeds**.
+  - Signs all outbound webhook requests with HMAC-SHA256 in the `X-SocietyHub-Signature: sha256=...` header using `AUDIT_ALERT_WEBHOOK_SECRET` for recipient verification.
+  - Fully asynchronous and non-blocking with a strict 5-second timeout, ensuring zero impact on user response times.
+
+### O. Security Health & Diagnostics Probe
 - Automated health check endpoint at `/api/health/security` continuously verifies:
   1. Database connectivity (`SELECT 1`).
   2. AES-256-GCM encryption/decryption round-trip parity.
@@ -223,7 +234,7 @@ npm run security:check
 ```
 
 This script executes:
-1. **Automated Cryptographic & Security Self-Tests (`tsx scripts/test-security.ts`)**: Mathematically validates **53 security assertions across 8 core test suites** (AES-256-GCM, HMAC-SHA256 audit chaining & tamper detection, rate limiter, CSV DDE escaping, XSS sanitization, open redirect defense, NIST password policy, and recursive PII redaction).
+1. **Automated Cryptographic & Security Self-Tests (`tsx scripts/test-security.ts`)**: Mathematically validates **69 security assertions across 9 core test suites** (AES-256-GCM, HMAC-SHA256 audit chaining & tamper detection, rate limiter, CSV DDE escaping, XSS sanitization, open redirect defense, NIST password policy, recursive PII redaction, and high-risk alert webhook signing).
 2. **ESLint Rule Validation**: Codebase-wide linting with 0 errors and 0 warnings.
 3. **Next.js Production Build**: TypeScript type-checking and static/dynamic optimization across all 44 App Router routes.
 

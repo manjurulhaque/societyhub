@@ -3,6 +3,7 @@ import { headers } from "next/headers"
 import { prisma } from "@/lib/prisma"
 import { sanitizeAuditPayload } from "@/lib/auditSanitizer"
 import { computeAuditSignature } from "@/lib/auditCrypto"
+import { dispatchAuditAlertWebhook } from "@/lib/auditAlerts"
 import type { Prisma, AuditAction } from "@/generated/prisma/client"
 
 export interface AuditLogPayload {
@@ -148,6 +149,22 @@ export async function recordAuditLog(payload: AuditLogPayload): Promise<void> {
         previousSignature,
         createdAt,
       },
+    })
+
+    // Non-blocking trigger for high-risk alerts & webhooks
+    void dispatchAuditAlertWebhook({
+      id,
+      action: payload.action,
+      entity: payload.entity,
+      entityId: payload.entityId ?? null,
+      userId: payload.userId ?? null,
+      societyId: payload.societyId ?? null,
+      description: payload.description ?? null,
+      ipAddress,
+      userAgent,
+      oldData: sanitizedOldData,
+      newData: sanitizedNewData,
+      createdAt,
     })
   } catch (error) {
     console.error("[AuditLog] Failed to record audit entry:", error)

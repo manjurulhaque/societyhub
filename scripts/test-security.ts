@@ -10,6 +10,7 @@
  * 6. Centralized Open Redirect Defense Protocol
  * 7. NIST SP 800-63B Password Policy Compliance
  * 8. Automated Audit PII & Secret Redaction Engine
+ * 9. High-Risk Audit Alert Classification & HMAC-Signed Webhook Engine
  */
 
 import { encryptData, decryptData, isEncrypted } from "../src/lib/crypto"
@@ -20,6 +21,11 @@ import { sanitizeText } from "../src/lib/sanitize"
 import { getSafeRedirectUrl } from "../src/lib/auth/safeRedirect"
 import { validatePasswordStrength } from "../src/lib/auth/passwordValidation"
 import { sanitizeAuditPayload } from "../src/lib/auditSanitizer"
+import {
+  evaluateAuditAlertSeverity,
+  signWebhookPayload,
+  formatAuditAlertPayload,
+} from "../src/lib/auditAlerts"
 
 let passedTests = 0
 let failedTests = 0
@@ -41,7 +47,7 @@ console.log("===================================================================
 // -----------------------------------------------------------------------------
 // TEST 1: AES-256-GCM Cryptography
 // -----------------------------------------------------------------------------
-console.log("▶ [1/8] Testing AES-256-GCM Field-Level Cryptography...")
+console.log("▶ [1/9] Testing AES-256-GCM Field-Level Cryptography...")
 try {
   const plaintext = "PAN-ABCDE1234F-SECRET-12345"
   const ciphertext = encryptData(plaintext)
@@ -69,7 +75,7 @@ try {
 // -----------------------------------------------------------------------------
 // TEST 2: HMAC-SHA256 Merkle Audit Trail Integrity
 // -----------------------------------------------------------------------------
-console.log("\n▶ [2/8] Testing HMAC-SHA256 Audit Trail Cryptographic Chaining...")
+console.log("\n▶ [2/9] Testing HMAC-SHA256 Audit Trail Cryptographic Chaining...")
 try {
   const date1 = new Date("2026-01-01T10:00:00Z")
   const date2 = new Date("2026-01-01T10:05:00Z")
@@ -156,7 +162,7 @@ try {
 // -----------------------------------------------------------------------------
 // TEST 3: Sliding-Window Rate Limiter
 // -----------------------------------------------------------------------------
-console.log("\n▶ [3/8] Testing Sliding-Window In-Memory Rate Limiter...")
+console.log("\n▶ [3/9] Testing Sliding-Window In-Memory Rate Limiter...")
 try {
   const testKey = `test-rate-limit-${Date.now()}`
   const options = { maxRequests: 2, windowSeconds: 60 }
@@ -183,7 +189,7 @@ try {
 // -----------------------------------------------------------------------------
 // TEST 4: Universal CSV Formula Injection (DDE) Neutralization
 // -----------------------------------------------------------------------------
-console.log("\n▶ [4/8] Testing CSV / Excel Formula Injection (DDE) Sanitization...")
+console.log("\n▶ [4/9] Testing CSV / Excel Formula Injection (DDE) Sanitization...")
 try {
   const formula1 = "=cmd|'/c calc'!A0"
   const formula2 = "+2+5"
@@ -207,7 +213,7 @@ try {
 // -----------------------------------------------------------------------------
 // TEST 5: Input Sanitizer (Stored XSS & Control Characters)
 // -----------------------------------------------------------------------------
-console.log("\n▶ [5/8] Testing Input Sanitizer Stored XSS & Control Character Removal...")
+console.log("\n▶ [5/9] Testing Input Sanitizer Stored XSS & Control Character Removal...")
 try {
   const xss1 = "<script>alert('XSS')</script>Society Notice"
   const xss2 = "<img src=x onerror=alert('pwned')>Safe Title"
@@ -225,7 +231,7 @@ try {
 // -----------------------------------------------------------------------------
 // TEST 6: Open Redirect Defense
 // -----------------------------------------------------------------------------
-console.log("\n▶ [6/8] Testing Open Redirect Defense Protocol...")
+console.log("\n▶ [6/9] Testing Open Redirect Defense Protocol...")
 try {
   const safePath = "/society/GREEN-OAKS/dashboard?tab=bills"
   const evilRelative = "//attacker.com/steal"
@@ -247,7 +253,7 @@ try {
 // -----------------------------------------------------------------------------
 // TEST 7: NIST SP 800-63B Password Policy Engine
 // -----------------------------------------------------------------------------
-console.log("\n▶ [7/8] Testing NIST SP 800-63B Password Policy Engine...")
+console.log("\n▶ [7/9] Testing NIST SP 800-63B Password Policy Engine...")
 try {
   const shortPass = "Pass@123"
   const breachedPass = "password1234"
@@ -270,7 +276,7 @@ try {
 // -----------------------------------------------------------------------------
 // TEST 8: Automated Audit PII & Secret Redaction Engine
 // -----------------------------------------------------------------------------
-console.log("\n▶ [8/8] Testing Automated Audit Payload PII & Secret Redaction...")
+console.log("\n▶ [8/9] Testing Automated Audit Payload PII & Secret Redaction...")
 try {
   const rawPayload = {
     password: "SuperSecretPassword123!",
@@ -314,6 +320,96 @@ try {
   assert(sanitized.nested?.memberPan === "AB••••••K", "Recursively masks nested PAN")
 } catch (e: unknown) {
   assert(false, "Audit PII Redaction threw unexpected error", e instanceof Error ? e.message : String(e))
+}
+
+// -----------------------------------------------------------------------------
+// TEST 9: High-Risk Audit Alert Classification & HMAC-Signed Webhook Engine
+// -----------------------------------------------------------------------------
+console.log("\n▶ [9/9] Testing High-Risk Audit Alert Classification & HMAC-Signed Webhook Engine...")
+try {
+  // Test 9.1: High-value expense detection (>= ₹50,000)
+  const highValueExpense = evaluateAuditAlertSeverity({
+    id: "test-alert-1",
+    action: "CREATE",
+    entity: "Expense",
+    description: "Approved lift modernization payment",
+    newData: { amount: 150000, category: "REPAIRS" },
+    createdAt: new Date(),
+  })
+  assert(highValueExpense.isAlertable, "Identifies high-value expense (≥ ₹50,000) as alertable")
+  assert(highValueExpense.severity === "CRITICAL", "Assigns CRITICAL severity to high-value disbursement")
+  assert(highValueExpense.category === "FINANCIAL", "Categorizes high-value transaction under FINANCIAL")
+
+  // Test 9.2: Bank Account deletion
+  const bankDeletion = evaluateAuditAlertSeverity({
+    id: "test-alert-2",
+    action: "DELETE",
+    entity: "Account",
+    description: "Deleted HDFC Maintenance Account",
+    createdAt: new Date(),
+  })
+  assert(bankDeletion.isAlertable, "Flags Bank Account deletion as alertable")
+  assert(bankDeletion.severity === "CRITICAL", "Assigns CRITICAL severity to bank account deletion")
+
+  // Test 9.3: Committee Member removal
+  const memberRemoval = evaluateAuditAlertSeverity({
+    id: "test-alert-3",
+    action: "DELETE",
+    entity: "SocietyMember",
+    description: "Removed Treasurer from committee",
+    createdAt: new Date(),
+  })
+  assert(memberRemoval.isAlertable, "Flags Management Committee member removal as alertable")
+  assert(memberRemoval.severity === "CRITICAL", "Assigns CRITICAL severity to committee removal")
+  assert(memberRemoval.category === "SECURITY_ACCESS", "Categorizes committee removal under SECURITY_ACCESS")
+
+  // Test 9.4: Cheque status change to BOUNCED
+  const chequeBounce = evaluateAuditAlertSeverity({
+    id: "test-alert-4",
+    action: "STATUS_CHANGE",
+    entity: "Cheque",
+    newData: { status: "BOUNCED" },
+    createdAt: new Date(),
+  })
+  assert(chequeBounce.isAlertable, "Flags bounced cheque status change as alertable")
+  assert(chequeBounce.severity === "CRITICAL", "Assigns CRITICAL severity to cheque bounce")
+
+  // Test 9.5: Standard routine flat update (non-alertable)
+  const routineUpdate = evaluateAuditAlertSeverity({
+    id: "test-alert-5",
+    action: "UPDATE",
+    entity: "Flat",
+    description: "Updated flat intercom number",
+    newData: { intercomNumber: "204" },
+    createdAt: new Date(),
+  })
+  assert(!routineUpdate.isAlertable, "Correctly identifies routine flat update as non-alertable (INFO)")
+
+  // Test 9.6: HMAC-SHA256 Webhook Payload Signing
+  const testPayload = JSON.stringify({ event: "audit.high_risk_alert", severity: "CRITICAL" })
+  const testSecret = "secret-webhook-key-2026"
+  const webhookSig = signWebhookPayload(testPayload, testSecret)
+  assert(typeof webhookSig === "string" && webhookSig.length === 64, "Generates 256-bit SHA-256 HMAC signature for webhook payload")
+  assert(webhookSig === signWebhookPayload(testPayload, testSecret), "Generates deterministic HMAC signature for identical payload")
+
+  // Test 9.7: Payload formatting for Slack and Discord
+  const { slackPayload, discordPayload, genericJson } = formatAuditAlertPayload(
+    {
+      id: "alert-format-test",
+      action: "DELETE",
+      entity: "SocietyMember",
+      userEmail: "president@societyhub.in",
+      ipAddress: "127.0.0.1",
+      description: "Removed Secretary from committee",
+      createdAt: new Date(),
+    },
+    memberRemoval
+  )
+  assert(Boolean(genericJson.record), "Formats generic SIEM JSON payload with record metadata")
+  assert(Array.isArray(slackPayload.blocks), "Formats Slack Block Kit structure with blocks")
+  assert(Array.isArray(discordPayload.embeds), "Formats Discord webhook structure with rich embeds")
+} catch (e: unknown) {
+  assert(false, "High-Risk Audit Alerts Engine threw unexpected error", e instanceof Error ? e.message : String(e))
 }
 
 // -----------------------------------------------------------------------------
