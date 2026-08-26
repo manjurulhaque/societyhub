@@ -182,8 +182,8 @@ export default async function SocietyResidentProfilePage({
 
   const flatIds = person.flats.map((fp) => fp.flatId)
 
-  // Fetch all billing and payment registers associated with this resident & their flats
-  const [rawBills, rawPayments] = await Promise.all([
+  // Fetch all billing, payment registers, and bank accounts associated with this society & resident
+  const [rawBills, rawPayments, rawAccounts] = await Promise.all([
     prisma.bill.findMany({
       where: {
         societyId: society.id,
@@ -227,6 +227,25 @@ export default async function SocietyResidentProfilePage({
       },
       orderBy: { paidOn: "desc" },
       take: 100,
+    }),
+
+    prisma.account.findMany({
+      where: {
+        societyId: society.id,
+        isActive: true,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        accountType: true,
+        bankName: true,
+        isDefault: true,
+      },
+      orderBy: [
+        { isDefault: "desc" },
+        { name: "asc" },
+      ],
     }),
   ])
 
@@ -435,6 +454,7 @@ export default async function SocietyResidentProfilePage({
         bills={bills}
         payments={payments}
         statutory={statutory}
+        accounts={rawAccounts}
         canManage={canManage}
       />
     </div>

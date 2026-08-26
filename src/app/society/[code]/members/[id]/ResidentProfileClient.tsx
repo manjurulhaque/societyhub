@@ -7,6 +7,7 @@ import { maskPan, maskAadhaar } from "@/lib/masking"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
 import { toggleResidentKyc } from "../residentActions"
 import { EditResidentModal, type EditableResident } from "../EditResidentModal"
+import { RecordConsolidatedPaymentModal, type AccountOption } from "./RecordConsolidatedPaymentModal"
 import { EntityAuditDrawer } from "@/components/audit/EntityAuditDrawer"
 
 export type FlatPortfolioItem = {
@@ -162,6 +163,7 @@ interface ResidentProfileClientProps {
   bills: ResidentBillItem[]
   payments: ResidentPaymentItem[]
   statutory: ResidentStatutoryData
+  accounts?: AccountOption[]
   canManage: boolean
 }
 
@@ -174,10 +176,12 @@ export function ResidentProfileClient({
   bills,
   payments,
   statutory,
+  accounts = [],
   canManage,
 }: ResidentProfileClientProps) {
   const [activeTab, setActiveTab] = useState<string>("flats")
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
   const [isTogglingKyc, startKycTransition] = useTransition()
   const [showFullKyc, setShowFullKyc] = useState(false)
 
@@ -338,6 +342,19 @@ export function ResidentProfileClient({
 
             {canManage && (
               <>
+                {totalUnpaidDues > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsPaymentModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-emerald-800 transition"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    <span>Collect Payment ({currencySymbol}{totalUnpaidDues.toLocaleString("en-IN")})</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={handleToggleKyc}
@@ -630,8 +647,23 @@ export function ResidentProfileClient({
               </select>
             </div>
 
-            <div className="text-xs text-stone-500">
-              Showing <strong className="text-stone-900">{filteredBills.length}</strong> bill(s)
+            <div className="flex items-center gap-3">
+              <div className="text-xs text-stone-500">
+                Showing <strong className="text-stone-900">{filteredBills.length}</strong> bill(s)
+              </div>
+
+              {canManage && totalUnpaidDues > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsPaymentModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 transition"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <span>Pay All Dues ({currencySymbol}{totalUnpaidDues.toLocaleString("en-IN")})</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1041,6 +1073,21 @@ export function ResidentProfileClient({
           onClose={() => setIsEditModalOpen(false)}
           societyCode={societyCode}
           resident={editableResident}
+        />
+      ) : null}
+
+      {/* Record Consolidated Payment Modal */}
+      {isPaymentModalOpen ? (
+        <RecordConsolidatedPaymentModal
+          isOpen={isPaymentModalOpen}
+          onClose={() => setIsPaymentModalOpen(false)}
+          societyCode={societyCode}
+          personId={resident.id}
+          personName={resident.name}
+          currencySymbol={currencySymbol}
+          bills={bills}
+          flats={flats}
+          accounts={accounts}
         />
       ) : null}
     </div>
