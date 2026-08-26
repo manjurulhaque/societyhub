@@ -43,6 +43,7 @@ type ProfileSettingsFormProps = {
     ipAddress?: string | null
     userAgent?: string | null
   } | null
+  auditLogsHref?: string
 }
 
 function parseDeviceFromUserAgent(ua?: string | null): string {
@@ -64,7 +65,11 @@ function parseDeviceFromUserAgent(ua?: string | null): string {
   return `${browser} on ${os}`
 }
 
-export function ProfileSettingsForm({ initialUser, lastLogin }: ProfileSettingsFormProps) {
+export function ProfileSettingsForm({
+  initialUser,
+  lastLogin,
+  auditLogsHref = "/admin/audit-logs",
+}: ProfileSettingsFormProps) {
   const router = useRouter()
 
   // Email form state
@@ -290,7 +295,7 @@ export function ProfileSettingsForm({ initialUser, lastLogin }: ProfileSettingsF
             <div className="mt-2">
               <p className="text-xs font-bold text-emerald-950">HMAC-SHA256 Chained</p>
               <Link
-                href="/admin/audit-logs"
+                href={auditLogsHref}
                 className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 hover:underline"
               >
                 <span>View Full Audit Logs</span>

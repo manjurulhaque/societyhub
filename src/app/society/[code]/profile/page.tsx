@@ -151,6 +151,7 @@ export default async function SocietyProfilePage({
               }
             : null
         }
+        auditLogsHref={`/society/${society.code || society.id}/audit-logs`}
       />
     </div>
   )
