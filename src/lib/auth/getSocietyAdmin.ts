@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 export type SocietyAdminContext = {
   user: {
     id: string
+    name: string | null
     email: string
     appRole: string
   }
@@ -104,6 +105,7 @@ export const getSocietyAdmin = cache(
       return {
         user: {
           id: currentUser.id,
+          name: currentUser.name,
           email: currentUser.email,
           appRole: currentUser.appRole,
         },
@@ -139,6 +141,7 @@ export const getSocietyAdmin = cache(
     return {
       user: {
         id: currentUser.id,
+        name: currentUser.name,
         email: currentUser.email,
         appRole: currentUser.appRole,
       },

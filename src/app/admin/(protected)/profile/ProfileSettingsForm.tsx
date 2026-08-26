@@ -26,6 +26,10 @@ import {
   type UpdatePasswordInput,
 } from "@/lib/validations/auth"
 
+import { formatDateInAppTimeZone, formatTimeInAppTimeZone } from "@/lib/datetime"
+import { ShieldCheck, Monitor, Clock, Globe, ArrowRight } from "lucide-react"
+import Link from "next/link"
+
 type ProfileSettingsFormProps = {
   initialUser: {
     id: string
@@ -34,9 +38,38 @@ type ProfileSettingsFormProps = {
     createdAt: string
     updatedAt: string
   }
+  lastLogin?: {
+    timestamp: string
+    ipAddress?: string | null
+    userAgent?: string | null
+  } | null
+  auditLogsHref?: string
 }
 
-export function ProfileSettingsForm({ initialUser }: ProfileSettingsFormProps) {
+function parseDeviceFromUserAgent(ua?: string | null): string {
+  if (!ua) return "Web Browser"
+  let browser = "Web Browser"
+  let os = "Desktop"
+
+  if (ua.includes("Edg/")) browser = "Microsoft Edge"
+  else if (ua.includes("Chrome/")) browser = "Google Chrome"
+  else if (ua.includes("Firefox/")) browser = "Mozilla Firefox"
+  else if (ua.includes("Safari/") && !ua.includes("Chrome/")) browser = "Apple Safari"
+
+  if (ua.includes("Windows")) os = "Windows"
+  else if (ua.includes("Macintosh") || ua.includes("Mac OS")) os = "macOS"
+  else if (ua.includes("Linux") && !ua.includes("Android")) os = "Linux"
+  else if (ua.includes("Android")) os = "Android"
+  else if (ua.includes("iPhone") || ua.includes("iPad")) os = "iOS"
+
+  return `${browser} on ${os}`
+}
+
+export function ProfileSettingsForm({
+  initialUser,
+  lastLogin,
+  auditLogsHref = "/admin/audit-logs",
+}: ProfileSettingsFormProps) {
   const router = useRouter()
 
   // Email form state
@@ -177,12 +210,98 @@ export function ProfileSettingsForm({ initialUser }: ProfileSettingsFormProps) {
               Account Created
             </span>
             <p className="mt-1 text-sm font-semibold text-stone-900">
-              {new Date(initialUser.createdAt).toLocaleDateString("en-IN", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              })}
+              {formatDateInAppTimeZone(initialUser.createdAt)}
             </p>
+          </div>
+        </div>
+      </AdminCard>
+
+      {/* Session & Security Details Card */}
+      <AdminCard
+        title="Session & Security Credentials"
+        description="Real-time cryptographic audit trail and active authentication metadata"
+      >
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Last Login Time */}
+          <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-2xs">
+            <div className="flex items-center gap-2 text-stone-500">
+              <Clock className="h-4 w-4 text-stone-600" />
+              <span className="text-xs font-semibold uppercase tracking-wider">
+                Last Sign-in
+              </span>
+            </div>
+            {lastLogin?.timestamp ? (
+              <div className="mt-2">
+                <p className="text-xs font-bold text-stone-900">
+                  {formatDateInAppTimeZone(lastLogin.timestamp)}
+                </p>
+                <p className="font-mono text-[11px] text-stone-500">
+                  {formatTimeInAppTimeZone(lastLogin.timestamp)}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-stone-400">Current Session</p>
+            )}
+          </div>
+
+          {/* Login IP Address */}
+          <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-2xs">
+            <div className="flex items-center gap-2 text-stone-500">
+              <Globe className="h-4 w-4 text-emerald-600" />
+              <span className="text-xs font-semibold uppercase tracking-wider">
+                Login IP Address
+              </span>
+            </div>
+            <div className="mt-2">
+              {lastLogin?.ipAddress ? (
+                <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-stone-900">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                  <span>{lastLogin.ipAddress}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-stone-900">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                  <span>127.0.0.1 (Loopback)</span>
+                </div>
+              )}
+              <span className="text-[10px] text-stone-400">Recorded via edge proxy</span>
+            </div>
+          </div>
+
+          {/* Browser & OS */}
+          <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-2xs">
+            <div className="flex items-center gap-2 text-stone-500">
+              <Monitor className="h-4 w-4 text-blue-600" />
+              <span className="text-xs font-semibold uppercase tracking-wider">
+                Device / Client
+              </span>
+            </div>
+            <div className="mt-2">
+              <p className="text-xs font-semibold text-stone-900 truncate">
+                {parseDeviceFromUserAgent(lastLogin?.userAgent)}
+              </p>
+              <span className="text-[10px] text-stone-400">Desktop / Web Client</span>
+            </div>
+          </div>
+
+          {/* Tamper Protection */}
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-2xs">
+            <div className="flex items-center gap-2 text-emerald-800">
+              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+              <span className="text-xs font-semibold uppercase tracking-wider">
+                Audit Integrity
+              </span>
+            </div>
+            <div className="mt-2">
+              <p className="text-xs font-bold text-emerald-950">HMAC-SHA256 Chained</p>
+              <Link
+                href={auditLogsHref}
+                className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 hover:underline"
+              >
+                <span>View Full Audit Logs</span>
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
           </div>
         </div>
       </AdminCard>

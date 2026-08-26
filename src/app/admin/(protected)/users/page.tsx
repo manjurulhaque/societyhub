@@ -10,10 +10,10 @@ import {
   AdminEmptyState,
 } from "@/components/admin"
 
-import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { formatDateInAppTimeZone, formatTimeInAppTimeZone } from "@/lib/datetime"
 
 export default async function UsersPage() {
-  const [users, superAdminCount, regularUserCount, totalMembershipsCount] = await Promise.all([
+  const [users, superAdminCount, regularUserCount, totalMembershipsCount, lastLoginLogs] = await Promise.all([
     prisma.user.findMany({
       orderBy: {
         createdAt: "desc",
@@ -52,8 +52,19 @@ export default async function UsersPage() {
       where: { appRole: "USER" },
     }),
     prisma.societyMember.count(),
+    prisma.auditLog.findMany({
+      where: { action: "LOGIN", userId: { not: null } },
+      orderBy: { createdAt: "desc" },
+      distinct: ["userId"],
+      select: {
+        userId: true,
+        createdAt: true,
+        ipAddress: true,
+      },
+    }),
   ])
 
+  const lastLoginMap = new Map(lastLoginLogs.map((l) => [l.userId!, l]))
   const totalUsers = users.length
 
   return (
@@ -125,98 +136,125 @@ export default async function UsersPage() {
             "Platform Role",
             "Assigned Society Memberships",
             "Linked Resident Profile",
+            "Last Sign-in",
             "Registered Date",
             "Actions",
           ]}
-          rows={users.map((user) => (
-            <tr
-              key={user.id}
-              className="border-t border-stone-100 transition-colors hover:bg-stone-50/70"
-            >
-              {/* User Email */}
-              <td className="px-4 py-3.5">
-                <span className="font-bold text-stone-950 text-sm block">
-                  {user.email}
-                </span>
-                <span className="font-mono text-[10px] text-stone-400">
-                  ID: {user.id.slice(0, 12)}...
-                </span>
-              </td>
+          rows={users.map((user) => {
+            const lastLogin = lastLoginMap.get(user.id)
 
-              {/* Platform App Role */}
-              <td className="px-4 py-3.5">
-                <AdminBadge
-                  variant={user.appRole === "SUPER_ADMIN" ? "purple" : "neutral"}
-                  size="sm"
-                  dot
-                >
-                  {user.appRole}
-                </AdminBadge>
-              </td>
+            return (
+              <tr
+                key={user.id}
+                className="border-t border-stone-100 transition-colors hover:bg-stone-50/70"
+              >
+                {/* User Email */}
+                <td className="px-4 py-3.5">
+                  <span className="font-bold text-stone-950 text-sm block">
+                    {user.email}
+                  </span>
+                  <span className="font-mono text-[10px] text-stone-400">
+                    ID: {user.id.slice(0, 12)}...
+                  </span>
+                </td>
 
-              {/* Society Memberships */}
-              <td className="px-4 py-3.5">
-                {user.memberships.length === 0 ? (
-                  <span className="text-xs text-stone-400">No society assigned</span>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {user.memberships.map((m) => (
-                      <Link
-                        key={m.id}
-                        href={`/society/${m.society.code || m.society.id}/dashboard`}
-                        className="inline-flex items-center gap-1 rounded-md bg-stone-100 hover:bg-stone-200 px-2 py-0.5 text-xs text-stone-800 transition"
-                      >
-                        <span className="font-semibold">{m.society.name}</span>
-                        <span className="text-[10px] text-stone-500 font-mono">({m.designation})</span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </td>
-
-              {/* Linked Resident Profile */}
-              <td className="px-4 py-3.5 text-xs text-stone-700">
-                {user.person ? (
-                  <div>
-                    <Link
-                      href={`/admin/people/${user.person.id}`}
-                      className="font-semibold text-stone-950 hover:underline block"
-                    >
-                      {user.person.name}
-                    </Link>
-                    <span className="text-[11px] text-stone-500">
-                      {user.person.society.name}
-                    </span>
-                  </div>
-                ) : (
-                  <span className="text-stone-400">None linked</span>
-                )}
-              </td>
-
-              {/* Registered Date */}
-              <td className="px-4 py-3.5 text-xs text-stone-500">
-                {formatDateInAppTimeZone(user.createdAt)}
-              </td>
-
-              {/* Actions: Toggle Role */}
-              <td className="px-4 py-3.5">
-                <form action={toggleUserRole}>
-                  <input type="hidden" name="userId" value={user.id} />
-                  <input
-                    type="hidden"
-                    name="nextRole"
-                    value={user.appRole === "SUPER_ADMIN" ? "USER" : "SUPER_ADMIN"}
-                  />
-                  <button
-                    type="submit"
-                    className="rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-100 transition shadow-sm"
+                {/* Platform App Role */}
+                <td className="px-4 py-3.5">
+                  <AdminBadge
+                    variant={user.appRole === "SUPER_ADMIN" ? "purple" : "neutral"}
+                    size="sm"
+                    dot
                   >
-                    {user.appRole === "SUPER_ADMIN" ? "Demote to User" : "Make Super Admin"}
-                  </button>
-                </form>
-              </td>
-            </tr>
-          ))}
+                    {user.appRole}
+                  </AdminBadge>
+                </td>
+
+                {/* Society Memberships */}
+                <td className="px-4 py-3.5">
+                  {user.memberships.length === 0 ? (
+                    <span className="text-xs text-stone-400">No society assigned</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {user.memberships.map((m) => (
+                        <Link
+                          key={m.id}
+                          href={`/society/${m.society.code || m.society.id}/dashboard`}
+                          className="inline-flex items-center gap-1 rounded-md bg-stone-100 hover:bg-stone-200 px-2 py-0.5 text-xs text-stone-800 transition"
+                        >
+                          <span className="font-semibold">{m.society.name}</span>
+                          <span className="text-[10px] text-stone-500 font-mono">({m.designation})</span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </td>
+
+                {/* Linked Resident Profile */}
+                <td className="px-4 py-3.5 text-xs text-stone-700">
+                  {user.person ? (
+                    <div>
+                      <Link
+                        href={`/admin/people/${user.person.id}`}
+                        className="font-semibold text-stone-950 hover:underline block"
+                      >
+                        {user.person.name}
+                      </Link>
+                      <span className="text-[11px] text-stone-500">
+                        {user.person.society.name}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-stone-400">None linked</span>
+                  )}
+                </td>
+
+                {/* Last Sign-in */}
+                <td className="px-4 py-3.5 whitespace-nowrap">
+                  {lastLogin ? (
+                    <div>
+                      <span className="block text-xs font-semibold text-stone-900">
+                        {formatDateInAppTimeZone(lastLogin.createdAt)}
+                      </span>
+                      <span className="block font-mono text-[10px] text-stone-500">
+                        {formatTimeInAppTimeZone(lastLogin.createdAt)}
+                      </span>
+                      {lastLogin.ipAddress && (
+                        <span className="inline-flex items-center gap-1 font-mono text-[10px] text-stone-500">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                          {lastLogin.ipAddress}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-stone-400">—</span>
+                  )}
+                </td>
+
+                {/* Registered Date */}
+                <td className="px-4 py-3.5 text-xs text-stone-500 whitespace-nowrap">
+                  {formatDateInAppTimeZone(user.createdAt)}
+                </td>
+
+                {/* Actions: Toggle Role */}
+                <td className="px-4 py-3.5">
+                  <form action={toggleUserRole}>
+                    <input type="hidden" name="userId" value={user.id} />
+                    <input
+                      type="hidden"
+                      name="nextRole"
+                      value={user.appRole === "SUPER_ADMIN" ? "USER" : "SUPER_ADMIN"}
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-100 transition shadow-sm"
+                    >
+                      {user.appRole === "SUPER_ADMIN" ? "Demote to User" : "Make Super Admin"}
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            )
+          })}
         />
       )}
     </div>

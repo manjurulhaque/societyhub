@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth/getCurrentUser"
+import { recordAuditLog } from "@/lib/audit"
+import { prisma } from "@/lib/prisma"
 
 export async function GET() {
   const user = await getCurrentUser()
@@ -12,6 +14,34 @@ export async function GET() {
         headers: { "Cache-Control": "no-store, no-cache, must-revalidate, private" },
       }
     )
+  }
+
+  // Record LOGIN audit log if not logged in the last 60 seconds (throttled to avoid reload duplication)
+  try {
+    const recentLogin = await prisma.auditLog.findFirst({
+      where: {
+        userId: user.id,
+        action: "LOGIN",
+        createdAt: {
+          gte: new Date(Date.now() - 60000),
+        },
+      },
+      select: { id: true },
+    })
+
+    if (!recentLogin) {
+      void recordAuditLog({
+        action: "LOGIN",
+        entity: "User",
+        entityId: user.id,
+        userId: user.id,
+        // Super Admins are platform-global: never log against specific society ledgers
+        societyId: user.appRole === "SUPER_ADMIN" ? null : user.memberships?.[0]?.societyId || null,
+        description: `User ${user.email} signed in (${user.appRole})`,
+      })
+    }
+  } catch {
+    // Non-blocking
   }
 
   let redirectUrl = "/"

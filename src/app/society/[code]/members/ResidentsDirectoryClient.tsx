@@ -6,6 +6,7 @@ import { maskPan, maskAadhaar } from "@/lib/masking"
 import { RegisterResidentModal, type FlatOption } from "./RegisterResidentModal"
 import { EditResidentModal } from "./EditResidentModal"
 import { removeResident, toggleResidentKyc } from "./residentActions"
+import { EntityAuditDrawer } from "@/components/audit/EntityAuditDrawer"
 
 export type ResidentItem = {
   id: string
@@ -220,7 +221,13 @@ export function ResidentsDirectoryClient({
               </td>
               {canManageResidents ? (
                 <td className="px-4 py-3.5 text-right whitespace-nowrap">
-                  <div className="flex items-center justify-end gap-1">
+                  <div className="flex items-center justify-end gap-1.5">
+                    <EntityAuditDrawer
+                      entity="Person"
+                      entityId={r.id}
+                      entityTitle={r.name}
+                      buttonVariant="compact"
+                    />
                     <button
                       type="button"
                       onClick={() => setEditingResident(r)}

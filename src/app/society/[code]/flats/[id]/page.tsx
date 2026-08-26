@@ -6,6 +6,7 @@ import { AdminBadge, AdminStatCard } from "@/components/admin"
 import { FlatProfileClient } from "./FlatProfileClient"
 import { COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import type { SocietyRole } from "@/generated/prisma/client"
+import { EntityAuditDrawer } from "@/components/audit/EntityAuditDrawer"
 
 export default async function SocietyFlatProfilePage({
   params,
@@ -59,7 +60,7 @@ export default async function SocietyFlatProfilePage({
       },
     }),
     prisma.person.findMany({
-      where: { societyId: society.id, isActive: true, deletedAt: null },
+      where: { deletedAt: null },
       select: {
         id: true,
         name: true,
@@ -69,9 +70,12 @@ export default async function SocietyFlatProfilePage({
       orderBy: { name: "asc" },
     }),
     prisma.payment.findMany({
-      where: { flatId: id, societyId: society.id },
+      where: {
+        flatId: id,
+        societyId: society.id,
+      },
       orderBy: { paidOn: "desc" },
-      take: 10,
+      take: 20,
     }),
   ])
 
@@ -81,17 +85,14 @@ export default async function SocietyFlatProfilePage({
 
   const currencySymbol = society.currencySymbol || "₹"
 
-  // Primary owner or active occupants
   const currentOwner =
     flat.ownershipHistory.find((h) => h.isCurrentOwner)?.toPerson.name ||
     flat.people.find((p) => p.role === "OWNER" && !p.toDate)?.person.name ||
     "Unassigned"
 
-  // Calculate unpaid dues balance
   const unpaidBills = flat.bills.filter((b) => b.status === "PENDING" || b.status === "OVERDUE")
   const totalUnpaidDues = unpaidBills.reduce((sum, b) => sum + Number(b.amount), 0)
 
-  // Total deposits held
   const activeDepositsTotal = flat.memberDeposits
     .filter((d) => d.status === "HELD")
     .reduce((sum, d) => sum + Number(d.amount), 0)
@@ -143,6 +144,23 @@ export default async function SocietyFlatProfilePage({
               {flat.parkingSlot ? `🚗 Parking: ${flat.parkingSlot} • ` : ""}
               {flat.intercomNumber ? `📞 Intercom: ${flat.intercomNumber}` : ""}
             </p>
+          </div>
+
+          {/* Action Tools */}
+          <div className="flex items-center gap-2">
+            <EntityAuditDrawer
+              entity="Flat"
+              entityId={flat.id}
+              entityTitle={`Flat ${flat.block.name}-${flat.number}`}
+              societyId={society.id}
+              relatedEntityIds={[
+                ...flat.people.map((p) => p.id),
+                ...(flat.shareCertificate ? [flat.shareCertificate.id] : []),
+                ...flat.propertyLiens.map((l) => l.id),
+                ...flat.nominations.map((n) => n.id),
+              ]}
+              buttonVariant="outline"
+            />
           </div>
         </div>
       </div>

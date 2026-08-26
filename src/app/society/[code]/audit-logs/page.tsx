@@ -4,13 +4,11 @@ import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import {
   AdminPageHeader,
-  AdminTable,
-  AdminBadge,
   AdminStatCard,
   AdminEmptyState,
 } from "@/components/admin"
-import { formatDateInAppTimeZone } from "@/lib/datetime"
-import { verifyAuditTrailIntegrity } from "@/lib/auditCrypto"
+import { verifyAuditTrailIntegrity, computeAuditSignature } from "@/lib/auditCrypto"
+import { AuditLogTableClient } from "@/components/audit/AuditLogTableClient"
 import type { AuditAction } from "@/generated/prisma/client"
 
 export default async function SocietyAuditLogsPage({
@@ -59,10 +57,10 @@ export default async function SocietyAuditLogsPage({
     ]
   }
 
-  const [logs, totalCount, actionCounts] = await Promise.all([
+  const [logs, totalCount, actionCounts, recentChainLogs] = await Promise.all([
     prisma.auditLog.findMany({
       where: whereClause,
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip: (currentPage - 1) * pageSize,
       take: pageSize,
       include: {
@@ -81,6 +79,22 @@ export default async function SocietyAuditLogsPage({
       where: { societyId: verifiedSocietyId },
       _count: { _all: true },
     }),
+    prisma.auditLog.findMany({
+      where: { societyId: verifiedSocietyId },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 100,
+      select: {
+        id: true,
+        action: true,
+        entity: true,
+        entityId: true,
+        userId: true,
+        societyId: true,
+        signature: true,
+        previousSignature: true,
+        createdAt: true,
+      },
+    }),
   ])
 
   const createCount =
@@ -91,22 +105,9 @@ export default async function SocietyAuditLogsPage({
     actionCounts.find((item) => item.action === "STATUS_CHANGE")?._count._all ?? 0
 
   const totalPages = Math.ceil(totalCount / pageSize)
-  const integrity = verifyAuditTrailIntegrity(logs)
-
-  const getActionBadgeVariant = (act: AuditAction) => {
-    switch (act) {
-      case "CREATE":
-        return "success"
-      case "UPDATE":
-        return "info"
-      case "DELETE":
-        return "danger"
-      case "STATUS_CHANGE":
-        return "warning"
-      default:
-        return "neutral"
-    }
-  }
+  const chainIntegrity = verifyAuditTrailIntegrity(recentChainLogs)
+  const displayedIntegrity = verifyAuditTrailIntegrity(logs, { allowNonConsecutive: true })
+  const integrity = !displayedIntegrity.isValid ? displayedIntegrity : chainIntegrity
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-6 py-8 md:px-8">
@@ -121,7 +122,7 @@ export default async function SocietyAuditLogsPage({
         className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border p-4 sm:p-5 transition-all ${
           !integrity.isValid
             ? "border-rose-300 bg-rose-50 text-rose-950 shadow-sm"
-            : logs.length === 0
+            : totalCount === 0
             ? "border-stone-200 bg-stone-50/80 text-stone-800"
             : "border-emerald-200 bg-emerald-50/70 text-emerald-950"
         }`}
@@ -131,27 +132,29 @@ export default async function SocietyAuditLogsPage({
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold text-white shadow-sm ${
               !integrity.isValid
                 ? "bg-rose-600 animate-pulse text-base"
-                : logs.length === 0
+                : totalCount === 0
                 ? "bg-stone-500 text-sm"
                 : "bg-emerald-600 text-base"
             }`}
           >
-            {!integrity.isValid ? "⚠️" : logs.length === 0 ? "ℹ" : "✓"}
+            {!integrity.isValid ? "⚠️" : totalCount === 0 ? "ℹ" : "✓"}
           </div>
           <div>
             <h3 className="text-sm font-bold">
               {!integrity.isValid
                 ? "Cryptographic Integrity Compromised: Tamper Detected"
-                : logs.length === 0
+                : totalCount === 0
                 ? "Audit Ledger: Genesis State"
                 : "Cryptographic Audit Trail Integrity: Verified"}
             </h3>
             <p className="text-xs opacity-90 mt-0.5">
               {!integrity.isValid
                 ? integrity.message
-                : logs.length === 0
+                : totalCount === 0
                 ? "No audit events found. The cryptographic hash chain is at its initial genesis state."
-                : `HMAC-SHA256 hash chaining active. All ${integrity.verifiedCount} fetched audit records mathematically verified against tampering.`}
+                : integrity.legacyCount && integrity.legacyCount > 0
+                ? `HMAC-SHA256 hash chaining active. ${integrity.verifiedCount} sealed records verified (${integrity.legacyCount} legacy records preserved).`
+                : `HMAC-SHA256 hash chaining active. All ${integrity.verifiedCount} audit records mathematically verified against tampering.`}
             </p>
           </div>
         </div>
@@ -159,14 +162,14 @@ export default async function SocietyAuditLogsPage({
           className={`self-start sm:self-auto rounded-full border px-3 py-1 text-xs font-bold whitespace-nowrap ${
             !integrity.isValid
               ? "border-rose-300 bg-rose-100 text-rose-800"
-              : logs.length === 0
+              : totalCount === 0
               ? "border-stone-300 bg-stone-100 text-stone-700"
               : "border-emerald-300 bg-emerald-100 text-emerald-800"
           }`}
         >
           {!integrity.isValid
             ? "Chain Broken"
-            : logs.length === 0
+            : totalCount === 0
             ? "Genesis State"
             : "Unbroken Chain"}
         </span>
@@ -244,76 +247,44 @@ export default async function SocietyAuditLogsPage({
             description="No recorded activity matches your filter criteria."
           />
         ) : (
-          <div className="overflow-x-auto">
-            <AdminTable
-              headers={[
-                "Timestamp",
-                "Action",
-                "Entity",
-                "Operator / Member",
-                "Description",
-                "IP Address",
-              ]}
-              rows={logs.map((log) => {
-                const isTampered = !integrity.isValid && integrity.tamperedLogId === log.id
-                return (
-                  <tr
-                    key={log.id}
-                    className={`border-t border-stone-100 transition-colors ${
-                      isTampered
-                        ? "bg-rose-50/90 border-l-4 border-l-rose-600"
-                        : "hover:bg-stone-50/70"
-                    }`}
-                  >
-                    <td className="px-4 py-3.5 text-xs font-medium text-stone-600 whitespace-nowrap">
-                      {formatDateInAppTimeZone(log.createdAt)}
-                    </td>
+          <AuditLogTableClient
+            logs={logs.map((log) => {
+              const isSealValid = log.signature
+                ? computeAuditSignature({
+                    id: log.id,
+                    action: log.action,
+                    entity: log.entity,
+                    entityId: log.entityId,
+                    userId: log.userId,
+                    societyId: log.societyId,
+                    createdAt: log.createdAt,
+                    previousSignature: log.previousSignature || "GENESIS",
+                  }) === log.signature
+                : false
 
-                    <td className="px-4 py-3.5 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        <AdminBadge variant={getActionBadgeVariant(log.action)}>
-                          {log.action}
-                        </AdminBadge>
-                        {isTampered && (
-                          <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white uppercase">
-                            Tampered
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
-                  <td className="px-4 py-3.5 whitespace-nowrap font-mono text-xs font-bold text-stone-900">
-                    {log.entity}
-                    {log.entityId ? (
-                      <span className="block text-[10px] font-normal text-stone-400 truncate max-w-[120px]">
-                        {log.entityId}
-                      </span>
-                    ) : null}
-                  </td>
-
-                  <td className="px-4 py-3.5 text-xs text-stone-800">
-                    <span className="font-semibold block">
-                      {log.user?.email || "System"}
-                    </span>
-                    {log.user?.appRole ? (
-                      <span className="text-[10px] text-stone-500">
-                        {log.user.appRole}
-                      </span>
-                    ) : null}
-                  </td>
-
-                  <td className="px-4 py-3.5 text-xs text-stone-700 max-w-sm">
-                    <p className="line-clamp-2">{log.description || "—"}</p>
-                  </td>
-
-                  <td className="px-4 py-3.5 font-mono text-[11px] text-stone-500 whitespace-nowrap">
-                    {log.ipAddress || "—"}
-                  </td>
-                  </tr>
-                )
-              })}
-            />
-          </div>
+              return {
+                ...log,
+                createdAt: log.createdAt.toISOString(),
+                isSealValid,
+                society: {
+                  id: context.society.id,
+                  name: context.society.name,
+                  code: context.society.code,
+                },
+              }
+            })}
+            totalCount={totalCount}
+            societyInfo={{
+              name: context.society.name,
+              address: context.society.address,
+              city: context.society.city,
+              state: context.society.state,
+              pincode: context.society.pincode,
+              registrationNumber: context.society.registrationNumber,
+              panNumber: context.society.panNumber,
+            }}
+            integrityStatus={integrity}
+          />
         )}
       </div>
     </div>

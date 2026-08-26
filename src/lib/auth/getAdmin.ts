@@ -10,6 +10,7 @@ export const getAdmin = cache(async () => {
 
   return {
     id: user.id,
+    name: user.name,
     email: user.email,
     appRole: user.appRole,
     createdAt: user.createdAt,
