@@ -13,7 +13,7 @@ import {
   AuditLogDetailModal,
   type AuditLogDetailData,
 } from "@/components/audit/AuditLogDetailModal"
-import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { formatDateInAppTimeZone, formatTimeInAppTimeZone } from "@/lib/datetime"
 import {
   History,
   ShieldCheck,
@@ -279,9 +279,14 @@ export function EntityAuditDrawer({
                             </span>
                           </div>
 
-                          <span className="text-[11px] font-medium text-stone-500 whitespace-nowrap">
-                            {formatDateInAppTimeZone(log.createdAt)}
-                          </span>
+                          <div className="text-right">
+                            <span className="block text-[11px] font-semibold text-stone-700 whitespace-nowrap">
+                              {formatDateInAppTimeZone(log.createdAt)}
+                            </span>
+                            <span className="block font-mono text-[10px] text-stone-400">
+                              {formatTimeInAppTimeZone(log.createdAt)}
+                            </span>
+                          </div>
                         </div>
 
                         {/* Description */}

@@ -2,7 +2,7 @@
 
 import React, { useState } from "react"
 import { AdminBadge } from "@/components/admin"
-import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { formatDateInAppTimeZone, formatTimeInAppTimeZone } from "@/lib/datetime"
 import { generateSafeCsv } from "@/lib/csv"
 import { generateAuditReportPDF } from "@/lib/pdf/auditPdfGenerator"
 import { AuditLogDetailModal, type AuditLogDetailData } from "./AuditLogDetailModal"
@@ -23,9 +23,10 @@ export interface AuditLogTableClientProps {
   } | null
   integrityStatus: {
     isValid: boolean
-    verifiedCount: number
-    legacyCount?: number
     message: string
+    verifiedCount: number
+    tamperedCount?: number
+    legacyCount?: number
   }
 }
 
@@ -48,6 +49,9 @@ export function AuditLogTableClient({
         return "danger"
       case "STATUS_CHANGE":
         return "warning"
+      case "LOGIN":
+      case "LOGOUT":
+        return "neutral"
       default:
         return "neutral"
     }
@@ -57,8 +61,7 @@ export function AuditLogTableClient({
     setIsExporting(true)
     try {
       const headers = [
-        "ID",
-        "Timestamp",
+        "Timestamp (ISO)",
         "Action",
         "Entity",
         "Entity ID",
@@ -66,13 +69,12 @@ export function AuditLogTableClient({
         "Operator Role",
         "Description",
         "IP Address",
-        "HMAC Signature",
+        "Signature (HMAC-SHA256)",
         "Previous Signature",
       ]
 
       const rows = logs.map((log) => [
-        log.id,
-        formatDateInAppTimeZone(log.createdAt),
+        typeof log.createdAt === "string" ? log.createdAt : log.createdAt.toISOString(),
         log.action,
         log.entity,
         log.entityId || "",
@@ -127,24 +129,30 @@ export function AuditLogTableClient({
   }
 
   return (
-    <>
-      <div className="flex items-center justify-end gap-2 mb-3">
-        <div className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 p-1 shadow-2xs">
+    <div className="space-y-4">
+      {/* Action Toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-stone-50/70 p-3 rounded-2xl border border-stone-200">
+        <div className="text-xs text-stone-600 font-medium">
+          Showing <span className="font-bold text-stone-900">{logs.length}</span> of{" "}
+          <span className="font-bold text-stone-900">{totalCount}</span> events
+        </div>
+
+        <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={handleExportCSV}
             disabled={isExporting || logs.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-700 hover:bg-white hover:text-stone-900 transition disabled:opacity-50"
-            title="Download CSV with formula-injection neutralization"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 shadow-2xs hover:bg-stone-50 hover:text-stone-900 disabled:opacity-50 transition"
           >
             <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
             <span>Export CSV</span>
           </button>
-          <div className="h-3.5 w-px bg-stone-200" />
+
           <button
+            type="button"
             onClick={handleExportPDF}
             disabled={isExporting || logs.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-700 hover:bg-white hover:text-stone-900 transition disabled:opacity-50"
-            title="Download Certified PDF with Cryptographic Verification Certificate"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 shadow-2xs hover:bg-stone-50 hover:text-stone-900 disabled:opacity-50 transition"
           >
             <FileText className="h-3.5 w-3.5 text-rose-600" />
             <span>Certified PDF</span>
@@ -152,10 +160,11 @@ export function AuditLogTableClient({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs border-collapse">
+      {/* Interactive Table */}
+      <div className="overflow-x-auto rounded-2xl border border-stone-200 bg-white shadow-2xs">
+        <table className="w-full text-left border-collapse text-xs">
           <thead>
-            <tr className="border-b border-stone-200 bg-stone-50/80 font-bold text-stone-600">
+            <tr className="border-b border-stone-200 bg-stone-50 text-[11px] font-bold uppercase tracking-wider text-stone-500">
               <th className="px-4 py-3 whitespace-nowrap">Timestamp</th>
               <th className="px-4 py-3 whitespace-nowrap">Action</th>
               <th className="px-4 py-3 whitespace-nowrap">Entity</th>
@@ -177,8 +186,13 @@ export function AuditLogTableClient({
                   onClick={() => setSelectedLog(log)}
                   className="group cursor-pointer transition-colors hover:bg-stone-50/90"
                 >
-                  <td className="px-4 py-3.5 text-xs font-medium text-stone-600 whitespace-nowrap">
-                    {formatDateInAppTimeZone(log.createdAt)}
+                  <td className="px-4 py-3.5 whitespace-nowrap">
+                    <span className="block text-xs font-semibold text-stone-900">
+                      {formatDateInAppTimeZone(log.createdAt)}
+                    </span>
+                    <span className="block font-mono text-[11px] text-stone-500">
+                      {formatTimeInAppTimeZone(log.createdAt)}
+                    </span>
                   </td>
 
                   <td className="px-4 py-3.5 whitespace-nowrap">
@@ -242,6 +256,6 @@ export function AuditLogTableClient({
         isOpen={Boolean(selectedLog)}
         onClose={() => setSelectedLog(null)}
       />
-    </>
+    </div>
   )
 }

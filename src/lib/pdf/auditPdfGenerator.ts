@@ -1,6 +1,6 @@
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
-import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { formatDateTimeInAppTimeZone } from "@/lib/datetime"
 import type { PDFSocietyInfo } from "./reportPdfGenerator"
 
 export interface GenerateAuditPDFOptions {
@@ -23,7 +23,7 @@ export interface GenerateAuditPDFOptions {
     ipAddress?: string | null
     signature?: string | null
   }>
-  filename: string
+  filename?: string
 }
 
 export function generateAuditReportPDF(options: GenerateAuditPDFOptions) {
@@ -35,48 +35,32 @@ export function generateAuditReportPDF(options: GenerateAuditPDFOptions) {
 
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
+  const societyName = options.society?.name || options.scopeName || "SocietyHub Audit Trail Ledger"
 
-  // 1. Header / Letterhead
-  const societyName = options.society?.name || options.scopeName || "SocietyHub Security & Compliance Ledger"
+  let currentY = 14
+
+  // 1. Society Header / Letterhead
   doc.setFont("helvetica", "bold")
   doc.setFontSize(14)
   doc.setTextColor(28, 25, 23) // stone-900
-  doc.text(societyName.toUpperCase(), pageWidth / 2, 12, { align: "center" })
+  doc.text(societyName, 14, currentY)
 
-  let currentY = 16
-  if (options.society?.address || options.society?.city) {
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(8)
-    doc.setTextColor(87, 83, 78) // stone-600
-    const addressStr = [
-      options.society.address,
-      options.society.city,
-      options.society.state,
-      options.society.pincode,
-    ]
-      .filter(Boolean)
-      .join(", ")
-    doc.text(addressStr, pageWidth / 2, currentY, { align: "center" })
+  currentY += 5
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(8)
+  doc.setTextColor(120, 113, 108) // stone-500
+
+  const metaParts: string[] = []
+  if (options.society?.registrationNumber) metaParts.push(`Reg No: ${options.society.registrationNumber}`)
+  if (options.society?.panNumber) metaParts.push(`PAN: ${options.society.panNumber}`)
+  if (options.society?.city) metaParts.push(`${options.society.city}, ${options.society.state || ""}`)
+
+  if (metaParts.length > 0) {
+    doc.text(metaParts.join(" | "), 14, currentY)
     currentY += 4
   }
 
-  // Divider
-  doc.setDrawColor(214, 211, 209)
-  doc.setLineWidth(0.3)
-  doc.line(14, currentY, pageWidth - 14, currentY)
-  currentY += 5
-
-  // 2. Report Title & Cryptographic Integrity Certificate Box
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(11)
-  doc.setTextColor(15, 23, 42)
-  doc.text("OFFICIAL CRYPTOGRAPHIC AUDIT LEDGER REPORT", 14, currentY)
-
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(8)
-  doc.setTextColor(100, 116, 139)
-  const genDate = `Certified On: ${formatDateInAppTimeZone(new Date().toISOString())}`
-  doc.text(genDate, pageWidth - 14, currentY, { align: "right" })
+  doc.text(`Generated on: ${formatDateTimeInAppTimeZone(new Date())} (Official Forensic Compliance Export)`, 14, currentY)
   currentY += 4
 
   // Cryptographic Integrity Badge Box
@@ -111,7 +95,7 @@ export function generateAuditReportPDF(options: GenerateAuditPDFOptions) {
   // 3. Table of Events
   const headers = ["Timestamp", "Action", "Entity", "Operator / Member", "Description", "IP Address", "HMAC Seal"]
   const tableData = options.rows.map((r) => [
-    formatDateInAppTimeZone(r.createdAt),
+    formatDateTimeInAppTimeZone(r.createdAt),
     r.action,
     r.entityId ? `${r.entity} (${r.entityId.slice(0, 8)})` : r.entity,
     r.operator,
@@ -168,5 +152,5 @@ export function generateAuditReportPDF(options: GenerateAuditPDFOptions) {
   })
 
   // 4. Download
-  doc.save(options.filename)
+  doc.save(options.filename || `audit_report_${new Date().toISOString().slice(0, 10)}.pdf`)
 }

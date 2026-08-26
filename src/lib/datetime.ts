@@ -139,6 +139,43 @@ export function formatDateTimeInAppTimeZone(
   ).format(new Date(value))
 }
 
+export function formatTimeInAppTimeZone(
+  value: Date | string,
+  locale = "en-US",
+  timeZone = APP_TIME_ZONE
+) {
+  return getFormatter(
+    {
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    },
+    locale,
+    timeZone
+  ).format(new Date(value))
+}
+
+export function formatDateTimeWithSecondsInAppTimeZone(
+  value: Date | string,
+  locale = "en-US",
+  timeZone = APP_TIME_ZONE
+) {
+  return getFormatter(
+    {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    },
+    locale,
+    timeZone
+  ).format(new Date(value))
+}
+
 export function formatDateTimeInTimeZone(
   value: Date | string,
   timeZone: string = APP_TIME_ZONE,

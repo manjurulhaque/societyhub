@@ -9,7 +9,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { AdminBadge } from "@/components/admin"
-import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { formatDateInAppTimeZone, formatTimeInAppTimeZone } from "@/lib/datetime"
 import type { AuditAction } from "@/generated/prisma/client"
 import { Check, Copy, ShieldCheck, ShieldAlert } from "lucide-react"
 
@@ -203,9 +203,14 @@ export function AuditLogDetailModal({
                 </span>
               )}
             </div>
-            <span className="text-xs text-stone-500">
-              {formatDateInAppTimeZone(log.createdAt)}
-            </span>
+            <div className="text-right">
+              <span className="block text-xs font-semibold text-stone-900">
+                {formatDateInAppTimeZone(log.createdAt)}
+              </span>
+              <span className="block font-mono text-[11px] text-stone-500">
+                {formatTimeInAppTimeZone(log.createdAt)}
+              </span>
+            </div>
           </div>
           <DialogTitle className="text-base font-bold text-stone-900">
             {log.description || `${log.action} on ${log.entity}`}
