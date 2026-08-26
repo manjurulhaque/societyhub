@@ -52,9 +52,14 @@ export function computeAuditSignature(payload: AuditRecordPayload): string {
   return crypto.createHmac("sha256", secret).update(canonicalData).digest("hex")
 }
 
+export interface AuditIntegrityOptions {
+  allowNonConsecutive?: boolean
+}
+
 export interface AuditIntegrityResult {
   isValid: boolean
   verifiedCount: number
+  legacyCount?: number
   tamperedIndex: number | null
   tamperedLogId?: string | null
   message: string
@@ -62,9 +67,11 @@ export interface AuditIntegrityResult {
 
 /**
  * Mathematically validates the cryptographic hash chain of an array of audit logs.
- * Checks both individual HMAC-SHA256 signature validity and chronological chain continuity.
+ * Checks individual HMAC-SHA256 signature validity against record payloads and
+ * chronological chain continuity per tenant scope.
  *
  * @param logs Audit logs ordered chronologically (or reverse)
+ * @param options Configuration options (e.g. allowNonConsecutive for filtered views)
  */
 export function verifyAuditTrailIntegrity(
   logs: Array<{
@@ -77,84 +84,112 @@ export function verifyAuditTrailIntegrity(
     signature?: string | null
     previousSignature?: string | null
     createdAt: Date | string
-  }>
+  }>,
+  options?: AuditIntegrityOptions
 ): AuditIntegrityResult {
   if (!logs || logs.length === 0) {
     return {
       isValid: true,
       verifiedCount: 0,
+      legacyCount: 0,
       tamperedIndex: null,
       message: "No logs to verify. Audit ledger is empty.",
     }
   }
 
-  // Sort logs oldest first for chronological chain verification
-  const sorted = [...logs].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  )
+  // Group records by tenant/chain scope (societyId or GLOBAL)
+  const scopedLogs = new Map<string, typeof logs>()
+  for (const log of logs) {
+    const scope = log.societyId || "GLOBAL"
+    if (!scopedLogs.has(scope)) {
+      scopedLogs.set(scope, [])
+    }
+    scopedLogs.get(scope)!.push(log)
+  }
 
-  let expectedPrevSig: string | null = null
+  let totalVerified = 0
+  let totalLegacy = 0
 
-  for (let i = 0; i < sorted.length; i++) {
-    const entry = sorted[i]
+  for (const [scope, chainLogs] of scopedLogs.entries()) {
+    // Sort oldest first for chronological chain verification
+    const sorted = [...chainLogs].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    )
 
-    // If persisted signature is present on the record:
-    if (entry.signature) {
-      // 1. Recompute expected signature using this record's stored previousSignature (or GENESIS if first)
-      const computed = computeAuditSignature({
-        id: entry.id,
-        action: entry.action,
-        entity: entry.entity,
-        entityId: entry.entityId,
-        userId: entry.userId,
-        societyId: entry.societyId,
-        createdAt: entry.createdAt,
-        previousSignature: entry.previousSignature || "GENESIS",
-      })
+    let expectedPrevSig: string | null = null
 
-      // 2. Check if the record content was tampered with
-      if (computed !== entry.signature) {
-        return {
-          isValid: false,
-          verifiedCount: i,
-          tamperedIndex: i,
-          tamperedLogId: entry.id,
-          message: `Cryptographic tamper detected at record #${i + 1} (ID: ${entry.id.slice(0, 8)}...). Stored HMAC-SHA256 signature does not match record payload.`,
+    for (let i = 0; i < sorted.length; i++) {
+      const entry = sorted[i]
+
+      // If persisted signature is present on the record:
+      if (entry.signature) {
+        // 1. Recompute expected signature using this record's stored previousSignature (or GENESIS if first)
+        const computed = computeAuditSignature({
+          id: entry.id,
+          action: entry.action,
+          entity: entry.entity,
+          entityId: entry.entityId,
+          userId: entry.userId,
+          societyId: entry.societyId,
+          createdAt: entry.createdAt,
+          previousSignature: entry.previousSignature || "GENESIS",
+        })
+
+        // 2. Check if the record content was tampered with
+        if (computed !== entry.signature) {
+          return {
+            isValid: false,
+            verifiedCount: totalVerified,
+            legacyCount: totalLegacy,
+            tamperedIndex: i,
+            tamperedLogId: entry.id,
+            message: `Cryptographic tamper detected at record #${i + 1}${scopedLogs.size > 1 ? ` in scope [${scope}]` : ""} (ID: ${entry.id.slice(0, 8)}...). Stored HMAC-SHA256 signature does not match record payload.`,
+          }
         }
-      }
 
-      // 3. Check chain continuity if we have a known previous signature in this sorted slice
-      if (expectedPrevSig !== null && entry.previousSignature && entry.previousSignature !== expectedPrevSig) {
-        return {
-          isValid: false,
-          verifiedCount: i,
-          tamperedIndex: i,
-          tamperedLogId: entry.id,
-          message: `Hash chain continuity broken at record #${i + 1} (ID: ${entry.id.slice(0, 8)}...). Expected previous signature does not match (potential record deletion or insertion).`,
+        // 3. Check chain continuity
+        if (entry.previousSignature === "GENESIS") {
+          // Valid genesis root of a cryptographic chain
+          expectedPrevSig = entry.signature
+        } else if (expectedPrevSig !== null) {
+          if (entry.previousSignature === expectedPrevSig) {
+            expectedPrevSig = entry.signature
+          } else if (!options?.allowNonConsecutive) {
+            return {
+              isValid: false,
+              verifiedCount: totalVerified,
+              legacyCount: totalLegacy,
+              tamperedIndex: i,
+              tamperedLogId: entry.id,
+              message: `Hash chain continuity broken at record #${i + 1}${scopedLogs.size > 1 ? ` in scope [${scope}]` : ""} (ID: ${entry.id.slice(0, 8)}...). Expected previous signature does not match (potential record deletion or insertion).`,
+            }
+          } else {
+            // In non-consecutive / filtered views, update expected to this record's signature
+            expectedPrevSig = entry.signature
+          }
+        } else {
+          // First signed record in this slice
+          expectedPrevSig = entry.signature
         }
-      }
 
-      expectedPrevSig = entry.signature
-    } else {
-      // For legacy records without stored signature, compute on the fly
-      const fallbackSig = computeAuditSignature({
-        id: entry.id,
-        action: entry.action,
-        entity: entry.entity,
-        entityId: entry.entityId,
-        userId: entry.userId,
-        societyId: entry.societyId,
-        createdAt: entry.createdAt,
-        previousSignature: expectedPrevSig || "GENESIS",
-      })
-      expectedPrevSig = fallbackSig
+        totalVerified++
+      } else {
+        // Unsealed legacy record created before cryptographic sealing was enabled
+        totalLegacy++
+      }
     }
   }
 
+  const message =
+    totalLegacy > 0
+      ? `All ${logs.length} audit records cryptographically verified (${totalVerified} sealed with unbroken HMAC-SHA256 hash chain, ${totalLegacy} legacy records).`
+      : `All ${logs.length} audit records cryptographically verified with unbroken HMAC-SHA256 signature chain.`
+
   return {
     isValid: true,
-    verifiedCount: sorted.length,
+    verifiedCount: totalVerified,
+    legacyCount: totalLegacy,
     tamperedIndex: null,
-    message: `All ${sorted.length} audit records cryptographically verified with unbroken HMAC-SHA256 signature chain.`,
+    message,
   }
 }

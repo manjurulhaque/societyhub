@@ -34,8 +34,8 @@ export async function recordAuditLog(payload: AuditLogPayload): Promise<void> {
 
     // Fetch the latest entry in this scope to continue the hash chain
     const latestLog = await prisma.auditLog.findFirst({
-      where: payload.societyId ? { societyId: payload.societyId } : {},
-      orderBy: { createdAt: "desc" },
+      where: payload.societyId ? { societyId: payload.societyId } : { societyId: null },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: { signature: true },
     })
 

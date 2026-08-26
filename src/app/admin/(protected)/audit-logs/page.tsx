@@ -44,10 +44,10 @@ export default async function AuditLogsPage({
     ]
   }
 
-  const [logs, totalCount, actionCounts] = await Promise.all([
+  const [logs, totalCount, actionCounts, recentChainLogs] = await Promise.all([
     prisma.auditLog.findMany({
       where: whereClause,
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip: (currentPage - 1) * pageSize,
       take: pageSize,
       include: {
@@ -72,6 +72,21 @@ export default async function AuditLogsPage({
       by: ["action"],
       _count: { _all: true },
     }),
+    prisma.auditLog.findMany({
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 100,
+      select: {
+        id: true,
+        action: true,
+        entity: true,
+        entityId: true,
+        userId: true,
+        societyId: true,
+        signature: true,
+        previousSignature: true,
+        createdAt: true,
+      },
+    }),
   ])
 
   const createCount =
@@ -82,7 +97,9 @@ export default async function AuditLogsPage({
     actionCounts.find((item) => item.action === "STATUS_CHANGE")?._count._all ?? 0
 
   const totalPages = Math.ceil(totalCount / pageSize)
-  const integrity = verifyAuditTrailIntegrity(logs)
+  const chainIntegrity = verifyAuditTrailIntegrity(recentChainLogs)
+  const displayedIntegrity = verifyAuditTrailIntegrity(logs, { allowNonConsecutive: true })
+  const integrity = !displayedIntegrity.isValid ? displayedIntegrity : chainIntegrity
 
   const getActionBadgeVariant = (act: AuditAction) => {
     switch (act) {
@@ -112,7 +129,7 @@ export default async function AuditLogsPage({
         className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border p-4 sm:p-5 transition-all ${
           !integrity.isValid
             ? "border-rose-300 bg-rose-50 text-rose-950 shadow-sm"
-            : logs.length === 0
+            : totalCount === 0
             ? "border-stone-200 bg-stone-50/80 text-stone-800"
             : "border-emerald-200 bg-emerald-50/70 text-emerald-950"
         }`}
@@ -122,27 +139,29 @@ export default async function AuditLogsPage({
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold text-white shadow-sm ${
               !integrity.isValid
                 ? "bg-rose-600 animate-pulse text-base"
-                : logs.length === 0
+                : totalCount === 0
                 ? "bg-stone-500 text-sm"
                 : "bg-emerald-600 text-base"
             }`}
           >
-            {!integrity.isValid ? "⚠️" : logs.length === 0 ? "ℹ" : "✓"}
+            {!integrity.isValid ? "⚠️" : totalCount === 0 ? "ℹ" : "✓"}
           </div>
           <div>
             <h3 className="text-sm font-bold">
               {!integrity.isValid
                 ? "Cryptographic Integrity Compromised: Tamper Detected"
-                : logs.length === 0
+                : totalCount === 0
                 ? "Audit Ledger: Genesis State"
                 : "Cryptographic Audit Trail Integrity: Verified"}
             </h3>
             <p className="text-xs opacity-90 mt-0.5">
               {!integrity.isValid
                 ? integrity.message
-                : logs.length === 0
+                : totalCount === 0
                 ? "No audit events found. The cryptographic hash chain is at its initial genesis state."
-                : `HMAC-SHA256 hash chaining active. All ${integrity.verifiedCount} fetched audit records mathematically verified against tampering.`}
+                : integrity.legacyCount && integrity.legacyCount > 0
+                ? `HMAC-SHA256 hash chaining active across tenant scopes. ${integrity.verifiedCount} sealed records verified (${integrity.legacyCount} legacy records preserved).`
+                : `HMAC-SHA256 hash chaining active across tenant scopes. All ${integrity.verifiedCount} audit records mathematically verified against tampering.`}
             </p>
           </div>
         </div>
@@ -150,14 +169,14 @@ export default async function AuditLogsPage({
           className={`self-start sm:self-auto rounded-full border px-3 py-1 text-xs font-bold whitespace-nowrap ${
             !integrity.isValid
               ? "border-rose-300 bg-rose-100 text-rose-800"
-              : logs.length === 0
+              : totalCount === 0
               ? "border-stone-300 bg-stone-100 text-stone-700"
               : "border-emerald-300 bg-emerald-100 text-emerald-800"
           }`}
         >
           {!integrity.isValid
             ? "Chain Broken"
-            : logs.length === 0
+            : totalCount === 0
             ? "Genesis State"
             : "Unbroken Chain"}
         </span>

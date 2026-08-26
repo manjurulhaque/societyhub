@@ -73,6 +73,7 @@ console.log("\n▶ [2/8] Testing HMAC-SHA256 Audit Trail Cryptographic Chaining.
 try {
   const date1 = new Date("2026-01-01T10:00:00Z")
   const date2 = new Date("2026-01-01T10:05:00Z")
+  const date3 = new Date("2026-01-01T10:10:00Z")
 
   const log1 = {
     id: "log-001",
@@ -82,7 +83,10 @@ try {
     userId: "user-abc",
     societyId: "soc-xyz",
     createdAt: date1,
+    previousSignature: "GENESIS",
+    signature: "",
   }
+  log1.signature = computeAuditSignature(log1)
 
   const log2 = {
     id: "log-002",
@@ -92,17 +96,59 @@ try {
     userId: "user-abc",
     societyId: "soc-xyz",
     createdAt: date2,
+    previousSignature: log1.signature,
+    signature: "",
   }
+  log2.signature = computeAuditSignature(log2)
 
-  const sig1 = computeAuditSignature({ ...log1, previousSignature: "GENESIS" })
-  const sig2 = computeAuditSignature({ ...log2, previousSignature: sig1 })
+  const log3 = {
+    id: "log-003",
+    action: "STATUS_CHANGE",
+    entity: "Bill",
+    entityId: "bill-123",
+    userId: "user-abc",
+    societyId: "soc-xyz",
+    createdAt: date3,
+    previousSignature: log2.signature,
+    signature: "",
+  }
+  log3.signature = computeAuditSignature(log3)
 
-  assert(typeof sig1 === "string" && sig1.length === 64, "Log 1 generated 256-bit SHA-256 HMAC signature")
-  assert(sig1 !== sig2, "Chained signatures are unique per transaction")
+  assert(typeof log1.signature === "string" && log1.signature.length === 64, "Log 1 generated 256-bit SHA-256 HMAC signature")
+  assert(log1.signature !== log2.signature, "Chained signatures are unique per transaction")
 
-  const trailResult = verifyAuditTrailIntegrity([log1, log2])
+  // Valid chain verification
+  const trailResult = verifyAuditTrailIntegrity([log1, log2, log3])
   assert(trailResult.isValid, "Audit trail integrity verification succeeds for valid chain")
-  assert(trailResult.verifiedCount === 2, "Verified count matches total records")
+  assert(trailResult.verifiedCount === 3, "Verified count matches total records")
+
+  // Tamper detection: modify a payload field
+  const tamperedLog2 = { ...log2, entity: "TamperedBill" }
+  const tamperedResult = verifyAuditTrailIntegrity([log1, tamperedLog2, log3])
+  assert(!tamperedResult.isValid, "Tampered record payload correctly caught by cryptographic verification")
+  assert(tamperedResult.tamperedLogId === "log-002", "Identifies exact tampered record ID")
+
+  // Continuity break: deleted intermediate record in strict mode
+  const brokenChainResult = verifyAuditTrailIntegrity([log1, log3])
+  assert(!brokenChainResult.isValid, "Missing/deleted record in strict chain correctly flags continuity break")
+
+  // Filtered/non-consecutive query support
+  const filteredResult = verifyAuditTrailIntegrity([log1, log3], { allowNonConsecutive: true })
+  assert(filteredResult.isValid, "Non-consecutive filtered view succeeds when individual seals are intact")
+
+  // Legacy records handling
+  const legacyLog = {
+    id: "legacy-001",
+    action: "CREATE",
+    entity: "Society",
+    entityId: "soc-xyz",
+    userId: "user-legacy",
+    societyId: "soc-xyz",
+    createdAt: new Date("2025-12-01T10:00:00Z"),
+  }
+  const mixedResult = verifyAuditTrailIntegrity([legacyLog, log1, log2])
+  assert(mixedResult.isValid, "Mixed legacy unsealed and sealed records verify gracefully")
+  assert(mixedResult.legacyCount === 1 && mixedResult.verifiedCount === 2, "Accurately reports legacy vs sealed counts")
 } catch (e: unknown) {
   assert(false, "HMAC Audit Chaining threw unexpected error", e instanceof Error ? e.message : String(e))
 }
