@@ -176,10 +176,29 @@ SocietyHub implements a 6-tier functional role hierarchy with strict separation 
   - `recordAuditLog` automatically runs deep recursive sanitization on `oldData` and `newData` before persistence.
   - Automatically redacts passwords, tokens, API keys, OTPs, session cookies, and masks PAN, Aadhaar, and Bank Account numbers within arbitrary JSON payloads.
 
-### L. Cryptographic Tamper-Proof Audit Log Hash Chaining
-- Audit logs are chained chronologically using HMAC-SHA256 hash signatures (`@/lib/auditCrypto.ts`), linking each record to the preceding entry's signature (Merkle audit chain).
-- **Super Admin Audit Explorer** (`/admin/audit-logs`): Real-time mathematical chain verification that detects any record modification, backdating, or unauthorized deletion.
-- **Society Audit Explorer** (`/society/[code]/audit-logs`): Tenant-isolated audit trails for committee transparency and statutory compliance.
+### L. Cryptographic Tamper-Proof Audit Log Hash Chaining & Forensic Suite
+- **HMAC-SHA256 Merkle Ledger Chaining (`@/lib/auditCrypto.ts`)**:
+  - Audit logs are chained chronologically using HMAC-SHA256 cryptographic signatures, linking each record to the preceding entry's signature per tenant scope (`societyId || "GLOBAL"`).
+  - Mathematical integrity verification (`verifyAuditTrailIntegrity`) validates individual row HMAC seals against record payloads and verifies chronological chain continuity without false positives in filtered/paginated views (`allowNonConsecutive: true`).
+  - Seamlessly handles unbroken genesis transitions (`previousSignature: "GENESIS"`) and legacy unsealed records without phantom collisions.
+  - **Retroactive Backfill Utility (`scripts/backfill-audit-signatures.ts`)**: Automatically seals and chains unsealed legacy audit records from genesis roots into an unbroken ledger.
+- **Automatic Client IP & User-Agent Attribution (`@/lib/audit.ts`)**:
+  - Automatically captures client network identifiers from Next.js server actions using `next/headers`:
+    - Cloudflare Edge (`cf-connecting-ip`)
+    - Akamai / Enterprise CDN (`true-client-ip`)
+    - Reverse Proxy / Load Balancer (`x-forwarded-for`, `x-real-ip`)
+    - Browser Client (`user-agent`).
+  - `normalizeIpAddress()` normalizes IPv4-mapped IPv6 prefixes (`::ffff:127.0.0.1` ➔ `127.0.0.1`), maps IPv6 loopbacks (`::1` ➔ `127.0.0.1`), and strips proxy ports.
+- **Interactive Forensic State Diff Inspector (`@/components/audit/AuditLogDetailModal.tsx`)**:
+  - Server-evaluated HMAC seal status badge (`isSealValid`) with 1-click signature copy.
+  - Side-by-side visual diff comparison comparing `oldData` against `newData` with color-coded additions (green), deletions (red), and mutations (amber).
+  - Complete actor metadata display (Email, App Role, IP Address with network indicators, User Agent, Tenant Scope).
+- **Certified Audit Pack Export (`@/lib/pdf/auditPdfGenerator.ts`)**:
+  - **Certified PDF Report**: Generates an official landscape compliance report with society letterhead, cryptographic integrity seal stamp, verified record tallies, and chronological event ledger for Annual General Meetings (AGM) and Registrar statutory audits.
+  - **Tamper-Evident CSV**: Exports audit records with universal CSV formula injection (DDE) neutralization.
+- **Dedicated Explorers**:
+  - **Super Admin Audit Explorer** (`/admin/audit-logs`): Cross-tenant platform governance and system mutation monitoring.
+  - **Society Audit Explorer** (`/society/[code]/audit-logs`): Tenant-isolated audit trails for committee transparency and compliance.
 
 ### M. Production Error Sanitization, Compiler Stripping & Environment Validation
 - **Safe Error Handling (`@/lib/errors.ts`)**: In production, `getSafeErrorMessage(err)` suppresses raw PostgreSQL/Prisma error details, table names, foreign key constraints, and internal stack traces, returning sanitized, safe user feedback.
@@ -204,9 +223,9 @@ npm run security:check
 ```
 
 This script executes:
-1. **Automated Cryptographic & Security Self-Tests (`tsx scripts/test-security.ts`)**: Mathematically validates **47 security assertions across 8 core test suites** (AES-256-GCM, HMAC-SHA256 audit chaining, rate limiter, CSV DDE escaping, XSS sanitization, open redirect defense, NIST password policy, and recursive PII redaction).
+1. **Automated Cryptographic & Security Self-Tests (`tsx scripts/test-security.ts`)**: Mathematically validates **53 security assertions across 8 core test suites** (AES-256-GCM, HMAC-SHA256 audit chaining & tamper detection, rate limiter, CSV DDE escaping, XSS sanitization, open redirect defense, NIST password policy, and recursive PII redaction).
 2. **ESLint Rule Validation**: Codebase-wide linting with 0 errors and 0 warnings.
-3. **Next.js Production Build**: TypeScript type-checking and static/dynamic optimization across all 42 App Router routes.
+3. **Next.js Production Build**: TypeScript type-checking and static/dynamic optimization across all 44 App Router routes.
 
 ---
 
