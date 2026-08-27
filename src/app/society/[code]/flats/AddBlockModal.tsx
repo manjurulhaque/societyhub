@@ -88,15 +88,34 @@ export function AddBlockModal({
           ) : null}
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1.5">
-              Block / Tower Name <span className="text-red-500">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-stone-700">
+                Structure / Wing Name <span className="text-red-500">*</span>
+              </label>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-stone-400 font-medium mr-1">Prefix:</span>
+                {["Wing", "Tower", "Block", "Building"].map((prefix) => (
+                  <button
+                    key={prefix}
+                    type="button"
+                    onClick={() => {
+                      const regex = /^(Wing|Tower|Block|Building)\s*/i
+                      const remainder = name.replace(regex, "").trim()
+                      setName(`${prefix} ${remainder}`.trim())
+                    }}
+                    className="rounded-md border border-stone-200 bg-stone-50 px-1.5 py-0.5 text-[10px] font-semibold text-stone-600 hover:bg-stone-200 hover:text-stone-900 transition"
+                  >
+                    {prefix}
+                  </button>
+                ))}
+              </div>
+            </div>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={isPending}
-              placeholder="e.g. Wing A, Tower 1, Block C"
+              placeholder="e.g. Wing A, Tower 1, Sapphire Block"
               className="w-full rounded-xl border border-stone-200 bg-stone-50/50 px-3.5 py-2.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none disabled:bg-stone-100"
             />
           </div>

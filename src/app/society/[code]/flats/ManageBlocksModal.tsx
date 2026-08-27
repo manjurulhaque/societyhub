@@ -201,7 +201,26 @@ export function ManageBlocksModal({
             </button>
           ) : (
             <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3 space-y-2">
-              <span className="text-xs font-bold text-stone-900 block">Create New Block / Wing</span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-stone-900 block">Create New Wing / Tower</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-stone-400 font-medium mr-1">Prefix:</span>
+                  {["Wing", "Tower", "Block", "Building"].map((prefix) => (
+                    <button
+                      key={prefix}
+                      type="button"
+                      onClick={() => {
+                        const regex = /^(Wing|Tower|Block|Building)\s*/i
+                        const remainder = newBlockName.replace(regex, "").trim()
+                        setNewBlockName(`${prefix} ${remainder}`.trim())
+                      }}
+                      className="rounded-md border border-stone-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-stone-600 hover:bg-stone-200 hover:text-stone-900 transition"
+                    >
+                      {prefix}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <input
                   type="text"
