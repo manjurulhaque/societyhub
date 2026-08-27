@@ -11,6 +11,7 @@ import {
   AdminButton,
 } from "@/components/admin"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { SuperAdminDashboardCharts } from "./SuperAdminDashboardCharts"
 
 export default async function DashboardPage() {
   const admin = await getAdmin()
@@ -50,10 +51,10 @@ export default async function DashboardPage() {
     prisma.society.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { createdAt: "desc" },
-      take: 5,
+      take: 6,
       include: {
         _count: {
-          select: { blocks: true, people: true, members: true },
+          select: { blocks: true, people: true, members: true, flats: true },
         },
       },
     }),
@@ -114,6 +115,14 @@ export default async function DashboardPage() {
   const outstandingAmount = Math.max(0, totalBilled - totalCollected)
   const collectionRate =
     totalBilled === 0 ? 0 : Math.min(100, Math.round((totalCollected / totalBilled) * 100))
+
+  const societyScaleData = recentSocieties.map((s) => ({
+    name: s.name,
+    code: s.code,
+    flatsCount: s._count.flats,
+    membersCount: s._count.members,
+    blocksCount: s._count.blocks,
+  }))
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-4 py-6 sm:px-6 sm:py-8 md:px-8">
@@ -245,6 +254,16 @@ export default async function DashboardPage() {
           }
         />
       </div>
+
+      {/* Row 3: Platform Visual Analytics */}
+      <SuperAdminDashboardCharts
+        societyScaleData={societyScaleData}
+        financialOverview={{
+          totalBilled,
+          totalCollected,
+          totalOutstanding: outstandingAmount,
+        }}
+      />
 
       {/* Grid: Recent Societies & Recent Residents */}
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">

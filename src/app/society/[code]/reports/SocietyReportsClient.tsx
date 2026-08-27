@@ -651,6 +651,52 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
     return [...topIncomes, ...topExpenses]
   }, [data.pnl.incomeHeads, data.pnl.expenseHeads])
 
+  // Chart data for Unit account solvency & status breakdown
+  const chartUnitStatusData = useMemo(() => {
+    const counts: Record<string, { name: string; count: number; fill: string }> = {
+      CLEAR: { name: "Fully Cleared", count: 0, fill: "#059669" },
+      ADVANCE: { name: "In Advance Float", count: 0, fill: "#0284c7" },
+      PENDING: { name: "Current Pending", count: 0, fill: "#d97706" },
+      OVERDUE: { name: "Arrears Overdue", count: 0, fill: "#e11d48" },
+      NO_BILLS: { name: "No Invoices", count: 0, fill: "#78716c" },
+    }
+    for (const u of data.unitLedger) {
+      if (counts[u.accountStatus]) {
+        counts[u.accountStatus].count += 1
+      }
+    }
+    return Object.values(counts).filter((c) => c.count > 0)
+  }, [data.unitLedger])
+
+  // Chart data for vendor creditor aging
+  const chartVendorAgingData = useMemo(() => {
+    const buckets = {
+      OVER_60: { name: ">60d Overdue", amount: 0, count: 0, fill: "#e11d48" },
+      DAYS_31_60: { name: "31-60 Days", amount: 0, count: 0, fill: "#f59e0b" },
+      DAYS_0_30: { name: "0-30 Days (Current)", amount: 0, count: 0, fill: "#0284c7" },
+    }
+    for (const v of data.vendorAging) {
+      if (buckets[v.agingBucket]) {
+        buckets[v.agingBucket].amount += v.outstandingDue
+        buckets[v.agingBucket].count += v.pendingBillsCount
+      }
+    }
+    return Object.values(buckets).filter((b) => b.amount > 0 || b.count > 0)
+  }, [data.vendorAging])
+
+  // Chart data for top vendor payables
+  const chartTopVendorsData = useMemo(() => {
+    return [...data.vendorAging]
+      .filter((v) => v.outstandingDue > 0)
+      .sort((a, b) => b.outstandingDue - a.outstandingDue)
+      .slice(0, 5)
+      .map((v) => ({
+        name: v.vendorName,
+        Outstanding: v.outstandingDue,
+        Paid: v.totalPaidAmount,
+      }))
+  }, [data.vendorAging])
+
   // CSV Export Utility
   const handleExportCSV = (reportType: string) => {
     let headers: string[] = []
@@ -3052,6 +3098,105 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
       {/* ========================================== */}
       {activeTab === "vendors" && (
         <div className="space-y-6">
+          {/* Vendor Creditors Overview Visuals */}
+          {chartVendorAgingData.length > 0 && (
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              {/* Aging Breakdown */}
+              <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-stone-950">
+                      Creditor Arrears Aging Distribution
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Payables concentration across 0-30d, 31-60d, and &gt;60d overdue
+                    </p>
+                  </div>
+                  <AdminBadge variant="neutral" size="sm">
+                    Creditors
+                  </AdminBadge>
+                </div>
+                <div className="h-48 w-full min-w-0">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height={180} minWidth={100} minHeight={100}>
+                      <PieChart>
+                        <Pie
+                          data={chartVendorAgingData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={38}
+                          outerRadius={62}
+                          paddingAngle={3}
+                          dataKey="amount"
+                        >
+                          {chartVendorAgingData.map((entry, index) => (
+                            <Cell key={`v-age-cell-${index}`} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(val: unknown, _name: unknown, item: { payload?: { count?: number } }) => [
+                            `${sym}${Number(val ?? 0).toLocaleString("en-IN")} (${item?.payload?.count ?? 0} bills)`,
+                            "Payable Amount",
+                          ]}
+                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: "11px" }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                  )}
+                </div>
+              </div>
+
+              {/* Top Vendors by Outstanding */}
+              <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-stone-950">
+                      Top Vendor Payables
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Highest pending balances across operational service providers
+                    </p>
+                  </div>
+                  <AdminBadge variant="neutral" size="sm">
+                    Payables
+                  </AdminBadge>
+                </div>
+                <div className="h-48 w-full min-w-0">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height={180} minWidth={100} minHeight={100}>
+                      <BarChart data={chartTopVendorsData} layout="vertical" margin={{ top: 5, right: 15, left: 10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e7e5e4" />
+                        <XAxis
+                          type="number"
+                          tick={{ fontSize: 10, fill: "#78716c" }}
+                          axisLine={{ stroke: "#e7e5e4" }}
+                          tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          tick={{ fontSize: 10, fill: "#78716c" }}
+                          axisLine={{ stroke: "#e7e5e4" }}
+                          width={100}
+                        />
+                        <Tooltip
+                          formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, "Outstanding"]}
+                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                        />
+                        <Bar dataKey="Outstanding" fill="#e11d48" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <AdminCard
             title={`Vendor Payables & Outstanding Aging (${data.vendorAging.length} Vendors)`}
             description="Itemized payables aging across operational suppliers, AMC contracts, and service providers"
@@ -3479,6 +3624,74 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
               />
             </div>
           </div>
+
+          {/* Unit Solvency Overview Donut */}
+          {chartUnitStatusData.length > 0 && (
+            <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-stone-950">
+                    Unit Account Health &amp; Solvency Distribution
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    Account balances across Cleared, In Advance, Pending, and Arrears categories
+                  </p>
+                </div>
+                <AdminBadge variant="neutral" size="sm">
+                  {data.unitLedger.length} Flats
+                </AdminBadge>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-3 items-center">
+                <div className="h-44 w-full min-w-0 md:col-span-1">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height={170} minWidth={100} minHeight={100}>
+                      <PieChart>
+                        <Pie
+                          data={chartUnitStatusData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={38}
+                          outerRadius={62}
+                          paddingAngle={3}
+                          dataKey="count"
+                        >
+                          {chartUnitStatusData.map((entry, index) => (
+                            <Cell key={`unit-cell-${index}`} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(val: unknown) => [
+                            `${val} flats (${data.unitLedger.length > 0 ? Math.round((Number(val) / data.unitLedger.length) * 100) : 0}%)`,
+                            "",
+                          ]}
+                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 md:col-span-2 sm:grid-cols-3">
+                  {chartUnitStatusData.map((item) => (
+                    <div key={item.name} className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: item.fill }} />
+                          <span className="text-xs font-bold text-stone-900 truncate">{item.name}</span>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-xl font-black text-stone-950">
+                        {item.count} <span className="text-xs font-medium text-stone-500">flats</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           <AdminCard
             title={`Unit Maintenance & Dues Ledger (${filteredUnitLedger.length} Flats)`}
