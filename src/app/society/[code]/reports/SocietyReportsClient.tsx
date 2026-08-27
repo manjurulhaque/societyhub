@@ -16,6 +16,7 @@ import {
   Cell,
   AreaChart,
   Area,
+  ReferenceLine,
 } from "recharts"
 import {
   AdminCard,
@@ -31,6 +32,25 @@ import {
 import { formatDateInAppTimeZone } from "@/lib/datetime"
 import { maskBankAccount } from "@/lib/masking"
 import { generateSafeCsv } from "@/lib/csv"
+
+function formatCompactCurrency(value: number, sym: string = "₹"): string {
+  if (value === 0) return `${sym}0`
+  const isNegative = value < 0
+  const absVal = Math.abs(value)
+  let formatted = ""
+
+  if (absVal >= 10_000_000) {
+    formatted = `${(absVal / 10_000_000).toFixed(1).replace(/\.0$/, "")}Cr`
+  } else if (absVal >= 100_000) {
+    formatted = `${(absVal / 100_000).toFixed(1).replace(/\.0$/, "")}L`
+  } else if (absVal >= 1_000) {
+    formatted = `${(absVal / 1_000).toFixed(0)}K`
+  } else {
+    formatted = `${absVal}`
+  }
+
+  return isNegative ? `-${sym}${formatted}` : `${sym}${formatted}`
+}
 
 const CHART_COLORS = [
   "#059669",
@@ -507,6 +527,43 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
       value: e.amount,
     }))
   }, [data.expensesByCategory])
+
+  // Chart data for defaulters aging distribution
+  const agingChartData = useMemo(() => [
+    {
+      bucket: ">90d (Chronic)",
+      amount: data.agingSummary.over90.amount,
+      count: data.agingSummary.over90.count,
+      fill: "#e11d48",
+    },
+    {
+      bucket: "61-90d",
+      amount: data.agingSummary.days61To90.amount,
+      count: data.agingSummary.days61To90.count,
+      fill: "#f59e0b",
+    },
+    {
+      bucket: "31-60d",
+      amount: data.agingSummary.days31To60.amount,
+      count: data.agingSummary.days31To60.count,
+      fill: "#eab308",
+    },
+    {
+      bucket: "0-30d",
+      amount: data.agingSummary.days0To30.amount,
+      count: data.agingSummary.days0To30.count,
+      fill: "#0284c7",
+    },
+  ], [data.agingSummary])
+
+  const totalDefaulterDues = useMemo(() => {
+    return (
+      data.agingSummary.over90.amount +
+      data.agingSummary.days61To90.amount +
+      data.agingSummary.days31To60.amount +
+      data.agingSummary.days0To30.amount
+    )
+  }, [data.agingSummary])
 
   // CSV Export Utility
   const handleExportCSV = (reportType: string) => {
@@ -1705,12 +1762,20 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
               </div>
 
               <div className="h-72 w-full min-w-0">
-                {isMounted ? (
+                {chartMonthlyData.length === 0 ? (
+                  <div className="flex h-72 items-center justify-center text-xs text-stone-400">
+                    No billing or collection history recorded for this period
+                  </div>
+                ) : isMounted ? (
                   <ResponsiveContainer width="100%" height={280} minWidth={100} minHeight={100}>
-                    <BarChart data={chartMonthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <BarChart data={chartMonthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
                       <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
-                      <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: "#78716c" }}
+                        axisLine={{ stroke: "#e7e5e4" }}
+                        tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                      />
                       <Tooltip
                         formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
                         contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
@@ -1787,9 +1852,13 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
             </div>
 
             <div className="h-56 w-full min-w-0">
-              {isMounted ? (
+              {chartMonthlyData.length === 0 ? (
+                <div className="flex h-56 items-center justify-center text-xs text-stone-400">
+                  No cashflow trend data recorded for this period
+                </div>
+              ) : isMounted ? (
                 <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
-                  <AreaChart data={chartMonthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <AreaChart data={chartMonthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorCashflow" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#059669" stopOpacity={0.4} />
@@ -1798,7 +1867,12 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
                     <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
-                    <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: "#78716c" }}
+                      axisLine={{ stroke: "#e7e5e4" }}
+                      tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                    />
+                    <ReferenceLine y={0} stroke="#f43f5e" strokeDasharray="3 3" />
                     <Tooltip
                       formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, "Net Cashflow"]}
                       contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
@@ -2247,6 +2321,62 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
               </p>
             </div>
           </div>
+
+          {/* Overdue Arrears Aging Distribution Visual */}
+          {totalDefaulterDues > 0 && (
+            <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-stone-950">
+                    Overdue Arrears Aging Distribution
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    Visual aging curve and recovery risk concentration
+                  </p>
+                </div>
+                <AdminBadge variant="neutral" size="sm">
+                  Aging Analysis
+                </AdminBadge>
+              </div>
+
+              <div className="h-56 w-full min-w-0">
+                {isMounted ? (
+                  <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
+                    <BarChart data={agingChartData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e7e5e4" />
+                      <XAxis
+                        type="number"
+                        tick={{ fontSize: 11, fill: "#78716c" }}
+                        axisLine={{ stroke: "#e7e5e4" }}
+                        tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="bucket"
+                        tick={{ fontSize: 11, fill: "#78716c" }}
+                        axisLine={{ stroke: "#e7e5e4" }}
+                        width={110}
+                      />
+                      <Tooltip
+                        formatter={(val: unknown, _name: unknown, item: { payload?: { count?: number } }) => [
+                          `${sym}${Number(val ?? 0).toLocaleString("en-IN")} (${item?.payload?.count ?? 0} units)`,
+                          "Overdue Dues",
+                        ]}
+                        contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                      />
+                      <Bar dataKey="amount" radius={[0, 6, 6, 0]}>
+                        {agingChartData.map((entry, index) => (
+                          <Cell key={`aging-cell-${index}`} fill={entry.fill} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Filter Bar */}
           <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50/70 p-4">

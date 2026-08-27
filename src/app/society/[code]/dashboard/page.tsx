@@ -13,6 +13,7 @@ import {
   AdminButton,
 } from "@/components/admin"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { SocietyDashboardCharts } from "./SocietyDashboardCharts"
 
 export default async function SocietyDashboardPage({
   params,
@@ -129,6 +130,20 @@ export default async function SocietyDashboardPage({
   const outstanding = Math.max(0, totalBilled - totalCollected)
   const collectionRate =
     totalBilled === 0 ? 0 : Math.min(100, Math.round((totalCollected / totalBilled) * 100))
+
+  const OCCUPANCY_CONFIG: Record<string, { label: string; color: string }> = {
+    OCCUPIED: { label: "Occupied", color: "#059669" },
+    VACANT: { label: "Vacant", color: "#d97706" },
+    UNDER_RENOVATION: { label: "Renovation", color: "#7c3aed" },
+    RESERVED: { label: "Reserved", color: "#0284c7" },
+  }
+
+  const occupancyData = flatStatusCounts.map((item) => ({
+    status: item.status,
+    label: OCCUPANCY_CONFIG[item.status]?.label || item.status,
+    count: item._count._all,
+    color: OCCUPANCY_CONFIG[item.status]?.color || "#78716c",
+  }))
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-4 py-6 sm:px-6 sm:py-8 md:px-8">
@@ -270,6 +285,20 @@ export default async function SocietyDashboardPage({
           }
         />
       </div>
+
+      {/* Visual Analytics Overview */}
+      <SocietyDashboardCharts
+        societyCode={societyCode}
+        occupancyData={occupancyData}
+        totalFlats={totalFlats}
+        financialSummary={{
+          totalBilled,
+          totalCollected,
+          outstanding,
+          collectionRate,
+          currencySymbol: "₹",
+        }}
+      />
 
       {/* Blocks Overview */}
       {blocks.length > 0 ? (
