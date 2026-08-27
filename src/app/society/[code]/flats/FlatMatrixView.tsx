@@ -95,6 +95,12 @@ export function FlatMatrixView({
       const overdueUnits = blockFlats.filter((f) => Boolean(f.isDefaulter) || (f.unpaidDues ?? 0) > 0).length
       const occupancyRate = totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 100) : 0
 
+      const totalBilled = blockFlats.reduce((sum, f) => sum + (f.totalBilled || 0), 0)
+      const totalPaid = blockFlats.reduce((sum, f) => sum + (f.totalPaid || 0), 0)
+      const totalOutstanding = blockFlats.reduce((sum, f) => sum + (f.unpaidDues || 0), 0)
+      const defaultersCount = blockFlats.filter((f) => Boolean(f.isDefaulter) || (f.unpaidDues || 0) > 0).length
+      const collectionRate = totalBilled > 0 ? Math.round((totalPaid / totalBilled) * 100) : 100
+
       return {
         block,
         sortedFloors,
@@ -109,6 +115,11 @@ export function FlatMatrixView({
           tenantOccupied,
           overdueUnits,
           occupancyRate,
+          totalBilled,
+          totalPaid,
+          totalOutstanding,
+          defaultersCount,
+          collectionRate,
         },
       }
     })
@@ -493,6 +504,68 @@ export function FlatMatrixView({
                           ⚠️ {stats.overdueUnits} Overdue
                         </span>
                       </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Block Financial & Collection Scorecard Strip */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 rounded-2xl bg-stone-50/80 p-3.5 border border-stone-100 text-xs">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 block">
+                    Billed Demand
+                  </span>
+                  <span className="font-mono font-bold text-stone-900 text-xs">
+                    ₹{stats.totalBilled.toLocaleString("en-IN")}
+                  </span>
+                </div>
+
+                <div className="space-y-0.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block">
+                      Collections Paid
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-800">
+                      {stats.collectionRate}%
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono font-bold text-emerald-700 text-xs">
+                      ₹{stats.totalPaid.toLocaleString("en-IN")}
+                    </span>
+                    <div className="h-1.5 flex-1 rounded-full bg-stone-200 overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-600 rounded-full"
+                        style={{ width: `${stats.collectionRate}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-0.5">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider block ${stats.totalOutstanding > 0 ? "text-red-700" : "text-stone-500"}`}>
+                    Outstanding Dues
+                  </span>
+                  <span className={`font-mono font-bold text-xs ${stats.totalOutstanding > 0 ? "text-red-700" : "text-stone-800"}`}>
+                    ₹{stats.totalOutstanding.toLocaleString("en-IN")}
+                  </span>
+                </div>
+
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 block">
+                    Defaulters
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {stats.defaultersCount > 0 ? (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                        <span>⚠️</span>
+                        <span>{stats.defaultersCount} Unit{stats.defaultersCount === 1 ? "" : "s"}</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                        <span>✓</span>
+                        <span>100% Cleared</span>
+                      </span>
                     )}
                   </div>
                 </div>

@@ -5,9 +5,21 @@ import { AdminBadge } from "@/components/admin"
 import { createBlock, updateBlock, deleteBlock, batchUpdateBlockPrefix } from "./actions"
 import type { BlockOption } from "./AddFlatModal"
 
+export type BlockFinancialScorecard = {
+  totalBilled: number
+  totalPaid: number
+  totalOutstanding: number
+  defaultersCount: number
+  collectionRate: number
+  totalUnits: number
+  occupiedUnits: number
+  occupancyRate: number
+}
+
 export type BlockWithDetails = BlockOption & {
   isActive?: boolean
   flatCount?: number
+  financialScorecard?: BlockFinancialScorecard
 }
 
 interface ManageBlocksModalProps {
@@ -346,11 +358,37 @@ export function ManageBlocksModal({
                           🏢
                         </div>
                         <div>
-                          <span className="font-bold text-xs text-stone-950 block">
-                            {block.name}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-xs text-stone-950">
+                              {block.name}
+                            </span>
+                            {block.financialScorecard && (
+                              <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                                block.financialScorecard.collectionRate >= 90
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : block.financialScorecard.collectionRate >= 70
+                                    ? "bg-amber-50 text-amber-700"
+                                    : "bg-red-50 text-red-700"
+                              }`}>
+                                {block.financialScorecard.collectionRate}% Collected
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[11px] text-stone-500 block">
-                            {count} Unit{count === 1 ? "" : "s"} Assigned
+                            {count} Unit{count === 1 ? "" : "s"}
+                            {block.financialScorecard ? (
+                              <>
+                                {" • "}
+                                <span className={block.financialScorecard.totalOutstanding > 0 ? "text-red-600 font-semibold" : "text-stone-600"}>
+                                  ₹{block.financialScorecard.totalOutstanding.toLocaleString("en-IN")} Dues
+                                </span>
+                                {block.financialScorecard.defaultersCount > 0 && (
+                                  <span className="text-red-700 font-bold ml-1">
+                                    ({block.financialScorecard.defaultersCount} Overdue)
+                                  </span>
+                                )}
+                              </>
+                            ) : null}
                           </span>
                         </div>
                       </div>

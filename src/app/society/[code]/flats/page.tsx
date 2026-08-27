@@ -80,9 +80,6 @@ export default async function SocietyFlatsPage({
           },
         },
         bills: {
-          where: {
-            status: { in: ["PENDING", "OVERDUE", "PARTIALLY_PAID"] },
-          },
           select: {
             amount: true,
             status: true,
@@ -102,7 +99,17 @@ export default async function SocietyFlatsPage({
   ])
 
   const flats: FlatListItem[] = flatsData.map((flat) => {
-    const unpaidDues = flat.bills.reduce((sum, b) => {
+    const totalBilled = flat.bills.reduce((sum, b) => sum + Number(b.amount), 0)
+    const totalPaid = flat.bills.reduce((sum, b) => {
+      const paid = b.payments.reduce((pSum, p) => pSum + Number(p.amount), 0)
+      return sum + paid
+    }, 0)
+
+    const unpaidBills = flat.bills.filter(
+      (b) => b.status === "PENDING" || b.status === "OVERDUE" || b.status === "PARTIALLY_PAID"
+    )
+
+    const unpaidDues = unpaidBills.reduce((sum, b) => {
       const paid = b.payments.reduce((pSum, p) => pSum + Number(p.amount), 0)
       return sum + Math.max(0, Number(b.amount) - paid)
     }, 0)
@@ -132,9 +139,41 @@ export default async function SocietyFlatsPage({
         isPrimary: p.isPrimary,
       })),
       unpaidDues,
-      unpaidBillsCount: flat.bills.length,
+      totalBilled,
+      totalPaid,
+      unpaidBillsCount: unpaidBills.length,
       isDefaulter,
       shareCertificateNumber: flat.shareCertificate?.certificateNumber || null,
+    }
+  })
+
+  // Calculate block financial scorecard
+  const enrichedBlocks = blocksData.map((b) => {
+    const blockFlats = flats.filter((f) => f.blockId === b.id)
+    const totalUnits = blockFlats.length
+    const occupiedUnits = blockFlats.filter((f) => f.status === "OCCUPIED").length
+    const totalBilled = blockFlats.reduce((sum, f) => sum + (f.totalBilled || 0), 0)
+    const totalPaid = blockFlats.reduce((sum, f) => sum + (f.totalPaid || 0), 0)
+    const totalOutstanding = blockFlats.reduce((sum, f) => sum + (f.unpaidDues || 0), 0)
+    const defaultersCount = blockFlats.filter((f) => f.isDefaulter || (f.unpaidDues || 0) > 0).length
+    const collectionRate = totalBilled > 0 ? Math.round((totalPaid / totalBilled) * 100) : 100
+    const occupancyRate = totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 100) : 0
+
+    return {
+      id: b.id,
+      name: b.name,
+      isActive: b.isActive,
+      flatCount: b._count.flats,
+      financialScorecard: {
+        totalBilled,
+        totalPaid,
+        totalOutstanding,
+        defaultersCount,
+        collectionRate,
+        totalUnits,
+        occupiedUnits,
+        occupancyRate,
+      },
     }
   })
 
@@ -149,12 +188,7 @@ export default async function SocietyFlatsPage({
       <FlatsClientView
         societyCode={code}
         flats={flats}
-        blocks={blocksData.map((b) => ({
-          id: b.id,
-          name: b.name,
-          isActive: b.isActive,
-          flatCount: b._count.flats,
-        }))}
+        blocks={enrichedBlocks}
         canManageFlats={canManageFlats}
       />
     </div>

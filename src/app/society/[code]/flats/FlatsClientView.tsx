@@ -37,6 +37,8 @@ export type FlatListItem = {
   occupants: string[]
   occupantDetails?: FlatOccupantSummary[]
   unpaidDues?: number
+  totalBilled?: number
+  totalPaid?: number
   unpaidBillsCount?: number
   isDefaulter?: boolean
   shareCertificateNumber?: string | null
