@@ -75,6 +75,150 @@ export async function createBlock(
 }
 
 /**
+ * Updates an existing block / tower in the society.
+ */
+export async function updateBlock(
+  societyCode: string,
+  blockId: string,
+  data: { name: string; isActive?: boolean }
+): Promise<FlatActionState> {
+  try {
+    const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
+    const societyId = context.society.id
+
+    const rawName = data.name.trim()
+    const name = sanitizeText(rawName)
+    if (!name) {
+      return { error: "Block name is required (e.g. Wing A, Tower 1)." }
+    }
+
+    const currentBlock = await prisma.block.findFirst({
+      where: {
+        id: blockId,
+        societyId,
+        deletedAt: null,
+      },
+    })
+
+    if (!currentBlock) {
+      return { error: "Block not found." }
+    }
+
+    // Check duplicate name on other blocks
+    const duplicate = await prisma.block.findFirst({
+      where: {
+        societyId,
+        id: { not: blockId },
+        name: { equals: name, mode: "insensitive" },
+        deletedAt: null,
+      },
+    })
+
+    if (duplicate) {
+      return { error: `Another block named "${name}" already exists in this society.` }
+    }
+
+    const updated = await prisma.block.update({
+      where: { id: blockId },
+      data: {
+        name,
+        ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+      },
+    })
+
+    await recordAuditLog({
+      societyId,
+      userId: context.user.id,
+      action: "UPDATE",
+      entity: "Block",
+      entityId: blockId,
+      description: `${context.user.email} renamed block from "${currentBlock.name}" to "${name}"`,
+      oldData: { name: currentBlock.name, isActive: currentBlock.isActive },
+      newData: { name: updated.name, isActive: updated.isActive },
+    })
+
+    revalidatePath(`/society/${societyCode}/flats`)
+    revalidatePath(`/society/${societyCode}/dashboard`)
+    revalidatePath(`/society/${societyCode}/members`)
+
+    return {
+      success: true,
+      message: `Block "${name}" updated successfully.`,
+    }
+  } catch (err: unknown) {
+    console.error("Failed to update block:", err)
+    return { error: getSafeErrorMessage(err, "Failed to update block.") }
+  }
+}
+
+/**
+ * Deletes a block / tower if no active flats are associated with it.
+ */
+export async function deleteBlock(
+  societyCode: string,
+  blockId: string
+): Promise<FlatActionState> {
+  try {
+    const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
+    const societyId = context.society.id
+
+    const block = await prisma.block.findFirst({
+      where: {
+        id: blockId,
+        societyId,
+        deletedAt: null,
+      },
+      include: {
+        _count: {
+          select: {
+            flats: {
+              where: { deletedAt: null },
+            },
+          },
+        },
+      },
+    })
+
+    if (!block) {
+      return { error: "Block not found." }
+    }
+
+    if (block._count.flats > 0) {
+      return {
+        error: `Cannot delete Block "${block.name}" because it contains ${block._count.flats} active unit(s). Please move or delete the units first.`,
+      }
+    }
+
+    await prisma.block.update({
+      where: { id: blockId },
+      data: { deletedAt: new Date() },
+    })
+
+    await recordAuditLog({
+      societyId,
+      userId: context.user.id,
+      action: "DELETE",
+      entity: "Block",
+      entityId: blockId,
+      description: `${context.user.email} deleted block "${block.name}"`,
+      oldData: { name: block.name },
+    })
+
+    revalidatePath(`/society/${societyCode}/flats`)
+    revalidatePath(`/society/${societyCode}/dashboard`)
+    revalidatePath(`/society/${societyCode}/members`)
+
+    return {
+      success: true,
+      message: `Block "${block.name}" deleted successfully.`,
+    }
+  } catch (err: unknown) {
+    console.error("Failed to delete block:", err)
+    return { error: getSafeErrorMessage(err, "Failed to delete block.") }
+  }
+}
+
+/**
  * Creates a new flat / unit in a specified block.
  */
 export async function createFlat(

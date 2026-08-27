@@ -33,6 +33,14 @@ export default async function SocietyFlatsPage({
       select: {
         id: true,
         name: true,
+        isActive: true,
+        _count: {
+          select: {
+            flats: {
+              where: { deletedAt: null },
+            },
+          },
+        },
       },
       orderBy: { name: "asc" },
     }),
@@ -141,7 +149,12 @@ export default async function SocietyFlatsPage({
       <FlatsClientView
         societyCode={code}
         flats={flats}
-        blocks={blocksData}
+        blocks={blocksData.map((b) => ({
+          id: b.id,
+          name: b.name,
+          isActive: b.isActive,
+          flatCount: b._count.flats,
+        }))}
         canManageFlats={canManageFlats}
       />
     </div>

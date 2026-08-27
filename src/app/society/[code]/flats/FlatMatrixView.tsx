@@ -12,7 +12,10 @@ interface FlatMatrixViewProps {
   flats: FlatListItem[]
   blocks: BlockOption[]
   searchQuery: string
+  canManage?: boolean
   onSelectFlat: (flat: FlatListItem) => void
+  onEditBlock?: (block: BlockOption) => void
+  onManageBlocks?: () => void
 }
 
 export function FlatMatrixView({
@@ -20,7 +23,10 @@ export function FlatMatrixView({
   flats,
   blocks,
   searchQuery,
+  canManage,
   onSelectFlat,
+  onEditBlock,
+  onManageBlocks,
 }: FlatMatrixViewProps) {
   const [selectedBlockId, setSelectedBlockId] = useState<string>(blocks[0]?.id || "ALL")
   const [colorMode, setColorMode] = useState<ColorMode>("occupancy")
@@ -268,6 +274,17 @@ export function FlatMatrixView({
               </button>
             )
           })}
+
+          {canManage && onManageBlocks && (
+            <button
+              type="button"
+              onClick={onManageBlocks}
+              className="inline-flex items-center gap-1 rounded-xl border border-dashed border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold text-stone-600 hover:border-stone-400 hover:text-stone-900 hover:bg-stone-50 transition"
+              title="Manage and edit blocks / wings"
+            >
+              <span>⚙️ Manage Wings</span>
+            </button>
+          )}
         </div>
 
         {/* Color Legend Mode Selector */}
@@ -427,13 +444,27 @@ export function FlatMatrixView({
               {/* Tower Header & Progress Bar */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-stone-100 pb-4">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="rounded-md bg-stone-900 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-white">
                       {block.name}
                     </span>
                     <span className="text-xs font-semibold text-stone-500">
                       {stats.totalUnits} Total Units • {sortedFloors.length} Floors
                     </span>
+                    {canManage && onEditBlock && (
+                      <button
+                        type="button"
+                        onClick={() => onEditBlock(block)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-950 transition"
+                        title="Edit or rename this block"
+                      >
+                        <svg className="h-3 w-3 text-stone-500" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z" />
+                          <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z" />
+                        </svg>
+                        <span>Rename / Edit</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 

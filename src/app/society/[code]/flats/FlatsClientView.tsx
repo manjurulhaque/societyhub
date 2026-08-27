@@ -4,6 +4,8 @@ import { useState, useMemo, useTransition } from "react"
 import Link from "next/link"
 import { AdminTable, AdminBadge, AdminStatCard } from "@/components/admin"
 import { AddBlockModal } from "./AddBlockModal"
+import { EditBlockModal } from "./EditBlockModal"
+import { ManageBlocksModal, type BlockWithDetails } from "./ManageBlocksModal"
 import { AddFlatModal, type BlockOption } from "./AddFlatModal"
 import { EditFlatModal } from "./EditFlatModal"
 import { BulkCreateFlatsModal } from "./BulkCreateFlatsModal"
@@ -45,7 +47,7 @@ export type FlatListItem = {
 interface FlatsClientViewProps {
   societyCode: string
   flats: FlatListItem[]
-  blocks: BlockOption[]
+  blocks: BlockWithDetails[]
   canManageFlats: boolean
 }
 
@@ -59,6 +61,8 @@ export function FlatsClientView({
   const [quickPreviewFlat, setQuickPreviewFlat] = useState<FlatListItem | null>(null)
 
   const [isAddBlockOpen, setIsAddBlockOpen] = useState(false)
+  const [isManageBlocksOpen, setIsManageBlocksOpen] = useState(false)
+  const [editingBlock, setEditingBlock] = useState<BlockWithDetails | null>(null)
   const [isAddFlatOpen, setIsAddFlatOpen] = useState(false)
   const [isBulkCreateOpen, setIsBulkCreateOpen] = useState(false)
   const [editingFlat, setEditingFlat] = useState<FlatListItem | null>(null)
@@ -266,13 +270,23 @@ export function FlatsClientView({
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
+              onClick={() => setIsManageBlocksOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-xs font-semibold text-stone-700 shadow-xs hover:bg-stone-50 hover:text-stone-900 transition"
+              title="Manage, edit, or rename blocks / wings"
+            >
+              <span>⚙️</span>
+              <span>Manage Blocks ({blocks.length})</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setIsAddBlockOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-xs font-semibold text-stone-700 shadow-xs hover:bg-stone-50 hover:text-stone-900 transition"
             >
               <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
               </svg>
-              <span>+ Add Block / Wing</span>
+              <span>+ Add Block</span>
             </button>
 
             <button
@@ -307,7 +321,10 @@ export function FlatsClientView({
           flats={flats}
           blocks={blocks}
           searchQuery={searchQuery}
+          canManage={canManageFlats}
           onSelectFlat={(f) => setQuickPreviewFlat(f)}
+          onEditBlock={(b) => setEditingBlock(b)}
+          onManageBlocks={() => setIsManageBlocksOpen(true)}
         />
       ) : filteredFlats.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-stone-200 bg-white p-12 text-center shadow-xs">
@@ -477,6 +494,30 @@ export function FlatsClientView({
           societyCode={societyCode}
         />
       ) : null}
+
+      {/* Manage Blocks Modal */}
+      {isManageBlocksOpen && (
+        <ManageBlocksModal
+          isOpen={isManageBlocksOpen}
+          onClose={() => setIsManageBlocksOpen(false)}
+          societyCode={societyCode}
+          blocks={blocks}
+          onOpenEditSingle={(block) => {
+            setIsManageBlocksOpen(false)
+            setEditingBlock(block)
+          }}
+        />
+      )}
+
+      {/* Edit Single Block Modal */}
+      {editingBlock && (
+        <EditBlockModal
+          isOpen={Boolean(editingBlock)}
+          onClose={() => setEditingBlock(null)}
+          societyCode={societyCode}
+          block={editingBlock}
+        />
+      )}
 
       {/* Add Flat Modal */}
       {isAddFlatOpen ? (
