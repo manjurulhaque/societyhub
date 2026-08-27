@@ -11,6 +11,8 @@ import { removeFlatPerson, refundMemberDeposit, forfeitMemberDeposit } from "../
 import { formatDateInAppTimeZone } from "@/lib/datetime"
 import { maskBankAccount } from "@/lib/masking"
 import { EntityAuditDrawer } from "@/components/audit/EntityAuditDrawer"
+import { generateFlatStatementPDF } from "@/lib/pdf/flatStatementPdfGenerator"
+import type { SocietyLetterheadInfo } from "@/lib/pdf/residentStatementPdfGenerator"
 
 export type FlatDetailData = {
   id: string
@@ -118,6 +120,7 @@ interface FlatProfileClientProps {
   societyCode: string
   societyId: string
   currencySymbol: string
+  societyInfo?: SocietyLetterheadInfo
   flat: FlatDetailData
   blocks: BlockOption[]
   occupants: FlatOccupantItem[]
@@ -135,6 +138,7 @@ export function FlatProfileClient({
   societyCode,
   societyId,
   currencySymbol,
+  societyInfo,
   flat,
   blocks,
   occupants,
@@ -158,6 +162,114 @@ export function FlatProfileClient({
     ownershipHistory.find((h) => h.isCurrentOwner)?.toPersonName ||
     occupants.find((o) => o.role === "OWNER" && o.isActive)?.personName ||
     "Unassigned"
+
+  const handleDownloadPDF = () => {
+    // 1. Build chronological ledger
+    const allEvents: {
+      date: string
+      type: "BILL" | "PAYMENT"
+      description: string
+      refNumber: string
+      debit: number
+      credit: number
+      status: string
+    }[] = []
+
+    financial.bills.forEach((b) => {
+      const monthNames = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+      ]
+      const period = `${monthNames[(b.month || 1) - 1]} ${b.year}`
+      allEvents.push({
+        date: b.dueDate || new Date(b.year, (b.month || 1) - 1, 1).toISOString(),
+        type: "BILL",
+        description: `Maintenance Bill (${period})`,
+        refNumber: b.billNumber || "—",
+        debit: b.amount,
+        credit: 0,
+        status: b.status,
+      })
+    })
+
+    financial.payments.forEach((p) => {
+      allEvents.push({
+        date: p.paidOn,
+        type: "PAYMENT",
+        description: `Maintenance Collection (${p.mode})`,
+        refNumber: p.receiptNumber || "—",
+        debit: 0,
+        credit: p.amount,
+        status: p.status,
+      })
+    })
+
+    // Sort chronological ascending for running balance calculation
+    allEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+    let runningBalance = 0
+    const ledger = allEvents.map((evt) => {
+      runningBalance += evt.debit - evt.credit
+      return {
+        ...evt,
+        balance: runningBalance,
+      }
+    })
+
+    ledger.reverse()
+
+    const totalDemanded = financial.bills.reduce((s, b) => s + b.amount, 0)
+    const totalPaid = financial.payments.filter((p) => p.status === "SUCCESS").reduce((s, p) => s + p.amount, 0)
+    const owner = ownershipHistory.find((h) => h.isCurrentOwner) || ownershipHistory[0]
+
+    generateFlatStatementPDF({
+      society: societyInfo || {
+        name: `Society ${societyCode}`,
+        code: societyCode,
+        currencySymbol,
+      },
+      flat: {
+        number: flat.number,
+        blockName: flat.blockName,
+        floor: flat.floor,
+        unitType: flat.unitType,
+        area: flat.area,
+        areaUnit: flat.areaUnit,
+        status: flat.status,
+        parkingSlot: flat.parkingSlot,
+        intercomNumber: flat.intercomNumber,
+      },
+      currentOwner: owner
+        ? {
+            name: owner.toPersonName,
+            fromDate: owner.fromDate,
+            registrationDoc: owner.registeredDocNumber,
+          }
+        : null,
+      activeOccupants: occupants
+        .filter((o) => o.isActive)
+        .map((o) => ({
+          name: o.personName,
+          role: o.role,
+          phone: o.personPhone,
+          email: o.personEmail,
+          fromDate: o.fromDate,
+        })),
+      statutory: {
+        shareCertificate: statutory.shareCertificate,
+        activeLiens: statutory.liens.filter((l) => !l.isCleared),
+      },
+      summary: {
+        totalDemanded,
+        totalPaid,
+        currentOutstanding: unpaidDues,
+        activeDeposits: activeDepositsTotal,
+        unpaidBillsCount,
+      },
+      ledger,
+      deposits: financial.deposits,
+    })
+  }
 
   const handleEndTenancy = (flatPersonId: string) => {
     if (!confirm("Are you sure you want to end this residency/tenancy?")) return
@@ -229,7 +341,19 @@ export function FlatProfileClient({
           </div>
 
           {/* Action Tools */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={handleDownloadPDF}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-xs font-semibold text-stone-700 shadow-xs hover:bg-stone-50 hover:text-stone-900 transition"
+              title="Download official letterhead flat account ledger PDF"
+            >
+              <svg className="h-4 w-4 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>Download Statement (PDF)</span>
+            </button>
+
             {canManage && (
               <button
                 type="button"
@@ -661,6 +785,25 @@ export function FlatProfileClient({
       {/* Tab 4: Financial Ledger & Invoices */}
       {activeTab === "financial" && (
         <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl border border-stone-200 bg-stone-50/50 p-4">
+            <div>
+              <h3 className="text-sm font-bold text-stone-900">Unit Financial Statement & Ledger</h3>
+              <p className="text-xs text-stone-500">
+                Consolidated billing demand, payments, and security deposit records for Flat {flat.blockName}-{flat.number}.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleDownloadPDF}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 transition shrink-0"
+            >
+              <svg className="h-4 w-4 text-stone-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>Download Ledger PDF</span>
+            </button>
+          </div>
           {/* Held Member Deposits */}
           <AdminCard title="Held Member Deposits" description="Move-in, fitout, renovation, or tenant security deposits">
             {financial.deposits.length === 0 ? (

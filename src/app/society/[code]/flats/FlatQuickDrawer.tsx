@@ -1,8 +1,11 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
-import { AdminBadge, AdminButton } from "@/components/admin"
+import { AdminBadge } from "@/components/admin"
 import type { FlatListItem } from "./FlatsClientView"
+import { getFlatStatementData } from "./actions"
+import { generateFlatStatementPDF } from "@/lib/pdf/flatStatementPdfGenerator"
 
 interface FlatQuickDrawerProps {
   isOpen: boolean
@@ -25,9 +28,27 @@ export function FlatQuickDrawer({
   onAssignResident,
   onTransferOwnership,
 }: FlatQuickDrawerProps) {
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
+  const [pdfError, setPdfError] = useState<string | null>(null)
+
   if (!isOpen || !flat) return null
 
-  const primaryOccupant = flat.occupantDetails?.find((o) => o.isPrimary) || flat.occupantDetails?.[0]
+  const handleDownloadPDF = async () => {
+    try {
+      setIsDownloadingPdf(true)
+      setPdfError(null)
+      const res = await getFlatStatementData(societyCode, flat.id)
+      if (res.error || !res.data) {
+        setPdfError(res.error || "Failed to load statement data.")
+        return
+      }
+      generateFlatStatementPDF(res.data)
+    } catch (err: unknown) {
+      setPdfError(err instanceof Error ? err.message : "Failed to generate PDF.")
+    } finally {
+      setIsDownloadingPdf(false)
+    }
+  }
 
   return (
     <div
@@ -92,33 +113,65 @@ export function FlatQuickDrawer({
           </div>
 
           {/* Drawer Body */}
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-            {/* Quick Actions Card */}
-            <div className="grid grid-cols-2 gap-2">
-              <Link
-                href={`/society/${societyCode}/flats/${flat.id}`}
-                className="flex items-center justify-center gap-1.5 rounded-xl bg-stone-900 px-3 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 transition text-center"
-              >
-                <span>View 360° Profile</span>
-                <span>→</span>
-              </Link>
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+            {pdfError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-2.5 text-xs text-red-700">
+                {pdfError}
+              </div>
+            )}
 
-              {canManage && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose()
-                    onEditFlat(flat)
-                  }}
-                  className="flex items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-xs font-semibold text-stone-700 shadow-xs hover:bg-stone-50 hover:text-stone-950 transition"
+            {/* Quick Actions Card */}
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <Link
+                  href={`/society/${societyCode}/flats/${flat.id}`}
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-stone-900 px-3 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 transition text-center"
                 >
-                  <svg className="h-3.5 w-3.5 text-stone-500" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z" />
-                    <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z" />
-                  </svg>
-                  <span>Edit Details</span>
-                </button>
-              )}
+                  <span>View 360° Profile</span>
+                  <span>→</span>
+                </Link>
+
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose()
+                      onEditFlat(flat)
+                    }}
+                    className="flex items-center justify-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-xs font-semibold text-stone-700 shadow-xs hover:bg-stone-50 hover:text-stone-950 transition"
+                  >
+                    <svg className="h-3.5 w-3.5 text-stone-500" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z" />
+                      <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z" />
+                    </svg>
+                    <span>Edit Details</span>
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleDownloadPDF}
+                disabled={isDownloadingPdf}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-stone-800 shadow-xs hover:bg-stone-50 hover:text-stone-950 transition disabled:opacity-50"
+              >
+                {isDownloadingPdf ? (
+                  <>
+                    <svg className="h-3.5 w-3.5 animate-spin text-stone-600" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Generating Statement PDF...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="h-4 w-4 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>Download Account Statement (PDF)</span>
+                  </>
+                )}
+              </button>
             </div>
 
             {/* Financial Health Summary */}

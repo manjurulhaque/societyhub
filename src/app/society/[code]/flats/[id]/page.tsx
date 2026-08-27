@@ -106,6 +106,18 @@ export default async function SocietyFlatProfilePage({
         societyCode={code}
         societyId={society.id}
         currencySymbol={currencySymbol}
+        societyInfo={{
+          name: society.name,
+          code: society.code,
+          address: society.address,
+          city: society.city,
+          state: society.state,
+          pincode: society.pincode,
+          registrationNumber: society.registrationNumber,
+          panNumber: society.panNumber,
+          gstin: society.gstin,
+          currencySymbol,
+        }}
         flat={{
           id: flat.id,
           number: flat.number,

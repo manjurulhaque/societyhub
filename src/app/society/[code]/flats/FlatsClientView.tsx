@@ -9,7 +9,8 @@ import { EditFlatModal } from "./EditFlatModal"
 import { BulkCreateFlatsModal } from "./BulkCreateFlatsModal"
 import { FlatMatrixView } from "./FlatMatrixView"
 import { FlatQuickDrawer } from "./FlatQuickDrawer"
-import { deleteFlat } from "./actions"
+import { deleteFlat, getFlatStatementData } from "./actions"
+import { generateFlatStatementPDF } from "@/lib/pdf/flatStatementPdfGenerator"
 
 export type FlatOccupantSummary = {
   id: string
@@ -64,6 +65,23 @@ export function FlatsClientView({
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedBlockId, setSelectedBlockId] = useState<string>("ALL")
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL")
+  const [downloadingPdfFlatId, setDownloadingPdfFlatId] = useState<string | null>(null)
+
+  const handleDownloadFlatPDF = async (flatId: string) => {
+    try {
+      setDownloadingPdfFlatId(flatId)
+      const res = await getFlatStatementData(societyCode, flatId)
+      if (res.error || !res.data) {
+        alert(res.error || "Failed to load statement data.")
+        return
+      }
+      generateFlatStatementPDF(res.data)
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to generate statement PDF.")
+    } finally {
+      setDownloadingPdfFlatId(null)
+    }
+  }
 
   const [deletingFlat, setDeletingFlat] = useState<FlatListItem | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -377,6 +395,26 @@ export function FlatsClientView({
               </td>
               <td className="px-4 py-3.5 text-right whitespace-nowrap">
                 <div className="flex items-center justify-end gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadFlatPDF(flat.id)}
+                    disabled={downloadingPdfFlatId === flat.id}
+                    className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2 py-1 text-[11px] font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-900 transition disabled:opacity-50"
+                    title="Download official PDF account statement"
+                  >
+                    {downloadingPdfFlatId === flat.id ? (
+                      <svg className="h-3 w-3 animate-spin text-stone-500" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    ) : (
+                      <svg className="h-3.5 w-3.5 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    )}
+                    <span>PDF</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setQuickPreviewFlat(flat)}
