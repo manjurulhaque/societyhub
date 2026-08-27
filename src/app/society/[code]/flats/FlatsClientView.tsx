@@ -6,6 +6,7 @@ import { AdminTable, AdminBadge, AdminStatCard } from "@/components/admin"
 import { AddBlockModal } from "./AddBlockModal"
 import { AddFlatModal, type BlockOption } from "./AddFlatModal"
 import { EditFlatModal } from "./EditFlatModal"
+import { BulkCreateFlatsModal } from "./BulkCreateFlatsModal"
 import { deleteFlat } from "./actions"
 
 export type FlatListItem = {
@@ -38,6 +39,7 @@ export function FlatsClientView({
 }: FlatsClientViewProps) {
   const [isAddBlockOpen, setIsAddBlockOpen] = useState(false)
   const [isAddFlatOpen, setIsAddFlatOpen] = useState(false)
+  const [isBulkCreateOpen, setIsBulkCreateOpen] = useState(false)
   const [editingFlat, setEditingFlat] = useState<FlatListItem | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedBlockId, setSelectedBlockId] = useState<string>("ALL")
@@ -193,7 +195,7 @@ export function FlatsClientView({
 
         {/* Action Buttons */}
         {canManageFlats ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
               onClick={() => setIsAddBlockOpen(true)}
@@ -203,6 +205,16 @@ export function FlatsClientView({
                 <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
               </svg>
               <span>+ Add Block / Wing</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsBulkCreateOpen(true)}
+              disabled={blocks.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-xs font-semibold text-stone-800 shadow-xs hover:bg-stone-50 hover:text-stone-950 transition disabled:opacity-50"
+            >
+              <span className="text-amber-600 font-bold">⚡</span>
+              <span>Bulk Add / Import</span>
             </button>
 
             <button
@@ -366,6 +378,16 @@ export function FlatsClientView({
         <AddFlatModal
           isOpen={isAddFlatOpen}
           onClose={() => setIsAddFlatOpen(false)}
+          societyCode={societyCode}
+          blocks={blocks}
+        />
+      ) : null}
+
+      {/* Bulk Create Flats Modal */}
+      {isBulkCreateOpen ? (
+        <BulkCreateFlatsModal
+          isOpen={isBulkCreateOpen}
+          onClose={() => setIsBulkCreateOpen(false)}
           societyCode={societyCode}
           blocks={blocks}
         />
