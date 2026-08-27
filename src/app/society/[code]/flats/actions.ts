@@ -152,6 +152,73 @@ export async function updateBlock(
 }
 
 /**
+ * Batch updates the structural prefix (Wing / Tower / Block / Building) for all blocks in the society.
+ * e.g., converts "Block A", "Block B" -> "Wing A", "Wing B" or "Tower A", "Tower B".
+ */
+export async function batchUpdateBlockPrefix(
+  societyCode: string,
+  newPrefix: "Wing" | "Tower" | "Block" | "Building"
+): Promise<FlatActionState> {
+  try {
+    const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
+    const societyId = context.society.id
+
+    const blocks = await prisma.block.findMany({
+      where: {
+        societyId,
+        deletedAt: null,
+      },
+    })
+
+    if (blocks.length === 0) {
+      return { error: "No blocks found to update." }
+    }
+
+    const regex = /^(Wing|Tower|Block|Building)\s*/i
+    const updates = blocks.map((b) => {
+      const remainder = b.name.replace(regex, "").trim()
+      const newName = `${newPrefix} ${remainder}`.trim()
+      return {
+        id: b.id,
+        oldName: b.name,
+        newName,
+      }
+    })
+
+    // Perform atomic transaction
+    await prisma.$transaction(
+      updates.map((u) =>
+        prisma.block.update({
+          where: { id: u.id },
+          data: { name: u.newName },
+        })
+      )
+    )
+
+    await recordAuditLog({
+      societyId,
+      userId: context.user.id,
+      action: "UPDATE",
+      entity: "Block",
+      description: `${context.user.email} batch-updated all block prefixes to "${newPrefix}"`,
+      newData: { newPrefix, count: blocks.length },
+    })
+
+    revalidatePath(`/society/${societyCode}/flats`)
+    revalidatePath(`/society/${societyCode}/dashboard`)
+    revalidatePath(`/society/${societyCode}/members`)
+
+    return {
+      success: true,
+      message: `Successfully updated all ${blocks.length} block(s) to use "${newPrefix}" prefix.`,
+    }
+  } catch (err: unknown) {
+    console.error("Failed to batch update block prefixes:", err)
+    return { error: getSafeErrorMessage(err, "Failed to batch update block prefixes.") }
+  }
+}
+
+/**
  * Deletes a block / tower if no active flats are associated with it.
  */
 export async function deleteBlock(

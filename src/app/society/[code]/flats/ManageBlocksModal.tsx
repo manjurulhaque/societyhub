@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { AdminBadge } from "@/components/admin"
-import { createBlock, updateBlock, deleteBlock } from "./actions"
+import { createBlock, updateBlock, deleteBlock, batchUpdateBlockPrefix } from "./actions"
 import type { BlockOption } from "./AddFlatModal"
 
 export type BlockWithDetails = BlockOption & {
@@ -34,6 +34,26 @@ export function ManageBlocksModal({
   const [isPending, startTransition] = useTransition()
 
   if (!isOpen) return null
+
+  const handleBatchPrefix = (newPrefix: "Wing" | "Tower" | "Block" | "Building") => {
+    if (!confirm(`Are you sure you want to change the prefix of all ${blocks.length} block(s) to "${newPrefix}" (e.g. ${newPrefix} A, ${newPrefix} B)?`)) {
+      return
+    }
+
+    setError(null)
+    startTransition(async () => {
+      try {
+        const res = await batchUpdateBlockPrefix(societyCode, newPrefix)
+        if (res.error) {
+          setError(res.error)
+        } else {
+          setSuccessMsg(res.message || `All blocks updated to "${newPrefix}".`)
+        }
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Failed to batch update prefixes.")
+      }
+    })
+  }
 
   const handleStartEdit = (block: BlockWithDetails) => {
     setEditingBlockId(block.id)
@@ -254,6 +274,27 @@ export function ManageBlocksModal({
             </div>
           )}
         </div>
+
+        {/* Batch Prefix Converter */}
+        {blocks.length > 0 && (
+          <div className="pb-3 border-b border-stone-100 flex items-center justify-between gap-2 flex-wrap text-xs shrink-0">
+            <span className="text-stone-500 font-medium">Batch change all prefixes to:</span>
+            <div className="flex items-center gap-1.5">
+              {(["Wing", "Tower", "Block", "Building"] as const).map((prefix) => (
+                <button
+                  key={prefix}
+                  type="button"
+                  onClick={() => handleBatchPrefix(prefix)}
+                  disabled={isPending}
+                  className="rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-200 px-2 py-1 text-[11px] font-semibold text-stone-700 hover:text-stone-950 transition disabled:opacity-40"
+                  title={`Convert all structures to use "${prefix}" prefix`}
+                >
+                  All &quot;{prefix}&quot;
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Blocks List */}
         <div className="flex-1 overflow-y-auto py-3 space-y-2">
