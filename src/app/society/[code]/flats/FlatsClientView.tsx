@@ -7,7 +7,19 @@ import { AddBlockModal } from "./AddBlockModal"
 import { AddFlatModal, type BlockOption } from "./AddFlatModal"
 import { EditFlatModal } from "./EditFlatModal"
 import { BulkCreateFlatsModal } from "./BulkCreateFlatsModal"
+import { FlatMatrixView } from "./FlatMatrixView"
+import { FlatQuickDrawer } from "./FlatQuickDrawer"
 import { deleteFlat } from "./actions"
+
+export type FlatOccupantSummary = {
+  id: string
+  personId: string
+  name: string
+  role: string
+  phone: string | null
+  email: string | null
+  isPrimary: boolean
+}
 
 export type FlatListItem = {
   id: string
@@ -20,6 +32,11 @@ export type FlatListItem = {
   blockId: string
   blockName: string
   occupants: string[]
+  occupantDetails?: FlatOccupantSummary[]
+  unpaidDues?: number
+  unpaidBillsCount?: number
+  isDefaulter?: boolean
+  shareCertificateNumber?: string | null
   parkingSlot?: string | null
   intercomNumber?: string | null
 }
@@ -37,6 +54,9 @@ export function FlatsClientView({
   blocks,
   canManageFlats,
 }: FlatsClientViewProps) {
+  const [viewMode, setViewMode] = useState<"table" | "matrix">("matrix")
+  const [quickPreviewFlat, setQuickPreviewFlat] = useState<FlatListItem | null>(null)
+
   const [isAddBlockOpen, setIsAddBlockOpen] = useState(false)
   const [isAddFlatOpen, setIsAddFlatOpen] = useState(false)
   const [isBulkCreateOpen, setIsBulkCreateOpen] = useState(false)
@@ -145,12 +165,40 @@ export function FlatsClientView({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         {/* Search and Filters */}
         <div className="flex flex-wrap items-center gap-2.5">
+          {/* View Mode Toggle */}
+          <div className="flex items-center rounded-xl border border-stone-200 bg-stone-100/80 p-1 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setViewMode("matrix")}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition ${
+                viewMode === "matrix"
+                  ? "bg-white text-stone-950 font-bold shadow-xs"
+                  : "text-stone-500 hover:text-stone-900"
+              }`}
+            >
+              <span>🏢</span>
+              <span>Tower Matrix</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition ${
+                viewMode === "table"
+                  ? "bg-white text-stone-950 font-bold shadow-xs"
+                  : "text-stone-500 hover:text-stone-900"
+              }`}
+            >
+              <span>📋</span>
+              <span>Table List</span>
+            </button>
+          </div>
+
           <div className="relative">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search flat, block, resident..."
+              placeholder="Search flat, block, resident, parking..."
               className="w-56 sm:w-64 rounded-xl border border-stone-200 bg-stone-50/50 px-3.5 py-2 pl-9 text-xs text-stone-900 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none"
             />
             <svg
@@ -166,7 +214,7 @@ export function FlatsClientView({
             </svg>
           </div>
 
-          {blocks.length > 0 ? (
+          {viewMode === "table" && blocks.length > 0 ? (
             <select
               value={selectedBlockId}
               onChange={(e) => setSelectedBlockId(e.target.value)}
@@ -181,16 +229,18 @@ export function FlatsClientView({
             </select>
           ) : null}
 
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-700 focus:border-stone-900 focus:outline-none"
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="OCCUPIED">Occupied</option>
-            <option value="VACANT">Vacant</option>
-            <option value="UNDER_RENOVATION">Under Renovation</option>
-          </select>
+          {viewMode === "table" && (
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-700 focus:border-stone-900 focus:outline-none"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="OCCUPIED">Occupied</option>
+              <option value="VACANT">Vacant</option>
+              <option value="UNDER_RENOVATION">Under Renovation</option>
+            </select>
+          )}
         </div>
 
         {/* Action Buttons */}
@@ -232,8 +282,16 @@ export function FlatsClientView({
         ) : null}
       </div>
 
-      {/* Table */}
-      {filteredFlats.length === 0 ? (
+      {/* Main Content: Matrix View or Table View */}
+      {viewMode === "matrix" ? (
+        <FlatMatrixView
+          societyCode={societyCode}
+          flats={flats}
+          blocks={blocks}
+          searchQuery={searchQuery}
+          onSelectFlat={(f) => setQuickPreviewFlat(f)}
+        />
+      ) : filteredFlats.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-stone-200 bg-white p-12 text-center shadow-xs">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-100 text-stone-400">
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -273,12 +331,13 @@ export function FlatsClientView({
           rows={filteredFlats.map((flat) => (
             <tr key={flat.id} className="border-t border-stone-100 hover:bg-stone-50/60 transition-colors">
               <td className="px-4 py-3.5 font-bold text-stone-950 text-xs">
-                <Link
-                  href={`/society/${societyCode}/flats/${flat.id}`}
-                  className="hover:text-blue-600 transition"
+                <button
+                  type="button"
+                  onClick={() => setQuickPreviewFlat(flat)}
+                  className="hover:text-blue-600 font-bold transition text-left"
                 >
                   {flat.number}
-                </Link>
+                </button>
               </td>
               <td className="px-4 py-3.5 text-stone-700 text-xs font-medium">
                 {flat.blockName}
@@ -318,12 +377,20 @@ export function FlatsClientView({
               </td>
               <td className="px-4 py-3.5 text-right whitespace-nowrap">
                 <div className="flex items-center justify-end gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setQuickPreviewFlat(flat)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2 py-1 text-[11px] font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-900 transition"
+                  >
+                    <span>Quick View</span>
+                    <span>→</span>
+                  </button>
+
                   <Link
                     href={`/society/${societyCode}/flats/${flat.id}`}
                     className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2 py-1 text-[11px] font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-900 transition"
                   >
-                    <span>View 360°</span>
-                    <span>→</span>
+                    <span>360°</span>
                   </Link>
 
                   {canManageFlats && (
@@ -415,6 +482,18 @@ export function FlatsClientView({
           }}
         />
       ) : null}
+
+      {/* Quick Flat 360 Drawer */}
+      <FlatQuickDrawer
+        isOpen={Boolean(quickPreviewFlat)}
+        onClose={() => setQuickPreviewFlat(null)}
+        societyCode={societyCode}
+        flat={quickPreviewFlat}
+        canManage={canManageFlats}
+        onEditFlat={(flat) => {
+          setEditingFlat(flat)
+        }}
+      />
 
       {/* Delete Flat Confirmation */}
       {deletingFlat ? (
