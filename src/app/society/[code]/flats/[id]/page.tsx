@@ -1,12 +1,9 @@
-import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { prisma } from "@/lib/prisma"
-import { AdminBadge, AdminStatCard } from "@/components/admin"
 import { FlatProfileClient } from "./FlatProfileClient"
 import { COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import type { SocietyRole } from "@/generated/prisma/client"
-import { EntityAuditDrawer } from "@/components/audit/EntityAuditDrawer"
 
 export default async function SocietyFlatProfilePage({
   params,
@@ -23,7 +20,7 @@ export default async function SocietyFlatProfilePage({
   const { society, designation, isSuperAdmin } = context
   const canManage = isSuperAdmin || COMMITTEE_ROLES.includes(designation as SocietyRole)
 
-  const [flat, rawPeople, flatPayments] = await Promise.all([
+  const [flat, rawPeople, flatPayments, blocksData] = await Promise.all([
     prisma.flat.findFirst({
       where: {
         id,
@@ -77,6 +74,17 @@ export default async function SocietyFlatProfilePage({
       orderBy: { paidOn: "desc" },
       take: 20,
     }),
+    prisma.block.findMany({
+      where: {
+        societyId: society.id,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+      orderBy: { name: "asc" },
+    }),
   ])
 
   if (!flat) {
@@ -84,11 +92,6 @@ export default async function SocietyFlatProfilePage({
   }
 
   const currencySymbol = society.currencySymbol || "₹"
-
-  const currentOwner =
-    flat.ownershipHistory.find((h) => h.isCurrentOwner)?.toPerson.name ||
-    flat.people.find((p) => p.role === "OWNER" && !p.toDate)?.person.name ||
-    "Unassigned"
 
   const unpaidBills = flat.bills.filter((b) => b.status === "PENDING" || b.status === "OVERDUE")
   const totalUnpaidDues = unpaidBills.reduce((sum, b) => sum + Number(b.amount), 0)
@@ -99,126 +102,9 @@ export default async function SocietyFlatProfilePage({
 
   return (
     <div className="space-y-6">
-      {/* Back Link & Title */}
-      <div>
-        <Link
-          href={`/society/${code}/flats`}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-stone-500 hover:text-stone-900 transition mb-3"
-        >
-          <span>←</span>
-          <span>Back to Blocks & Flats</span>
-        </Link>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500">
-                {flat.block.name}
-              </span>
-              <AdminBadge
-                variant={
-                  flat.status === "OCCUPIED"
-                    ? "success"
-                    : flat.status === "UNDER_RENOVATION"
-                      ? "warning"
-                      : "neutral"
-                }
-                size="sm"
-              >
-                {flat.status}
-              </AdminBadge>
-              {flat.unitType && (
-                <span className="rounded-md bg-stone-100 px-2 py-0.5 text-xs font-semibold text-stone-700">
-                  {flat.unitType}
-                </span>
-              )}
-            </div>
-
-            <h1 className="text-xl font-bold tracking-tight text-stone-950 sm:text-2xl">
-              Flat {flat.number}
-            </h1>
-
-            <p className="text-xs text-stone-500">
-              {flat.floor !== null ? `Floor ${flat.floor} • ` : ""}
-              {flat.area ? `${flat.area} ${flat.areaUnit} • ` : ""}
-              {flat.parkingSlot ? `🚗 Parking: ${flat.parkingSlot} • ` : ""}
-              {flat.intercomNumber ? `📞 Intercom: ${flat.intercomNumber}` : ""}
-            </p>
-          </div>
-
-          {/* Action Tools */}
-          <div className="flex items-center gap-2">
-            <EntityAuditDrawer
-              entity="Flat"
-              entityId={flat.id}
-              entityTitle={`Flat ${flat.block.name}-${flat.number}`}
-              societyId={society.id}
-              relatedEntityIds={[
-                ...flat.people.map((p) => p.id),
-                ...(flat.shareCertificate ? [flat.shareCertificate.id] : []),
-                ...flat.propertyLiens.map((l) => l.id),
-                ...flat.nominations.map((n) => n.id),
-              ]}
-              buttonVariant="outline"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <AdminStatCard
-          title="Registered Owner"
-          value={currentOwner}
-          subtitle={`Tenure since ${flat.ownershipHistory[0] ? flat.ownershipHistory[0].transferDate.toISOString().split("T")[0] : "Allotment"}`}
-          icon={
-            <svg className="h-5 w-5 text-stone-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-          }
-        />
-
-        <AdminStatCard
-          title="Outstanding Maintenance"
-          value={`${currencySymbol}${totalUnpaidDues.toLocaleString("en-IN")}`}
-          subtitle={unpaidBills.length > 0 ? `${unpaidBills.length} unpaid bill(s)` : "All dues cleared"}
-          icon={
-            <svg className="h-5 w-5 text-red-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
-            </svg>
-          }
-        />
-
-        <AdminStatCard
-          title="Active Member Deposits"
-          value={`${currencySymbol}${activeDepositsTotal.toLocaleString("en-IN")}`}
-          subtitle="Held security / fitout deposits"
-          icon={
-            <svg className="h-5 w-5 text-emerald-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          }
-        />
-
-        <AdminStatCard
-          title="Share Certificate"
-          value={flat.shareCertificate?.certificateNumber || "Not Issued"}
-          subtitle={
-            flat.shareCertificate
-              ? `${flat.shareCertificate.sharesCount} shares (${flat.shareCertificate.status})`
-              : "Form I register pending"
-          }
-          icon={
-            <svg className="h-5 w-5 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          }
-        />
-      </div>
-
-      {/* Flat Profile Client Tabs Container */}
       <FlatProfileClient
         societyCode={code}
+        societyId={society.id}
         currencySymbol={currencySymbol}
         flat={{
           id: flat.id,
@@ -233,6 +119,7 @@ export default async function SocietyFlatProfilePage({
           blockId: flat.blockId,
           blockName: flat.block.name,
         }}
+        blocks={blocksData}
         occupants={flat.people.map((p) => ({
           id: p.id,
           personId: p.personId,
@@ -323,6 +210,9 @@ export default async function SocietyFlatProfilePage({
           })),
         }}
         people={rawPeople}
+        unpaidDues={totalUnpaidDues}
+        unpaidBillsCount={unpaidBills.length}
+        activeDepositsTotal={activeDepositsTotal}
         canManage={canManage}
       />
     </div>

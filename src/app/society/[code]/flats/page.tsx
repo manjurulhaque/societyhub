@@ -81,6 +81,8 @@ export default async function SocietyFlatsPage({
     status: flat.status,
     area: flat.area ? flat.area.toString() : null,
     areaUnit: flat.areaUnit,
+    parkingSlot: flat.parkingSlot,
+    intercomNumber: flat.intercomNumber,
     blockId: flat.block.id,
     blockName: flat.block.name,
     occupants: flat.people.map((p) => p.person.name).filter(Boolean),

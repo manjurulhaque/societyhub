@@ -168,6 +168,7 @@ export async function updateFlatDetails(
   societyCode: string,
   flatId: string,
   data: {
+    blockId?: string | null
     number: string
     floor?: number | null
     unitType?: UnitType | null
@@ -188,7 +189,7 @@ export async function updateFlatDetails(
     })
 
     if (!flat) {
-      return { error: "Flat not found." }
+      return { error: "Flat not found in this society." }
     }
 
     const rawNumber = data.number?.trim()
@@ -197,9 +198,37 @@ export async function updateFlatDetails(
       return { error: "Flat number is required." }
     }
 
+    const targetBlockId = data.blockId || flat.blockId
+
+    // Validate block belongs to this society if changed
+    if (data.blockId && data.blockId !== flat.blockId) {
+      const block = await prisma.block.findFirst({
+        where: { id: data.blockId, societyId, deletedAt: null },
+      })
+      if (!block) {
+        return { error: "Selected block is invalid for this society." }
+      }
+    }
+
+    // Check uniqueness within target block
+    const existing = await prisma.flat.findFirst({
+      where: {
+        blockId: targetBlockId,
+        number: { equals: number, mode: "insensitive" },
+        id: { not: flatId },
+        deletedAt: null,
+      },
+      include: { block: true },
+    })
+
+    if (existing) {
+      return { error: `Flat "${number}" already exists in ${existing.block.name}.` }
+    }
+
     const updated = await prisma.flat.update({
       where: { id: flatId },
       data: {
+        blockId: targetBlockId,
         number,
         floor: data.floor !== undefined && data.floor !== null && !isNaN(data.floor) ? data.floor : null,
         unitType: data.unitType || null,
@@ -209,6 +238,7 @@ export async function updateFlatDetails(
         intercomNumber: data.intercomNumber ? sanitizeText(data.intercomNumber) : null,
         parkingSlot: data.parkingSlot ? sanitizeText(data.parkingSlot) : null,
       },
+      include: { block: true },
     })
 
     await recordAuditLog({
@@ -217,13 +247,15 @@ export async function updateFlatDetails(
       action: "UPDATE",
       entity: "Flat",
       entityId: flatId,
-      description: `${context.user.email} updated details for Flat ${flat.block.name}-${number}`,
+      description: `${context.user.email} updated details for Flat ${updated.block.name}-${number}`,
       oldData: flat,
       newData: updated,
     })
 
     revalidatePath(`/society/${societyCode}/flats`)
     revalidatePath(`/society/${societyCode}/flats/${flatId}`)
+    revalidatePath(`/society/${societyCode}/members`)
+    revalidatePath(`/society/${societyCode}/dashboard`)
 
     return { success: true, message: "Flat details updated successfully." }
   } catch (err: unknown) {

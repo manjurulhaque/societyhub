@@ -2,12 +2,15 @@
 
 import { useState, useTransition } from "react"
 import Link from "next/link"
-import { AdminCard, AdminBadge, AdminTable } from "@/components/admin"
+import { AdminCard, AdminBadge, AdminTable, AdminStatCard } from "@/components/admin"
 import { TransferOwnershipModal, type PersonDirectoryOption } from "./TransferOwnershipModal"
 import { AddFlatPersonModal } from "./AddFlatPersonModal"
+import { EditFlatModal } from "../EditFlatModal"
+import type { BlockOption } from "../AddFlatModal"
 import { removeFlatPerson, refundMemberDeposit, forfeitMemberDeposit } from "../actions"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
 import { maskBankAccount } from "@/lib/masking"
+import { EntityAuditDrawer } from "@/components/audit/EntityAuditDrawer"
 
 export type FlatDetailData = {
   id: string
@@ -113,34 +116,48 @@ export type FinancialData = {
 
 interface FlatProfileClientProps {
   societyCode: string
+  societyId: string
   currencySymbol: string
   flat: FlatDetailData
+  blocks: BlockOption[]
   occupants: FlatOccupantItem[]
   ownershipHistory: OwnershipHistoryItem[]
   statutory: StatutoryData
   financial: FinancialData
   people: PersonDirectoryOption[]
+  unpaidDues: number
+  unpaidBillsCount: number
+  activeDepositsTotal: number
   canManage: boolean
 }
 
 export function FlatProfileClient({
   societyCode,
+  societyId,
   currencySymbol,
   flat,
+  blocks,
   occupants,
   ownershipHistory,
   statutory,
   financial,
   people,
+  unpaidDues,
+  unpaidBillsCount,
+  activeDepositsTotal,
   canManage,
 }: FlatProfileClientProps) {
   const [activeTab, setActiveTab] = useState<"occupants" | "ownership" | "statutory" | "financial">("occupants")
+  const [isEditFlatOpen, setIsEditFlatOpen] = useState(false)
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false)
   const [isAddPersonModalOpen, setIsAddPersonModalOpen] = useState(false)
   const [isEndingTenancyId, setIsEndingTenancyId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  const currentOwner = ownershipHistory.find((h) => h.isCurrentOwner)?.toPersonName || occupants.find((o) => o.role === "OWNER" && o.isActive)?.personName
+  const currentOwner =
+    ownershipHistory.find((h) => h.isCurrentOwner)?.toPersonName ||
+    occupants.find((o) => o.role === "OWNER" && o.isActive)?.personName ||
+    "Unassigned"
 
   const handleEndTenancy = (flatPersonId: string) => {
     if (!confirm("Are you sure you want to end this residency/tenancy?")) return
@@ -164,6 +181,137 @@ export function FlatProfileClient({
 
   return (
     <div className="space-y-6">
+      {/* Top Header & Actions */}
+      <div>
+        <Link
+          href={`/society/${societyCode}/flats`}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-stone-500 hover:text-stone-900 transition mb-3"
+        >
+          <span>←</span>
+          <span>Back to Blocks & Flats</span>
+        </Link>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500">
+                {flat.blockName}
+              </span>
+              <AdminBadge
+                variant={
+                  flat.status === "OCCUPIED"
+                    ? "success"
+                    : flat.status === "UNDER_RENOVATION"
+                      ? "warning"
+                      : "neutral"
+                }
+                size="sm"
+              >
+                {flat.status.replace(/_/g, " ")}
+              </AdminBadge>
+              {flat.unitType && (
+                <span className="rounded-md bg-stone-100 px-2 py-0.5 text-xs font-semibold text-stone-700">
+                  {flat.unitType.replace(/_/g, " ")}
+                </span>
+              )}
+            </div>
+
+            <h1 className="text-xl font-bold tracking-tight text-stone-950 sm:text-2xl">
+              Flat {flat.number}
+            </h1>
+
+            <p className="text-xs text-stone-500">
+              {flat.floor !== null ? `Floor ${flat.floor} • ` : ""}
+              {flat.area ? `${flat.area} ${flat.areaUnit} • ` : ""}
+              {flat.parkingSlot ? `🚗 Parking: ${flat.parkingSlot} • ` : ""}
+              {flat.intercomNumber ? `📞 Intercom: ${flat.intercomNumber}` : ""}
+            </p>
+          </div>
+
+          {/* Action Tools */}
+          <div className="flex items-center gap-2">
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => setIsEditFlatOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-xs font-semibold text-stone-700 shadow-xs hover:bg-stone-50 hover:text-stone-900 transition"
+              >
+                <svg className="h-4 w-4 text-stone-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z" />
+                  <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z" />
+                </svg>
+                <span>Edit Flat</span>
+              </button>
+            )}
+
+            <EntityAuditDrawer
+              entity="Flat"
+              entityId={flat.id}
+              entityTitle={`Flat ${flat.blockName}-${flat.number}`}
+              societyId={societyId}
+              relatedEntityIds={[
+                ...occupants.map((p) => p.id),
+                ...(statutory.shareCertificate ? [flat.id] : []),
+                ...statutory.liens.map((l) => l.id),
+                ...statutory.nominations.map((n) => n.id),
+              ]}
+              buttonVariant="outline"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* KPI Overview Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <AdminStatCard
+          title="Registered Owner"
+          value={currentOwner}
+          subtitle={`Tenure since ${ownershipHistory[0] ? ownershipHistory[0].transferDate.split("T")[0] : "Allotment"}`}
+          icon={
+            <svg className="h-5 w-5 text-stone-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          }
+        />
+
+        <AdminStatCard
+          title="Outstanding Maintenance"
+          value={`${currencySymbol}${unpaidDues.toLocaleString("en-IN")}`}
+          subtitle={unpaidBillsCount > 0 ? `${unpaidBillsCount} unpaid bill(s)` : "All dues cleared"}
+          icon={
+            <svg className="h-5 w-5 text-red-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
+            </svg>
+          }
+        />
+
+        <AdminStatCard
+          title="Active Member Deposits"
+          value={`${currencySymbol}${activeDepositsTotal.toLocaleString("en-IN")}`}
+          subtitle="Held security / fitout deposits"
+          icon={
+            <svg className="h-5 w-5 text-emerald-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
+        />
+
+        <AdminStatCard
+          title="Share Certificate"
+          value={statutory.shareCertificate?.certificateNumber || "Not Issued"}
+          subtitle={
+            statutory.shareCertificate
+              ? `${statutory.shareCertificate.sharesCount} shares (${statutory.shareCertificate.status})`
+              : "Form I register pending"
+          }
+          icon={
+            <svg className="h-5 w-5 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          }
+        />
+      </div>
+
       {/* Tab Navigation */}
       <div className="flex border-b border-stone-200 gap-6 overflow-x-auto text-xs font-semibold">
         {tabs.map((tab) => (
@@ -232,7 +380,7 @@ export function FlatProfileClient({
                       {occ.personName}
                     </Link>
                     {occ.isPrimary && (
-                      <span className="text-[10px] text-blue-700 font-semibold bg-blue-50 border border-blue-200 rounded px-1.5 py-0.2">
+                      <span className="text-[10px] text-blue-700 font-semibold bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5 mt-0.5 inline-block">
                         Primary Point of Contact
                       </span>
                     )}
@@ -249,7 +397,7 @@ export function FlatProfileClient({
                       }
                       size="sm"
                     >
-                      {occ.role.replace("_", " ")}
+                      {occ.role.replace(/_/g, " ")}
                     </AdminBadge>
                   </td>
 
@@ -646,6 +794,27 @@ export function FlatProfileClient({
           </div>
         </div>
       )}
+
+      {/* Edit Flat Modal */}
+      <EditFlatModal
+        isOpen={isEditFlatOpen}
+        onClose={() => setIsEditFlatOpen(false)}
+        societyCode={societyCode}
+        blocks={blocks}
+        flat={{
+          id: flat.id,
+          blockId: flat.blockId,
+          blockName: flat.blockName,
+          number: flat.number,
+          floor: flat.floor,
+          unitType: flat.unitType,
+          status: flat.status,
+          area: flat.area,
+          areaUnit: flat.areaUnit,
+          parkingSlot: flat.parkingSlot,
+          intercomNumber: flat.intercomNumber,
+        }}
+      />
 
       {/* Transfer Ownership Modal */}
       <TransferOwnershipModal
