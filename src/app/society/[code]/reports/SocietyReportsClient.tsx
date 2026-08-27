@@ -565,6 +565,37 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
     )
   }, [data.agingSummary])
 
+  // Chart data for revenue streams
+  const chartBillCategoryData = useMemo(() => {
+    return data.billsByCategory.map((b) => ({
+      name: b.billType.replace(/_/g, " "),
+      value: b.amount,
+      count: b.count,
+      percentage: b.percentage,
+    }))
+  }, [data.billsByCategory])
+
+  // Chart data for payment channels
+  const chartPaymentModeData = useMemo(() => {
+    return data.paymentsByMode.map((p) => ({
+      name: p.mode,
+      value: p.amount,
+      count: p.count,
+      percentage: p.percentage,
+    }))
+  }, [data.paymentsByMode])
+
+  // Chart data for budget variance
+  const chartBudgetData = useMemo(() => {
+    return data.budgetVariance.map((b) => ({
+      name: b.headName,
+      Allocated: b.allocatedAmount,
+      Utilized: b.utilizedAmount,
+      Remaining: b.remainingAmount,
+      rate: b.utilizationRate,
+    }))
+  }, [data.budgetVariance])
+
   // CSV Export Utility
   const handleExportCSV = (reportType: string) => {
     let headers: string[] = []
@@ -1903,21 +1934,64 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
               {data.billsByCategory.length === 0 ? (
                 <p className="py-6 text-center text-xs text-stone-500">No bills recorded yet.</p>
               ) : (
-                <div className="space-y-3">
-                  {data.billsByCategory.map((cat) => (
-                    <div key={cat.billType} className="rounded-2xl border border-stone-100 bg-stone-50/60 p-3.5 space-y-1.5">
-                      <div className="flex items-center justify-between text-xs font-semibold">
-                        <span className="text-stone-900">{cat.billType.replace(/_/g, " ")}</span>
-                        <span className="text-stone-950 font-bold">
-                          {sym}{cat.amount.toLocaleString("en-IN")} ({cat.percentage}%)
-                        </span>
+                <div className="space-y-4">
+                  <div className="h-44 w-full min-w-0">
+                    {isMounted ? (
+                      <ResponsiveContainer width="100%" height={170} minWidth={100} minHeight={100}>
+                        <PieChart>
+                          <Pie
+                            data={chartBillCategoryData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={38}
+                            outerRadius={62}
+                            paddingAngle={3}
+                            dataKey="value"
+                          >
+                            {chartBillCategoryData.map((_, index) => (
+                              <Cell key={`bill-cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
+                            contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: "11px" }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    {data.billsByCategory.map((cat, idx) => (
+                      <div key={cat.billType} className="rounded-2xl border border-stone-100 bg-stone-50/60 p-3.5 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs font-semibold">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="h-2.5 w-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}
+                            />
+                            <span className="text-stone-900">{cat.billType.replace(/_/g, " ")}</span>
+                          </div>
+                          <span className="text-stone-950 font-bold">
+                            {sym}{cat.amount.toLocaleString("en-IN")} ({cat.percentage}%)
+                          </span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-stone-200 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${cat.percentage}%`,
+                              backgroundColor: CHART_COLORS[idx % CHART_COLORS.length],
+                            }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-stone-500">{cat.count} invoices generated</span>
                       </div>
-                      <div className="h-2 w-full rounded-full bg-stone-200 overflow-hidden">
-                        <div className="h-full bg-stone-900 rounded-full transition-all" style={{ width: `${cat.percentage}%` }} />
-                      </div>
-                      <span className="text-[10px] text-stone-500">{cat.count} invoices generated</span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
             </AdminCard>
@@ -1959,19 +2033,56 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
               {data.paymentsByMode.length === 0 ? (
                 <p className="py-6 text-center text-xs text-stone-500">No payment records found.</p>
               ) : (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {data.paymentsByMode.map((mode) => (
-                    <div key={mode.mode} className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-stone-900">{mode.mode}</span>
-                        <AdminBadge variant="neutral" size="sm">{mode.percentage}%</AdminBadge>
+                <div className="space-y-4">
+                  <div className="h-44 w-full min-w-0">
+                    {isMounted ? (
+                      <ResponsiveContainer width="100%" height={170} minWidth={100} minHeight={100}>
+                        <PieChart>
+                          <Pie
+                            data={chartPaymentModeData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={38}
+                            outerRadius={62}
+                            paddingAngle={3}
+                            dataKey="value"
+                          >
+                            {chartPaymentModeData.map((_, index) => (
+                              <Cell key={`pay-mode-cell-${index}`} fill={CHART_COLORS[(index + 2) % CHART_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
+                            contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: "11px" }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {data.paymentsByMode.map((mode, idx) => (
+                      <div key={mode.mode} className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span
+                              className="h-2 w-2 rounded-full shrink-0"
+                              style={{ backgroundColor: CHART_COLORS[(idx + 2) % CHART_COLORS.length] }}
+                            />
+                            <span className="text-xs font-bold text-stone-900 truncate">{mode.mode}</span>
+                          </div>
+                          <AdminBadge variant="neutral" size="sm">{mode.percentage}%</AdminBadge>
+                        </div>
+                        <p className="mt-2 text-base font-extrabold text-emerald-800">
+                          {sym}{mode.amount.toLocaleString("en-IN")}
+                        </p>
+                        <p className="text-[11px] text-stone-500 mt-0.5">{mode.count} transactions</p>
                       </div>
-                      <p className="mt-2 text-base font-extrabold text-emerald-800">
-                        {sym}{mode.amount.toLocaleString("en-IN")}
-                      </p>
-                      <p className="text-[11px] text-stone-500 mt-0.5">{mode.count} transactions</p>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
             </AdminCard>
@@ -2184,9 +2295,46 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                 No active budget plan configured for the current financial year.
               </div>
             ) : (
-              <AdminTable
-                headers={[
-                  "Budget Plan",
+              <div className="space-y-6">
+                <div className="rounded-2xl border border-stone-100 bg-stone-50/50 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-stone-700">
+                      Budget Cap vs. Actual Disbursement Comparison
+                    </span>
+                    <AdminBadge variant="neutral" size="sm">
+                      {data.budgetVariance.length} Heads
+                    </AdminBadge>
+                  </div>
+                  <div className="h-64 w-full min-w-0">
+                    {isMounted ? (
+                      <ResponsiveContainer width="100%" height={240} minWidth={100} minHeight={100}>
+                        <BarChart data={chartBudgetData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                          <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                          <YAxis
+                            tick={{ fontSize: 11, fill: "#78716c" }}
+                            axisLine={{ stroke: "#e7e5e4" }}
+                            tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                          />
+                          <Tooltip
+                            formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
+                            contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "4px" }} />
+                          <Bar dataKey="Allocated" fill="#1c1917" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="Utilized" fill="#d97706" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="Remaining" fill="#059669" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                    )}
+                  </div>
+                </div>
+
+                <AdminTable
+                  headers={[
+                    "Budget Plan",
                   "Expenditure Head",
                   "Allocated Cap",
                   "Utilized / Spent",
@@ -2250,9 +2398,10 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                   </tr>
                 ))}
               />
-            )}
-          </AdminCard>
-        </div>
+            </div>
+          )}
+        </AdminCard>
+      </div>
       )}
 
       {/* ========================================== */}
