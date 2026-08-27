@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import Link from "next/link"
 import { AdminTable, AdminBadge } from "@/components/admin"
 import { MemberRoleModal, type MemberData, type AvailableRole } from "./MemberRoleModal"
 import { type ResidentItem } from "./ResidentsDirectoryClient"
@@ -10,6 +11,7 @@ import type { SocietyRole } from "@/generated/prisma/client"
 export type CommitteeMemberItem = {
   id: string
   userId: string
+  personId?: string | null
   email: string
   name?: string | null
   phone?: string | null
@@ -178,7 +180,16 @@ export function CommitteeMembersClient({
                     </div>
                     <div className="min-w-0">
                       <div className="text-xs font-semibold text-stone-950 truncate">
-                        {m.name || m.email}
+                        {m.personId ? (
+                          <Link
+                            href={`/society/${societyCode}/members/${m.personId}`}
+                            className="hover:text-blue-600 transition"
+                          >
+                            {m.name || m.email}
+                          </Link>
+                        ) : (
+                          m.name || m.email
+                        )}
                       </div>
                       <div className="flex items-center gap-1.5 text-[11px] text-stone-500 truncate">
                         {m.name ? <span>{m.email}</span> : null}

@@ -226,6 +226,7 @@ export async function toggleResidentKyc(
     })
 
     revalidatePath(`/society/${societyCode}/members`)
+    revalidatePath(`/society/${societyCode}/members/${personId}`)
     revalidatePath(`/society/${societyCode}/flats`)
     return {
       success: true,
@@ -349,6 +350,7 @@ export async function updateResident(
     })
 
     revalidatePath(`/society/${societyCode}/members`)
+    revalidatePath(`/society/${societyCode}/members/${personId}`)
     revalidatePath(`/society/${societyCode}/flats`)
     revalidatePath(`/society/${societyCode}/dashboard`)
     revalidatePath(`/admin/people`)

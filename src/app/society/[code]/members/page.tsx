@@ -142,6 +142,7 @@ export default async function SocietyMembersPage({
     return {
       id: m.id,
       userId: m.user.id,
+      personId: person?.id || null,
       email: m.user.email,
       name: person?.name || null,
       phone: person?.phone || null,

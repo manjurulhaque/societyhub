@@ -311,3 +311,235 @@ export async function voidPayment(
     return { error: getSafeErrorMessage(err, "Failed to void payment.") }
   }
 }
+
+export type ConsolidatedBillAllocation = {
+  billId: string
+  flatId: string
+  amount: number
+}
+
+/**
+ * Records a consolidated payment across multiple flats and bills for an owner/resident.
+ */
+export async function recordConsolidatedPayment(
+  societyCode: string,
+  data: {
+    personId: string
+    totalAmount: number
+    mode: PaymentMode
+    paidOn?: string | null
+    reference?: string | null
+    remarks?: string | null
+    accountId?: string | null
+    allocations: ConsolidatedBillAllocation[]
+    advanceAmount?: number
+    advanceFlatId?: string | null
+  }
+): Promise<PaymentActionState & { receiptNumbers?: string[] }> {
+  try {
+    const context = await requireCommitteeAccess(societyCode, FINANCIAL_ROLES)
+    const societyId = context.society.id
+
+    const totalAmount = Number(data.totalAmount)
+    if (isNaN(totalAmount) || totalAmount <= 0) {
+      return { error: "Please enter a valid total payment amount." }
+    }
+
+    const paidOn = data.paidOn ? new Date(data.paidOn) : new Date()
+    const reference = data.reference ? sanitizeText(data.reference) : null
+    const remarks = data.remarks ? sanitizeText(data.remarks) : null
+    const advanceAmount = Math.max(0, Number(data.advanceAmount || 0))
+
+    // Verify person belongs to society
+    const person = await prisma.person.findFirst({
+      where: { id: data.personId, societyId, deletedAt: null },
+    })
+    if (!person) {
+      return { error: "Target resident record not found." }
+    }
+
+    // Verify account if provided
+    if (data.accountId) {
+      const account = await prisma.account.findFirst({
+        where: { id: data.accountId, societyId, isActive: true },
+      })
+      if (!account) {
+        return { error: "Selected bank/cash account not found." }
+      }
+    }
+
+    const activeAllocations = data.allocations.filter((a) => Number(a.amount) > 0)
+    const allocatedSum = activeAllocations.reduce((sum, a) => sum + Number(a.amount), 0)
+    const combinedTotal = allocatedSum + advanceAmount
+
+    if (activeAllocations.length === 0 && advanceAmount <= 0) {
+      return { error: "Please allocate payment against at least one bill or as advance credit." }
+    }
+
+    if (Math.abs(combinedTotal - totalAmount) > 0.01) {
+      return {
+        error: `Allocated amount (₹${combinedTotal.toLocaleString("en-IN")}) must equal total payment (₹${totalAmount.toLocaleString("en-IN")}).`,
+      }
+    }
+
+    // Verify all bill IDs belong to this society
+    const billIds = activeAllocations.map((a) => a.billId)
+    const bills = await prisma.bill.findMany({
+      where: {
+        id: { in: billIds },
+        societyId,
+      },
+      include: {
+        payments: {
+          where: { status: "SUCCESS" },
+        },
+      },
+    })
+
+    if (bills.length !== billIds.length) {
+      return { error: "One or more selected bills do not belong to this society." }
+    }
+
+    const billMap = new Map(bills.map((b) => [b.id, b]))
+
+    // Generate base receipt sequence
+    const now = new Date()
+    const year = now.getFullYear()
+    const monthStr = (now.getMonth() + 1).toString().padStart(2, "0")
+    let currentReceiptCount = await prisma.payment.count({ where: { societyId } })
+
+    const createdReceiptNumbers: string[] = []
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Process each allocated bill
+      for (const allocation of activeAllocations) {
+        const bill = billMap.get(allocation.billId)
+        if (!bill) continue
+
+        currentReceiptCount += 1
+        const receiptSeq = currentReceiptCount.toString().padStart(4, "0")
+        const receiptNumber = `REC-${year}${monthStr}-${receiptSeq}`
+        createdReceiptNumbers.push(receiptNumber)
+
+        const allocAmount = Number(allocation.amount)
+
+        // Create Payment record for this bill
+        await tx.payment.create({
+          data: {
+            societyId,
+            billId: bill.id,
+            flatId: allocation.flatId || bill.flatId,
+            paidById: person.id,
+            accountId: data.accountId || undefined,
+            receiptNumber,
+            amount: allocAmount,
+            paidOn,
+            mode: data.mode,
+            status: "SUCCESS" as PaymentStatus,
+            reference,
+            remarks: remarks
+              ? `${remarks} [Consolidated payment for ${person.name}]`
+              : `Consolidated payment for ${person.name}`,
+          },
+        })
+
+        // Check if bill is now fully or partially settled
+        const previousPaid = bill.payments.reduce((acc, p) => acc + Number(p.amount), 0)
+        const totalPaid = previousPaid + allocAmount
+        const billTotal = Number(bill.amount)
+
+        if (totalPaid >= billTotal) {
+          await tx.bill.update({
+            where: { id: bill.id },
+            data: {
+              status: "PAID",
+              paidDate: paidOn,
+            },
+          })
+        } else if (totalPaid > 0) {
+          await tx.bill.update({
+            where: { id: bill.id },
+            data: {
+              status: "PARTIALLY_PAID",
+            },
+          })
+        }
+      }
+
+      // 2. If excess advance exists, create advance Payment credit
+      if (advanceAmount > 0) {
+        currentReceiptCount += 1
+        const receiptSeq = currentReceiptCount.toString().padStart(4, "0")
+        const advanceReceiptNumber = `REC-${year}${monthStr}-${receiptSeq}`
+        createdReceiptNumbers.push(advanceReceiptNumber)
+
+        await tx.payment.create({
+          data: {
+            societyId,
+            flatId: data.advanceFlatId || activeAllocations[0]?.flatId,
+            paidById: person.id,
+            accountId: data.accountId || undefined,
+            isAdvance: true,
+            receiptNumber: advanceReceiptNumber,
+            amount: advanceAmount,
+            paidOn,
+            mode: data.mode,
+            status: "SUCCESS" as PaymentStatus,
+            reference,
+            remarks: remarks
+              ? `${remarks} [Advance balance for ${person.name}]`
+              : `Advance surplus credit for ${person.name}`,
+          },
+        })
+      }
+
+      // 3. Increment destination bank/cash account if specified
+      if (data.accountId) {
+        await tx.account.update({
+          where: { id: data.accountId },
+          data: {
+            currentBalance: { increment: totalAmount },
+          },
+        })
+      }
+    })
+
+    // Record audit log
+    await recordAuditLog({
+      societyId,
+      userId: context.user.id,
+      action: "CREATE",
+      entity: "Payment",
+      entityId: person.id,
+      description: `${context.user.email} collected consolidated payment of ₹${totalAmount.toLocaleString("en-IN")} via ${data.mode} for ${person.name} across ${activeAllocations.length} bill(s)${reference ? ` [Ref: ${reference}]` : ""}`,
+      newData: {
+        totalAmount,
+        mode: data.mode,
+        personId: person.id,
+        receiptNumbers: createdReceiptNumbers,
+        allocatedBillsCount: activeAllocations.length,
+        advanceAmount,
+      },
+    })
+
+    revalidatePath(`/society/${societyCode}/members/${person.id}`)
+    revalidatePath(`/society/${societyCode}/members`)
+    revalidatePath(`/society/${societyCode}/payments`)
+    revalidatePath(`/society/${societyCode}/bills`)
+    revalidatePath(`/society/${societyCode}/accounts`)
+    revalidatePath(`/society/${societyCode}/flats`)
+    revalidatePath(`/society/${societyCode}/dashboard`)
+    revalidatePath(`/society/${societyCode}/reports`)
+
+    return {
+      success: true,
+      message: `Consolidated payment of ₹${totalAmount.toLocaleString("en-IN")} recorded successfully across ${activeAllocations.length} bill(s).`,
+      receiptNumber: createdReceiptNumbers.join(", "),
+      receiptNumbers: createdReceiptNumbers,
+    }
+  } catch (err: unknown) {
+    console.error("Failed to record consolidated payment:", err)
+    return { error: getSafeErrorMessage(err, "Failed to record consolidated payment.") }
+  }
+}
+

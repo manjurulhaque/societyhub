@@ -450,6 +450,7 @@ export async function addFlatPerson(
     revalidatePath(`/society/${societyCode}/flats/${flatId}`)
     revalidatePath(`/society/${societyCode}/flats`)
     revalidatePath(`/society/${societyCode}/members`)
+    revalidatePath(`/society/${societyCode}/members/${data.personId}`)
 
     return { success: true, message: `${person.name} assigned to Flat ${flat.number} as ${data.role}.` }
   } catch (err: unknown) {
@@ -478,9 +479,11 @@ export async function removeFlatPerson(
       return { error: "Record not found." }
     }
 
+    const toDate = new Date()
+
     await prisma.flatPerson.update({
       where: { id: flatPersonId },
-      data: { toDate: new Date(), isPrimary: false },
+      data: { toDate, isPrimary: false },
     })
 
     await recordAuditLog({
@@ -488,12 +491,14 @@ export async function removeFlatPerson(
       userId: context.user.id,
       action: "UPDATE",
       entity: "FlatPerson",
-      entityId: flatPersonId,
+      entityId: flatId,
       description: `${context.user.email} ended occupancy for ${record.person.name} in Flat ${record.flat.block.name}-${record.flat.number}`,
     })
 
     revalidatePath(`/society/${societyCode}/flats/${flatId}`)
     revalidatePath(`/society/${societyCode}/flats`)
+    revalidatePath(`/society/${societyCode}/members`)
+    revalidatePath(`/society/${societyCode}/members/${record.personId}`)
 
     return { success: true, message: `Occupancy ended for ${record.person.name}.` }
   } catch (err: unknown) {
