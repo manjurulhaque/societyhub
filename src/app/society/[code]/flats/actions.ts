@@ -75,6 +75,217 @@ export async function createBlock(
 }
 
 /**
+ * Updates an existing block / tower in the society.
+ */
+export async function updateBlock(
+  societyCode: string,
+  blockId: string,
+  data: { name: string; isActive?: boolean }
+): Promise<FlatActionState> {
+  try {
+    const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
+    const societyId = context.society.id
+
+    const rawName = data.name.trim()
+    const name = sanitizeText(rawName)
+    if (!name) {
+      return { error: "Block name is required (e.g. Wing A, Tower 1)." }
+    }
+
+    const currentBlock = await prisma.block.findFirst({
+      where: {
+        id: blockId,
+        societyId,
+        deletedAt: null,
+      },
+    })
+
+    if (!currentBlock) {
+      return { error: "Block not found." }
+    }
+
+    // Check duplicate name on other blocks
+    const duplicate = await prisma.block.findFirst({
+      where: {
+        societyId,
+        id: { not: blockId },
+        name: { equals: name, mode: "insensitive" },
+        deletedAt: null,
+      },
+    })
+
+    if (duplicate) {
+      return { error: `Another block named "${name}" already exists in this society.` }
+    }
+
+    const updated = await prisma.block.update({
+      where: { id: blockId },
+      data: {
+        name,
+        ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+      },
+    })
+
+    await recordAuditLog({
+      societyId,
+      userId: context.user.id,
+      action: "UPDATE",
+      entity: "Block",
+      entityId: blockId,
+      description: `${context.user.email} renamed block from "${currentBlock.name}" to "${name}"`,
+      oldData: { name: currentBlock.name, isActive: currentBlock.isActive },
+      newData: { name: updated.name, isActive: updated.isActive },
+    })
+
+    revalidatePath(`/society/${societyCode}/flats`)
+    revalidatePath(`/society/${societyCode}/dashboard`)
+    revalidatePath(`/society/${societyCode}/members`)
+
+    return {
+      success: true,
+      message: `Block "${name}" updated successfully.`,
+    }
+  } catch (err: unknown) {
+    console.error("Failed to update block:", err)
+    return { error: getSafeErrorMessage(err, "Failed to update block.") }
+  }
+}
+
+/**
+ * Batch updates the structural prefix (Wing / Tower / Block / Building) for all blocks in the society.
+ * e.g., converts "Block A", "Block B" -> "Wing A", "Wing B" or "Tower A", "Tower B".
+ */
+export async function batchUpdateBlockPrefix(
+  societyCode: string,
+  newPrefix: "Wing" | "Tower" | "Block" | "Building"
+): Promise<FlatActionState> {
+  try {
+    const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
+    const societyId = context.society.id
+
+    const blocks = await prisma.block.findMany({
+      where: {
+        societyId,
+        deletedAt: null,
+      },
+    })
+
+    if (blocks.length === 0) {
+      return { error: "No blocks found to update." }
+    }
+
+    const regex = /^(Wing|Tower|Block|Building)\s*/i
+    const updates = blocks.map((b) => {
+      const remainder = b.name.replace(regex, "").trim()
+      const newName = `${newPrefix} ${remainder}`.trim()
+      return {
+        id: b.id,
+        oldName: b.name,
+        newName,
+      }
+    })
+
+    // Perform atomic transaction
+    await prisma.$transaction(
+      updates.map((u) =>
+        prisma.block.update({
+          where: { id: u.id },
+          data: { name: u.newName },
+        })
+      )
+    )
+
+    await recordAuditLog({
+      societyId,
+      userId: context.user.id,
+      action: "UPDATE",
+      entity: "Block",
+      description: `${context.user.email} batch-updated all block prefixes to "${newPrefix}"`,
+      newData: { newPrefix, count: blocks.length },
+    })
+
+    revalidatePath(`/society/${societyCode}/flats`)
+    revalidatePath(`/society/${societyCode}/dashboard`)
+    revalidatePath(`/society/${societyCode}/members`)
+
+    return {
+      success: true,
+      message: `Successfully updated all ${blocks.length} block(s) to use "${newPrefix}" prefix.`,
+    }
+  } catch (err: unknown) {
+    console.error("Failed to batch update block prefixes:", err)
+    return { error: getSafeErrorMessage(err, "Failed to batch update block prefixes.") }
+  }
+}
+
+/**
+ * Deletes a block / tower if no active flats are associated with it.
+ */
+export async function deleteBlock(
+  societyCode: string,
+  blockId: string
+): Promise<FlatActionState> {
+  try {
+    const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
+    const societyId = context.society.id
+
+    const block = await prisma.block.findFirst({
+      where: {
+        id: blockId,
+        societyId,
+        deletedAt: null,
+      },
+      include: {
+        _count: {
+          select: {
+            flats: {
+              where: { deletedAt: null },
+            },
+          },
+        },
+      },
+    })
+
+    if (!block) {
+      return { error: "Block not found." }
+    }
+
+    if (block._count.flats > 0) {
+      return {
+        error: `Cannot delete Block "${block.name}" because it contains ${block._count.flats} active unit(s). Please move or delete the units first.`,
+      }
+    }
+
+    await prisma.block.update({
+      where: { id: blockId },
+      data: { deletedAt: new Date() },
+    })
+
+    await recordAuditLog({
+      societyId,
+      userId: context.user.id,
+      action: "DELETE",
+      entity: "Block",
+      entityId: blockId,
+      description: `${context.user.email} deleted block "${block.name}"`,
+      oldData: { name: block.name },
+    })
+
+    revalidatePath(`/society/${societyCode}/flats`)
+    revalidatePath(`/society/${societyCode}/dashboard`)
+    revalidatePath(`/society/${societyCode}/members`)
+
+    return {
+      success: true,
+      message: `Block "${block.name}" deleted successfully.`,
+    }
+  } catch (err: unknown) {
+    console.error("Failed to delete block:", err)
+    return { error: getSafeErrorMessage(err, "Failed to delete block.") }
+  }
+}
+
+/**
  * Creates a new flat / unit in a specified block.
  */
 export async function createFlat(
@@ -168,6 +379,7 @@ export async function updateFlatDetails(
   societyCode: string,
   flatId: string,
   data: {
+    blockId?: string | null
     number: string
     floor?: number | null
     unitType?: UnitType | null
@@ -188,7 +400,7 @@ export async function updateFlatDetails(
     })
 
     if (!flat) {
-      return { error: "Flat not found." }
+      return { error: "Flat not found in this society." }
     }
 
     const rawNumber = data.number?.trim()
@@ -197,9 +409,37 @@ export async function updateFlatDetails(
       return { error: "Flat number is required." }
     }
 
+    const targetBlockId = data.blockId || flat.blockId
+
+    // Validate block belongs to this society if changed
+    if (data.blockId && data.blockId !== flat.blockId) {
+      const block = await prisma.block.findFirst({
+        where: { id: data.blockId, societyId, deletedAt: null },
+      })
+      if (!block) {
+        return { error: "Selected block is invalid for this society." }
+      }
+    }
+
+    // Check uniqueness within target block
+    const existing = await prisma.flat.findFirst({
+      where: {
+        blockId: targetBlockId,
+        number: { equals: number, mode: "insensitive" },
+        id: { not: flatId },
+        deletedAt: null,
+      },
+      include: { block: true },
+    })
+
+    if (existing) {
+      return { error: `Flat "${number}" already exists in ${existing.block.name}.` }
+    }
+
     const updated = await prisma.flat.update({
       where: { id: flatId },
       data: {
+        blockId: targetBlockId,
         number,
         floor: data.floor !== undefined && data.floor !== null && !isNaN(data.floor) ? data.floor : null,
         unitType: data.unitType || null,
@@ -209,6 +449,7 @@ export async function updateFlatDetails(
         intercomNumber: data.intercomNumber ? sanitizeText(data.intercomNumber) : null,
         parkingSlot: data.parkingSlot ? sanitizeText(data.parkingSlot) : null,
       },
+      include: { block: true },
     })
 
     await recordAuditLog({
@@ -217,13 +458,15 @@ export async function updateFlatDetails(
       action: "UPDATE",
       entity: "Flat",
       entityId: flatId,
-      description: `${context.user.email} updated details for Flat ${flat.block.name}-${number}`,
+      description: `${context.user.email} updated details for Flat ${updated.block.name}-${number}`,
       oldData: flat,
       newData: updated,
     })
 
     revalidatePath(`/society/${societyCode}/flats`)
     revalidatePath(`/society/${societyCode}/flats/${flatId}`)
+    revalidatePath(`/society/${societyCode}/members`)
+    revalidatePath(`/society/${societyCode}/dashboard`)
 
     return { success: true, message: "Flat details updated successfully." }
   } catch (err: unknown) {
@@ -708,5 +951,574 @@ export async function forfeitMemberDeposit(
   } catch (err: unknown) {
     console.error("Failed to forfeit deposit:", err)
     return { error: getSafeErrorMessage(err, "Failed to forfeit deposit.") }
+  }
+}
+
+export type BulkFlatItemInput = {
+  blockId: string
+  number: string
+  floor?: number | null
+  unitType?: UnitType | null
+  area?: number | null
+  areaUnit?: string
+  status?: OccupancyStatus
+  intercomNumber?: string | null
+  parkingSlot?: string | null
+}
+
+export type BulkCreateFlatsResult = {
+  success?: boolean
+  error?: string
+  message?: string
+  createdCount?: number
+  skippedCount?: number
+  createdFlats?: { id: string; number: string; blockName: string }[]
+  skippedFlats?: { number: string; blockName: string; reason: string }[]
+}
+
+/**
+ * Creates multiple flats in bulk with duplicate protection and audit logging.
+ */
+export async function bulkCreateFlats(
+  societyCode: string,
+  flats: BulkFlatItemInput[]
+): Promise<BulkCreateFlatsResult> {
+  try {
+    const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
+    const societyId = context.society.id
+
+    if (!Array.isArray(flats) || flats.length === 0) {
+      return { error: "No flat items provided for bulk creation." }
+    }
+
+    if (flats.length > 500) {
+      return { error: "Maximum batch limit is 500 flats per operation." }
+    }
+
+    // 1. Fetch valid blocks for this society
+    const societyBlocks = await prisma.block.findMany({
+      where: { societyId, deletedAt: null },
+      select: { id: true, name: true },
+    })
+    const blockMap = new Map(societyBlocks.map((b) => [b.id, b.name]))
+
+    // 2. Fetch existing flats in these blocks
+    const blockIds = Array.from(new Set(flats.map((f) => f.blockId).filter(Boolean)))
+    const existingFlats = await prisma.flat.findMany({
+      where: {
+        blockId: { in: blockIds },
+        deletedAt: null,
+      },
+      select: {
+        blockId: true,
+        number: true,
+      },
+    })
+
+    const existingKeySet = new Set(
+      existingFlats.map((f) => `${f.blockId}::${f.number.toLowerCase()}`)
+    )
+
+    // 3. Process and filter batch items
+    const toCreate: {
+      blockId: string
+      number: string
+      floor: number | null
+      unitType: UnitType | null
+      area: number | null
+      areaUnit: string
+      status: OccupancyStatus
+      intercomNumber: string | null
+      parkingSlot: string | null
+    }[] = []
+
+    const skippedFlats: { number: string; blockName: string; reason: string }[] = []
+    const seenBatchKeys = new Set<string>()
+
+    for (const item of flats) {
+      const rawNumber = item.number?.trim()
+      const number = sanitizeText(rawNumber)
+      const blockName = blockMap.get(item.blockId) || "Unknown Block"
+
+      if (!item.blockId || !blockMap.has(item.blockId)) {
+        skippedFlats.push({
+          number: number || "N/A",
+          blockName,
+          reason: "Invalid or missing block assignment.",
+        })
+        continue
+      }
+
+      if (!number) {
+        skippedFlats.push({
+          number: "Blank",
+          blockName,
+          reason: "Missing flat / unit number.",
+        })
+        continue
+      }
+
+      const key = `${item.blockId}::${number.toLowerCase()}`
+
+      if (existingKeySet.has(key)) {
+        skippedFlats.push({
+          number,
+          blockName,
+          reason: `Flat ${number} already exists in ${blockName}.`,
+        })
+        continue
+      }
+
+      if (seenBatchKeys.has(key)) {
+        skippedFlats.push({
+          number,
+          blockName,
+          reason: `Duplicate flat number ${number} within the import batch.`,
+        })
+        continue
+      }
+
+      seenBatchKeys.add(key)
+
+      toCreate.push({
+        blockId: item.blockId,
+        number,
+        floor: item.floor !== undefined && item.floor !== null && !isNaN(item.floor) ? item.floor : null,
+        unitType: item.unitType || null,
+        area: item.area && !isNaN(item.area) ? item.area : null,
+        areaUnit: item.areaUnit ? sanitizeText(item.areaUnit) : "sqft",
+        status: item.status || "VACANT",
+        intercomNumber: item.intercomNumber ? sanitizeText(item.intercomNumber) : null,
+        parkingSlot: item.parkingSlot ? sanitizeText(item.parkingSlot) : null,
+      })
+    }
+
+    if (toCreate.length === 0) {
+      return {
+        error: "No valid new flats to create. All items were duplicates or invalid.",
+        createdCount: 0,
+        skippedCount: skippedFlats.length,
+        skippedFlats,
+      }
+    }
+
+    // 4. Create flats in transaction
+    const createdRecords = await prisma.$transaction(
+      toCreate.map((data) =>
+        prisma.flat.create({
+          data,
+          include: { block: { select: { name: true } } },
+        })
+      )
+    )
+
+    // 5. Record bulk audit log
+    await recordAuditLog({
+      societyId,
+      userId: context.user.id,
+      action: "CREATE",
+      entity: "Flat",
+      description: `${context.user.email} bulk-created ${createdRecords.length} flats across ${blockIds.length} block(s).`,
+      newData: {
+        createdCount: createdRecords.length,
+        skippedCount: skippedFlats.length,
+        blocksInvolved: Array.from(new Set(createdRecords.map((r) => r.block.name))),
+      },
+    })
+
+    revalidatePath(`/society/${societyCode}/flats`)
+    revalidatePath(`/society/${societyCode}/members`)
+    revalidatePath(`/society/${societyCode}/dashboard`)
+
+    return {
+      success: true,
+      createdCount: createdRecords.length,
+      skippedCount: skippedFlats.length,
+      createdFlats: createdRecords.map((r) => ({
+        id: r.id,
+        number: r.number,
+        blockName: r.block.name,
+      })),
+      skippedFlats,
+      message: `Successfully generated ${createdRecords.length} unit(s)${skippedFlats.length > 0 ? ` (${skippedFlats.length} skipped as duplicates/invalid)` : ""}.`,
+    }
+  } catch (err: unknown) {
+    console.error("Failed to bulk create flats:", err)
+    return { error: getSafeErrorMessage(err, "Failed to bulk create flats.") }
+  }
+}
+
+/**
+ * Fetches comprehensive statement and financial ledger payload for a single flat
+ * to generate and download official PDF statement from anywhere in the UI.
+ */
+export async function getFlatStatementData(
+  societyCode: string,
+  flatId: string
+) {
+  try {
+    const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
+    const society = context.society
+
+    const flat = await prisma.flat.findFirst({
+      where: {
+        id: flatId,
+        block: { societyId: society.id },
+        deletedAt: null,
+      },
+      include: {
+        block: true,
+        people: {
+          include: { person: true },
+          orderBy: { fromDate: "desc" },
+        },
+        ownershipHistory: {
+          include: {
+            fromPerson: true,
+            toPerson: true,
+          },
+          orderBy: { transferDate: "desc" },
+        },
+        shareCertificate: true,
+        propertyLiens: {
+          orderBy: { createdAt: "desc" },
+        },
+        bills: {
+          orderBy: [{ year: "desc" }, { month: "desc" }],
+          take: 50,
+        },
+        memberDeposits: {
+          orderBy: { receivedOn: "desc" },
+        },
+      },
+    })
+
+    if (!flat) return { error: "Flat record not found." }
+
+    const flatPayments = await prisma.payment.findMany({
+      where: {
+        flatId,
+        societyId: society.id,
+      },
+      orderBy: { paidOn: "desc" },
+      take: 50,
+    })
+
+    // 1. Build combined chronological ledger
+    const allEvents: {
+      date: string
+      type: "BILL" | "PAYMENT"
+      description: string
+      refNumber: string
+      debit: number
+      credit: number
+      status: string
+    }[] = []
+
+    const monthNames = [
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ]
+
+    flat.bills.forEach((b) => {
+      const period = `${monthNames[(b.month || 1) - 1]} ${b.year}`
+      allEvents.push({
+        date: b.dueDate ? b.dueDate.toISOString() : new Date(b.year, (b.month || 1) - 1, 1).toISOString(),
+        type: "BILL",
+        description: `Maintenance Bill (${period})`,
+        refNumber: b.billNumber || "—",
+        debit: Number(b.amount),
+        credit: 0,
+        status: b.status,
+      })
+    })
+
+    flatPayments.forEach((p) => {
+      allEvents.push({
+        date: p.paidOn.toISOString(),
+        type: "PAYMENT",
+        description: `Maintenance Collection (${p.mode})`,
+        refNumber: p.receiptNumber || "—",
+        debit: 0,
+        credit: Number(p.amount),
+        status: p.status,
+      })
+    })
+
+    allEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+    let runningBalance = 0
+    const ledger = allEvents.map((evt) => {
+      runningBalance += evt.debit - evt.credit
+      return {
+        ...evt,
+        balance: runningBalance,
+      }
+    })
+
+    ledger.reverse()
+
+    const totalDemanded = flat.bills.reduce((s, b) => s + Number(b.amount), 0)
+    const totalPaid = flatPayments.filter((p) => p.status === "SUCCESS").reduce((s, p) => s + Number(p.amount), 0)
+    const unpaidBills = flat.bills.filter((b) => b.status === "PENDING" || b.status === "OVERDUE")
+    const unpaidDues = unpaidBills.reduce((s, b) => s + Number(b.amount), 0)
+    const activeDepositsTotal = flat.memberDeposits
+      .filter((d) => d.status === "HELD")
+      .reduce((s, d) => s + Number(d.amount), 0)
+
+    const owner = flat.ownershipHistory.find((h) => h.isCurrentOwner) || flat.ownershipHistory[0]
+
+    return {
+      success: true,
+      data: {
+        society: {
+          name: society.name,
+          code: society.code,
+          address: society.address,
+          city: society.city,
+          state: society.state,
+          pincode: society.pincode,
+          registrationNumber: society.registrationNumber,
+          panNumber: society.panNumber,
+          gstin: society.gstin,
+          currencySymbol: society.currencySymbol || "₹",
+        },
+        flat: {
+          number: flat.number,
+          blockName: flat.block.name,
+          floor: flat.floor,
+          unitType: flat.unitType,
+          area: flat.area ? Number(flat.area) : null,
+          areaUnit: flat.areaUnit,
+          status: flat.status,
+          parkingSlot: flat.parkingSlot,
+          intercomNumber: flat.intercomNumber,
+        },
+        currentOwner: owner
+          ? {
+              name: owner.toPerson.name,
+              fromDate: owner.fromDate.toISOString(),
+              registrationDoc: owner.registeredDocNumber,
+            }
+          : null,
+        activeOccupants: flat.people
+          .filter((p) => !p.toDate)
+          .map((p) => ({
+            name: p.person.name,
+            role: p.role,
+            phone: p.person.phone,
+            email: p.person.email,
+            fromDate: p.fromDate.toISOString(),
+          })),
+        statutory: {
+          shareCertificate: flat.shareCertificate
+            ? {
+                certificateNumber: flat.shareCertificate.certificateNumber,
+                sharesCount: flat.shareCertificate.sharesCount,
+                distinctiveRange:
+                  flat.shareCertificate.shareDistinctFrom && flat.shareCertificate.shareDistinctTo
+                    ? `${flat.shareCertificate.shareDistinctFrom} – ${flat.shareCertificate.shareDistinctTo}`
+                    : null,
+                faceValue: Number(flat.shareCertificate.faceValuePerShare) * flat.shareCertificate.sharesCount,
+                issueDate: flat.shareCertificate.issueDate.toISOString(),
+                status: flat.shareCertificate.status,
+              }
+            : null,
+          activeLiens: flat.propertyLiens
+            .filter((l) => !l.isCleared)
+            .map((l) => ({
+              bankName: l.bankName,
+              loanAccountNumber: l.loanAccountNumber,
+              sanctionAmount: l.sanctionAmount ? Number(l.sanctionAmount) : null,
+              nocReference: l.nocReference,
+            })),
+        },
+        summary: {
+          totalDemanded,
+          totalPaid,
+          currentOutstanding: unpaidDues,
+          activeDeposits: activeDepositsTotal,
+          unpaidBillsCount: unpaidBills.length,
+        },
+        ledger,
+        deposits: flat.memberDeposits.map((d) => ({
+          depositType: d.depositType,
+          amount: Number(d.amount),
+          status: d.status,
+          receivedOn: d.receivedOn.toISOString(),
+          refundedOn: d.refundedOn ? d.refundedOn.toISOString() : null,
+        })),
+      },
+    }
+  } catch (err: unknown) {
+    console.error("Failed to fetch flat statement data:", err)
+    return { error: getSafeErrorMessage(err, "Failed to generate statement data.") }
+  }
+}
+
+/**
+ * Fetches comprehensive tower/block roster data with letterhead, specs, occupants, parking, and dues
+ * for generating official Tower Directory PDF and CSV exports.
+ */
+export async function getTowerDirectoryData(
+  societyCode: string,
+  blockId: string
+) {
+  try {
+    const context = await requireCommitteeAccess(societyCode)
+    const society = context.society
+
+    const block = await prisma.block.findFirst({
+      where: {
+        id: blockId,
+        societyId: society.id,
+        deletedAt: null,
+      },
+      include: {
+        flats: {
+          where: {
+            isActive: true,
+            deletedAt: null,
+          },
+          orderBy: [
+            { floor: "asc" },
+            { number: "asc" },
+          ],
+          include: {
+            people: {
+              where: { toDate: null },
+              include: {
+                person: {
+                  select: {
+                    id: true,
+                    name: true,
+                    phone: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+            bills: {
+              select: {
+                amount: true,
+                status: true,
+                payments: {
+                  where: { status: "SUCCESS" },
+                  select: { amount: true },
+                },
+              },
+            },
+            shareCertificate: {
+              select: {
+                certificateNumber: true,
+              },
+            },
+          },
+        },
+      },
+    })
+
+    if (!block) return { error: "Block not found." }
+
+    const flatItems = block.flats.map((flat) => {
+      const primaryPerson = flat.people.find((p) => p.isPrimary) || flat.people[0]
+      const totalBilled = flat.bills.reduce((s, b) => s + Number(b.amount), 0)
+      const totalPaid = flat.bills.reduce((s, b) => {
+        const paid = b.payments.reduce((pS, p) => pS + Number(p.amount), 0)
+        return s + paid
+      }, 0)
+
+      const unpaidBills = flat.bills.filter(
+        (b) => b.status === "PENDING" || b.status === "OVERDUE" || b.status === "PARTIALLY_PAID"
+      )
+
+      const unpaidDues = unpaidBills.reduce((s, b) => {
+        const paid = b.payments.reduce((pS, p) => pS + Number(p.amount), 0)
+        return s + Math.max(0, Number(b.amount) - paid)
+      }, 0)
+
+      const isDefaulter = unpaidDues > 0 && flat.bills.some((b) => b.status === "OVERDUE")
+
+      return {
+        number: flat.number,
+        floor: flat.floor,
+        unitType: flat.unitType,
+        area: flat.area ? Number(flat.area) : null,
+        areaUnit: flat.areaUnit,
+        status: flat.status,
+        parkingSlot: flat.parkingSlot,
+        intercomNumber: flat.intercomNumber,
+        shareCertificateNumber: flat.shareCertificate?.certificateNumber || null,
+        primaryResident: primaryPerson
+          ? {
+              name: primaryPerson.person.name,
+              role: primaryPerson.role,
+              phone: primaryPerson.person.phone,
+              email: primaryPerson.person.email,
+            }
+          : null,
+        allOccupantsCount: flat.people.length,
+        unpaidDues,
+        isDefaulter,
+      }
+    })
+
+    const totalUnits = flatItems.length
+    const occupiedUnits = flatItems.filter((f) => f.status === "OCCUPIED").length
+    const vacantUnits = flatItems.filter((f) => f.status === "VACANT").length
+    const occupancyRate = totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 100) : 0
+    const totalBilled = block.flats.reduce(
+      (sum, f) => sum + f.bills.reduce((bSum, b) => bSum + Number(b.amount), 0),
+      0
+    )
+    const totalPaid = block.flats.reduce(
+      (sum, f) =>
+        sum +
+        f.bills.reduce(
+          (bSum, b) =>
+            bSum +
+            b.payments.reduce((pSum, p) => pSum + Number(p.amount), 0),
+          0
+        ),
+      0
+    )
+    const totalOutstanding = flatItems.reduce((sum, f) => sum + f.unpaidDues, 0)
+    const defaultersCount = flatItems.filter((f) => f.isDefaulter || f.unpaidDues > 0).length
+    const collectionRate = totalBilled > 0 ? Math.round((totalPaid / totalBilled) * 100) : 100
+
+    return {
+      success: true,
+      data: {
+        society: {
+          name: society.name,
+          code: society.code,
+          address: society.address,
+          city: society.city,
+          state: society.state,
+          pincode: society.pincode,
+          registrationNumber: society.registrationNumber,
+          panNumber: society.panNumber,
+          gstin: society.gstin,
+          currencySymbol: society.currencySymbol || "₹",
+        },
+        block: {
+          id: block.id,
+          name: block.name,
+          totalUnits,
+          occupiedUnits,
+          vacantUnits,
+          occupancyRate,
+          totalBilled,
+          totalPaid,
+          totalOutstanding,
+          collectionRate,
+          defaultersCount,
+        },
+        flats: flatItems,
+      },
+    }
+  } catch (err: unknown) {
+    console.error("Failed to fetch tower directory data:", err)
+    return { error: getSafeErrorMessage(err, "Failed to load tower directory data.") }
   }
 }

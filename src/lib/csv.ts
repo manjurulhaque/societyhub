@@ -46,3 +46,69 @@ export function generateSafeCsv(
   // Include UTF-8 Byte Order Mark (BOM) so Excel renders UTF-8 correctly
   return `\uFEFF${[headerLine, ...rowLines].join("\r\n")}`
 }
+
+/**
+ * Parses an RFC 4180 compliant or tab-delimited CSV/TSV text into an array of string rows.
+ * Handles quoted fields, embedded commas/newlines, and escaped quotes ("").
+ */
+export function parseCsv(text: string): string[][] {
+  if (!text || !text.trim()) return []
+
+  // Remove Byte Order Mark if present
+  let cleanText = text
+  if (cleanText.charCodeAt(0) === 0xfeff) {
+    cleanText = cleanText.slice(1)
+  }
+
+  // Detect delimiter: tab or comma or semicolon
+  const firstLine = cleanText.split(/\r\n|\n|\r/)[0] || ""
+  let delimiter = ","
+  if (firstLine.includes("\t") && !firstLine.includes(",")) {
+    delimiter = "\t"
+  } else if (firstLine.includes(";") && !firstLine.includes(",")) {
+    delimiter = ";"
+  }
+
+  const rows: string[][] = []
+  let currentRow: string[] = []
+  let currentCell = ""
+  let insideQuotes = false
+
+  for (let i = 0; i < cleanText.length; i++) {
+    const char = cleanText[i]
+    const nextChar = cleanText[i + 1]
+
+    if (char === '"') {
+      if (insideQuotes && nextChar === '"') {
+        currentCell += '"'
+        i++ // skip escaped quote
+      } else {
+        insideQuotes = !insideQuotes
+      }
+    } else if (char === delimiter && !insideQuotes) {
+      currentRow.push(currentCell.trim())
+      currentCell = ""
+    } else if ((char === "\r" || char === "\n") && !insideQuotes) {
+      if (char === "\r" && nextChar === "\n") {
+        i++ // skip \n of \r\n
+      }
+      currentRow.push(currentCell.trim())
+      currentCell = ""
+      if (currentRow.some((c) => c.length > 0)) {
+        rows.push(currentRow)
+      }
+      currentRow = []
+    } else {
+      currentCell += char
+    }
+  }
+
+  if (currentCell.length > 0 || currentRow.length > 0) {
+    currentRow.push(currentCell.trim())
+    if (currentRow.some((c) => c.length > 0)) {
+      rows.push(currentRow)
+    }
+  }
+
+  return rows
+}
