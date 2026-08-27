@@ -17,6 +17,11 @@ import {
   AreaChart,
   Area,
   ReferenceLine,
+  ComposedChart,
+  Line,
+  RadialBarChart,
+  RadialBar,
+  Treemap,
 } from "recharts"
 import {
   AdminCard,
@@ -696,6 +701,109 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
         Paid: v.totalPaidAmount,
       }))
   }, [data.vendorAging])
+
+  // Chart data for Block-by-Block Stacked Arrears & Solvency
+  const chartBlockDefaultersData = useMemo(() => {
+    const blockMap = new Map<
+      string,
+      { block: string; cleared: number; current: number; attention: number; chronic: number; total: number }
+    >()
+    for (const b of data.blocks) {
+      blockMap.set(b, { block: `Block ${b}`, cleared: 0, current: 0, attention: 0, chronic: 0, total: 0 })
+    }
+    for (const u of data.unitLedger) {
+      const entry = blockMap.get(u.blockName) || {
+        block: `Block ${u.blockName}`,
+        cleared: 0,
+        current: 0,
+        attention: 0,
+        chronic: 0,
+        total: 0,
+      }
+      entry.total += 1
+      if (u.accountStatus === "CLEAR" || u.accountStatus === "ADVANCE" || u.accountStatus === "NO_BILLS") {
+        entry.cleared += 1
+      } else {
+        const def = data.defaulters.find((d) => d.flatId === u.flatId)
+        if (def?.agingBucket === "OVER_90") {
+          entry.chronic += 1
+        } else if (def?.agingBucket === "DAYS_61_90" || def?.agingBucket === "DAYS_31_60") {
+          entry.attention += 1
+        } else {
+          entry.current += 1
+        }
+      }
+      blockMap.set(u.blockName, entry)
+    }
+    return Array.from(blockMap.values()).filter((b) => b.total > 0)
+  }, [data.blocks, data.unitLedger, data.defaulters])
+
+  // Chart data for Balance Sheet Assets vs Liabilities
+  const chartBalanceSheetData = useMemo(() => {
+    return [
+      {
+        category: "Liquid Cash & Bank",
+        Asset: data.balanceSheet.assets.liquidBankCash,
+        Liability: 0,
+      },
+      {
+        category: "Fixed Deposits (FDs)",
+        Asset: data.balanceSheet.assets.fixedDeposits,
+        Liability: 0,
+      },
+      {
+        category: "Maintenance Arrears",
+        Asset: data.balanceSheet.assets.maintenanceArrears,
+        Liability: 0,
+      },
+      {
+        category: "Fixed Assets (Net)",
+        Asset: data.balanceSheet.assets.fixedAssetsBookValue,
+        Liability: 0,
+      },
+      {
+        category: "Member Caution Deposits",
+        Asset: 0,
+        Liability: data.balanceSheet.liabilities.memberDepositsHeld,
+      },
+      {
+        category: "Vendor Payables",
+        Asset: 0,
+        Liability: data.balanceSheet.liabilities.vendorPayables,
+      },
+      {
+        category: "Advance Receipts",
+        Asset: 0,
+        Liability: data.balanceSheet.liabilities.advanceCollections,
+      },
+      {
+        category: "Sinking / Capital Reserves",
+        Asset: 0,
+        Liability: data.balanceSheet.liabilities.sinkingAndGeneralReserves,
+      },
+    ]
+  }, [data.balanceSheet])
+
+  // Chart data for Expense Treemap
+  const chartExpenseTreemapData = useMemo(() => {
+    return data.pnl.expenseHeads.map((head, idx) => ({
+      name: head.category,
+      size: head.amount,
+      fill: CHART_COLORS[idx % CHART_COLORS.length],
+    }))
+  }, [data.pnl.expenseHeads])
+
+  // Chart data for Radial Collection Gauge
+  const chartRadialRecoveryData = useMemo(() => {
+    const rate = data.summary.collectionRate || 0
+    return [
+      {
+        name: "Collection Efficiency",
+        value: Math.min(100, rate),
+        fill: rate >= 85 ? "#059669" : rate >= 60 ? "#d97706" : "#e11d48",
+      },
+    ]
+  }, [data.summary.collectionRate])
 
   // CSV Export Utility
   const handleExportCSV = (reportType: string) => {
@@ -2061,58 +2169,110 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
             </div>
           </div>
 
-          {/* Operating Cashflow Surplus / Deficit Area Trend */}
-          <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-stone-950">
-                  Operating Net Cashflow Trajectory
-                </h3>
-                <p className="text-xs text-stone-500">
-                  Monthly Surplus (Positive) vs Deficit (Negative) trend
-                </p>
+          {/* Operating Cashflow & Radial Collection Efficiency Row */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            {/* Operating Cashflow Surplus / Deficit Area Trend (2 cols) */}
+            <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm lg:col-span-2">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-stone-950">
+                    Operating Net Cashflow Trajectory
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    Monthly Surplus (Positive) vs Deficit (Negative) trend
+                  </p>
+                </div>
+              </div>
+
+              <div className="h-56 w-full min-w-0">
+                {chartMonthlyData.length === 0 ? (
+                  <div className="flex h-56 items-center justify-center text-xs text-stone-400">
+                    No cashflow trend data recorded for this period
+                  </div>
+                ) : isMounted ? (
+                  <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
+                    <AreaChart data={chartMonthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorCashflow" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#059669" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#059669" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: "#78716c" }}
+                        axisLine={{ stroke: "#e7e5e4" }}
+                        tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                      />
+                      <ReferenceLine y={0} stroke="#f43f5e" strokeDasharray="3 3" />
+                      <Tooltip
+                        formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, "Net Cashflow"]}
+                        contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="Cashflow"
+                        stroke="#059669"
+                        strokeWidth={2.5}
+                        fillOpacity={1}
+                        fill="url(#colorCashflow)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                )}
               </div>
             </div>
 
-            <div className="h-56 w-full min-w-0">
-              {chartMonthlyData.length === 0 ? (
-                <div className="flex h-56 items-center justify-center text-xs text-stone-400">
-                  No cashflow trend data recorded for this period
+            {/* Radial Collection Efficiency Gauge (1 col) */}
+            <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm flex flex-col justify-between">
+              <div className="mb-2 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-stone-950">Collection Realization Rate</h3>
+                  <p className="text-xs text-stone-500">Statutory recovery efficiency</p>
                 </div>
-              ) : isMounted ? (
-                <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
-                  <AreaChart data={chartMonthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorCashflow" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#059669" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#059669" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: "#78716c" }}
-                      axisLine={{ stroke: "#e7e5e4" }}
-                      tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
-                    />
-                    <ReferenceLine y={0} stroke="#f43f5e" strokeDasharray="3 3" />
-                    <Tooltip
-                      formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, "Net Cashflow"]}
-                      contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="Cashflow"
-                      stroke="#059669"
-                      strokeWidth={2.5}
-                      fillOpacity={1}
-                      fill="url(#colorCashflow)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
-              )}
+                <AdminBadge variant={data.summary.collectionRate >= 85 ? "success" : "warning"} size="sm">
+                  {data.summary.collectionRate >= 85 ? "Healthy" : "Attention"}
+                </AdminBadge>
+              </div>
+
+              <div className="relative flex h-48 items-center justify-center">
+                {isMounted ? (
+                  <ResponsiveContainer width="100%" height={180} minWidth={100} minHeight={100}>
+                    <RadialBarChart
+                      cx="50%"
+                      cy="60%"
+                      innerRadius="65%"
+                      outerRadius="95%"
+                      barSize={14}
+                      data={chartRadialRecoveryData}
+                      startAngle={180}
+                      endAngle={0}
+                    >
+                      <RadialBar background dataKey="value" cornerRadius={10} />
+                      <Tooltip
+                        formatter={(val: unknown) => [`${val}%`, "Recovery Rate"]}
+                        contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                      />
+                    </RadialBarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                )}
+                <div className="absolute inset-0 top-8 flex flex-col items-center justify-center">
+                  <span className="text-3xl font-black text-stone-950">{data.summary.collectionRate}%</span>
+                  <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">Realized</span>
+                </div>
+              </div>
+
+              <div className="border-t border-stone-100 pt-3 flex items-center justify-between text-xs text-stone-600">
+                <span>Target: 85%+</span>
+                <span className="font-semibold text-stone-900">
+                  {data.summary.totalPaymentsCount} of {data.summary.totalBillsCount} demands settled
+                </span>
+              </div>
             </div>
           </div>
 
@@ -2331,6 +2491,54 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
               <p className="text-[11px] text-stone-400 mt-0.5">
                 Audit Snapshot as of {formatDateInAppTimeZone(new Date().toISOString())}
               </p>
+            </div>
+
+            {/* Assets vs Liabilities Solvency Comparative Chart */}
+            <div className="mt-6 rounded-2xl border border-stone-100 bg-stone-50/50 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-stone-700">
+                    Balance Sheet Composition &amp; Solvency
+                  </span>
+                  <p className="text-[11px] text-stone-500">
+                    Comparative Asset allocations vs. Liability &amp; Reserve obligations
+                  </p>
+                </div>
+                <AdminBadge variant="neutral" size="sm">
+                  Solvency Map
+                </AdminBadge>
+              </div>
+              <div className="h-64 w-full min-w-0">
+                {isMounted ? (
+                  <ResponsiveContainer width="100%" height={240} minWidth={100} minHeight={100}>
+                    <BarChart data={chartBalanceSheetData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e7e5e4" />
+                      <XAxis
+                        type="number"
+                        tick={{ fontSize: 10, fill: "#78716c" }}
+                        axisLine={{ stroke: "#e7e5e4" }}
+                        tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="category"
+                        tick={{ fontSize: 10, fill: "#78716c" }}
+                        axisLine={{ stroke: "#e7e5e4" }}
+                        width={140}
+                      />
+                      <Tooltip
+                        formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
+                        contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: "11px" }} />
+                      <Bar dataKey="Asset" fill="#059669" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="Liability" fill="#d97706" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                )}
+              </div>
             </div>
 
             <div className="mt-8 grid grid-cols-1 gap-8 md:grid-cols-2">
@@ -2663,58 +2871,121 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
             </div>
           </div>
 
-          {/* Overdue Arrears Aging Distribution Visual */}
+          {/* 2-column Defaulters & Arrears Visuals */}
           {totalDefaulterDues > 0 && (
-            <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-stone-950">
-                    Overdue Arrears Aging Distribution
-                  </h3>
-                  <p className="text-xs text-stone-500">
-                    Visual aging curve and recovery risk concentration
-                  </p>
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              {/* 1. Aging Curve */}
+              <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-stone-950">
+                      Overdue Arrears Aging Distribution
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Visual aging curve and recovery risk concentration
+                    </p>
+                  </div>
+                  <AdminBadge variant="neutral" size="sm">
+                    Aging Analysis
+                  </AdminBadge>
                 </div>
-                <AdminBadge variant="neutral" size="sm">
-                  Aging Analysis
-                </AdminBadge>
+
+                <div className="h-56 w-full min-w-0">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
+                      <BarChart data={agingChartData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e7e5e4" />
+                        <XAxis
+                          type="number"
+                          tick={{ fontSize: 11, fill: "#78716c" }}
+                          axisLine={{ stroke: "#e7e5e4" }}
+                          tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="bucket"
+                          tick={{ fontSize: 11, fill: "#78716c" }}
+                          axisLine={{ stroke: "#e7e5e4" }}
+                          width={110}
+                        />
+                        <Tooltip
+                          formatter={(val: unknown, _name: unknown, item: { payload?: { count?: number } }) => [
+                            `${sym}${Number(val ?? 0).toLocaleString("en-IN")} (${item?.payload?.count ?? 0} units)`,
+                            "Overdue Dues",
+                          ]}
+                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                        />
+                        <Bar dataKey="amount" radius={[0, 6, 6, 0]}>
+                          {agingChartData.map((entry, index) => (
+                            <Cell key={`aging-cell-${index}`} fill={entry.fill} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                  )}
+                </div>
               </div>
 
-              <div className="h-56 w-full min-w-0">
-                {isMounted ? (
-                  <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
-                    <BarChart data={agingChartData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e7e5e4" />
-                      <XAxis
-                        type="number"
-                        tick={{ fontSize: 11, fill: "#78716c" }}
-                        axisLine={{ stroke: "#e7e5e4" }}
-                        tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
-                      />
-                      <YAxis
-                        type="category"
-                        dataKey="bucket"
-                        tick={{ fontSize: 11, fill: "#78716c" }}
-                        axisLine={{ stroke: "#e7e5e4" }}
-                        width={110}
-                      />
-                      <Tooltip
-                        formatter={(val: unknown, _name: unknown, item: { payload?: { count?: number } }) => [
-                          `${sym}${Number(val ?? 0).toLocaleString("en-IN")} (${item?.payload?.count ?? 0} units)`,
-                          "Overdue Dues",
-                        ]}
-                        contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                      />
-                      <Bar dataKey="amount" radius={[0, 6, 6, 0]}>
-                        {agingChartData.map((entry, index) => (
-                          <Cell key={`aging-cell-${index}`} fill={entry.fill} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
-                )}
+              {/* 2. Block-by-Block Stacked Arrears & Solvency */}
+              <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-stone-950">
+                      Block / Wing Solvency &amp; Arrears
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Unit payment standing across residential blocks
+                    </p>
+                  </div>
+                  <AdminBadge variant="neutral" size="sm">
+                    Block Analysis
+                  </AdminBadge>
+                </div>
+
+                <div className="h-56 w-full min-w-0">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
+                      <BarChart data={chartBlockDefaultersData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                        <XAxis dataKey="block" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                        <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                        <Tooltip
+                          formatter={(val: unknown, name: unknown) => [
+                            `${val} flats`,
+                            name === "cleared"
+                              ? "Cleared / No Dues"
+                              : name === "current"
+                                ? "0-30d Current"
+                                : name === "attention"
+                                  ? "31-60d Overdue"
+                                  : ">60d Chronic Overdue",
+                          ]}
+                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                        />
+                        <Legend
+                          formatter={(val) =>
+                            val === "cleared"
+                              ? "Cleared"
+                              : val === "current"
+                                ? "0-30d"
+                                : val === "attention"
+                                  ? "31-60d"
+                                  : ">60d Chronic"
+                          }
+                          wrapperStyle={{ fontSize: "11px", paddingTop: "4px" }}
+                        />
+                        <Bar dataKey="cleared" stackId="a" fill="#059669" />
+                        <Bar dataKey="current" stackId="a" fill="#0284c7" />
+                        <Bar dataKey="attention" stackId="a" fill="#f59e0b" />
+                        <Bar dataKey="chronic" stackId="a" fill="#e11d48" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -3420,46 +3691,112 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
             {data.monthlyTrends.length === 0 ? (
               <p className="py-6 text-center text-xs text-stone-500">No monthly billing trends available.</p>
             ) : (
-              <AdminTable
-                headers={[
-                  "Billing Period",
-                  "Invoices Issued",
-                  "Billed Demand",
-                  "Collections Realized",
-                  "Recovery Rate",
-                  "Operational Expenses",
-                  "Net Monthly Cashflow",
-                ]}
-                rows={data.monthlyTrends.map((trend) => (
-                  <tr key={trend.key} className="border-t border-stone-100 hover:bg-stone-50/60">
-                    <td className="px-4 py-3.5 font-bold text-xs text-stone-950">{trend.label}</td>
-                    <td className="px-4 py-3.5 text-xs text-stone-600">{trend.billedCount} invoice(s)</td>
-                    <td className="px-4 py-3.5 text-xs font-semibold text-stone-900">
-                      {sym}{trend.billedAmount.toLocaleString("en-IN")}
-                    </td>
-                    <td className="px-4 py-3.5 text-xs font-bold text-emerald-700">
-                      {sym}{trend.collectedAmount.toLocaleString("en-IN")}
-                      <span className="block text-[10px] text-stone-400 font-normal">{trend.collectedCount} receipt(s)</span>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <AdminBadge
-                        variant={trend.collectionRate >= 80 ? "success" : trend.collectionRate >= 50 ? "warning" : "danger"}
-                        size="sm"
-                      >
-                        {trend.collectionRate}%
-                      </AdminBadge>
-                    </td>
-                    <td className="px-4 py-3.5 text-xs font-semibold text-amber-700">
-                      {sym}{trend.expenseAmount.toLocaleString("en-IN")}
-                    </td>
-                    <td className="px-4 py-3.5 text-xs font-extrabold">
-                      <span className={trend.netCashflow >= 0 ? "text-emerald-700" : "text-rose-700"}>
-                        {trend.netCashflow >= 0 ? "+" : ""}{sym}{trend.netCashflow.toLocaleString("en-IN")}
+              <div className="space-y-6">
+                <div className="rounded-2xl border border-stone-100 bg-stone-50/50 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-stone-700">
+                        Monthly Demands, Collections &amp; Realization Rate
                       </span>
-                    </td>
-                  </tr>
-                ))}
-              />
+                      <p className="text-[11px] text-stone-500">
+                        Billing &amp; Collection volume (Left Axis) vs. Realization Rate % (Right Axis)
+                      </p>
+                    </div>
+                    <AdminBadge variant="neutral" size="sm">
+                      Dual-Axis Trend
+                    </AdminBadge>
+                  </div>
+                  <div className="h-64 w-full min-w-0">
+                    {isMounted ? (
+                      <ResponsiveContainer width="100%" height={240} minWidth={100} minHeight={100}>
+                        <ComposedChart data={data.monthlyTrends} margin={{ top: 10, right: 15, left: 0, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                          <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                          <YAxis
+                            yAxisId="left"
+                            tick={{ fontSize: 11, fill: "#78716c" }}
+                            axisLine={{ stroke: "#e7e5e4" }}
+                            tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                          />
+                          <YAxis
+                            yAxisId="right"
+                            orientation="right"
+                            domain={[0, 100]}
+                            tick={{ fontSize: 11, fill: "#2563eb" }}
+                            axisLine={{ stroke: "#e7e5e4" }}
+                            tickFormatter={(val) => `${val}%`}
+                          />
+                          <Tooltip
+                            formatter={(val: unknown, name: unknown) => [
+                              String(name) === "Collection Rate (%)"
+                                ? `${val}%`
+                                : `${sym}${Number(val ?? 0).toLocaleString("en-IN")}`,
+                              String(name),
+                            ]}
+                            contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "4px" }} />
+                          <Bar yAxisId="left" dataKey="billedAmount" name="Billed Demand" fill="#1c1917" radius={[4, 4, 0, 0]} />
+                          <Bar yAxisId="left" dataKey="collectedAmount" name="Collections Realized" fill="#059669" radius={[4, 4, 0, 0]} />
+                          <Bar yAxisId="left" dataKey="expenseAmount" name="Expenses" fill="#d97706" radius={[4, 4, 0, 0]} />
+                          <Line
+                            yAxisId="right"
+                            type="monotone"
+                            dataKey="collectionRate"
+                            name="Collection Rate (%)"
+                            stroke="#2563eb"
+                            strokeWidth={3}
+                            dot={{ r: 4, fill: "#2563eb" }}
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                    )}
+                  </div>
+                </div>
+
+                <AdminTable
+                  headers={[
+                    "Billing Period",
+                    "Invoices Issued",
+                    "Billed Demand",
+                    "Collections Realized",
+                    "Recovery Rate",
+                    "Operational Expenses",
+                    "Net Monthly Cashflow",
+                  ]}
+                  rows={data.monthlyTrends.map((trend) => (
+                    <tr key={trend.key} className="border-t border-stone-100 hover:bg-stone-50/60">
+                      <td className="px-4 py-3.5 font-bold text-xs text-stone-950">{trend.label}</td>
+                      <td className="px-4 py-3.5 text-xs text-stone-600">{trend.billedCount} invoice(s)</td>
+                      <td className="px-4 py-3.5 text-xs font-semibold text-stone-900">
+                        {sym}{trend.billedAmount.toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-4 py-3.5 text-xs font-bold text-emerald-700">
+                        {sym}{trend.collectedAmount.toLocaleString("en-IN")}
+                        <span className="block text-[10px] text-stone-400 font-normal">{trend.collectedCount} receipt(s)</span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <AdminBadge
+                          variant={trend.collectionRate >= 80 ? "success" : trend.collectionRate >= 50 ? "warning" : "danger"}
+                          size="sm"
+                        >
+                          {trend.collectionRate}%
+                        </AdminBadge>
+                      </td>
+                      <td className="px-4 py-3.5 text-xs font-semibold text-amber-700">
+                        {sym}{trend.expenseAmount.toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-4 py-3.5 text-xs font-extrabold">
+                        <span className={trend.netCashflow >= 0 ? "text-emerald-700" : "text-rose-700"}>
+                          {trend.netCashflow >= 0 ? "+" : ""}{sym}{trend.netCashflow.toLocaleString("en-IN")}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                />
+              </div>
             )}
           </AdminCard>
         </div>
@@ -3508,6 +3845,45 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                         <Bar dataKey="Income" fill="#059669" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="Expense" fill="#d97706" radius={[4, 4, 0, 0]} />
                       </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Expenditure Categories Proportional Treemap */}
+            {chartExpenseTreemapData.length > 0 && (
+              <div className="mt-6 rounded-2xl border border-stone-100 bg-stone-50/50 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-stone-700">
+                      Operational Expenditure Category Weights (Treemap)
+                    </span>
+                    <p className="text-[11px] text-stone-500">
+                      Proportional visual mapping of major operational cost centers
+                    </p>
+                  </div>
+                  <AdminBadge variant="neutral" size="sm">
+                    {data.pnl.expenseHeads.length} Heads
+                  </AdminBadge>
+                </div>
+                <div className="h-52 w-full min-w-0">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height={200} minWidth={100} minHeight={100}>
+                      <Treemap
+                        data={chartExpenseTreemapData}
+                        dataKey="size"
+                        aspectRatio={4 / 3}
+                        stroke="#fff"
+                        fill="#78716c"
+                      >
+                        <Tooltip
+                          formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, "Expense"]}
+                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                        />
+                      </Treemap>
                     </ResponsiveContainer>
                   ) : (
                     <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
