@@ -596,6 +596,61 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
     }))
   }, [data.budgetVariance])
 
+  // Chart data for special assessment schemes
+  const chartCampaignsData = useMemo(() => {
+    return data.oneTimeFunds.campaigns.map((c) => ({
+      name: c.title,
+      Target: c.totalTargetAmount,
+      Collected: c.totalCollectedAmount,
+      Outstanding: c.totalOutstandingAmount,
+      rate: c.realizationRate,
+    }))
+  }, [data.oneTimeFunds.campaigns])
+
+  // Chart data for member deposits distribution
+  const chartDepositsTypeData = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const d of data.oneTimeFunds.deposits) {
+      const typeName = d.depositType.replace(/_/g, " ")
+      map.set(typeName, (map.get(typeName) || 0) + Number(d.amount))
+    }
+    return Array.from(map.entries()).map(([name, value]) => ({
+      name,
+      value,
+    }))
+  }, [data.oneTimeFunds.deposits])
+
+  // Chart data for cheque clearing status
+  const chartChequesStatusData = useMemo(() => {
+    const statusCounts = {
+      CLEARED: { name: "Cleared", value: 0, count: 0, fill: "#059669" },
+      IN_CLEARING: { name: "In Clearing", value: 0, count: 0, fill: "#d97706" },
+      BOUNCED: { name: "Bounced", value: 0, count: 0, fill: "#e11d48" },
+      OTHER: { name: "Other", value: 0, count: 0, fill: "#78716c" },
+    }
+    for (const c of data.cheques) {
+      const key = c.status === "CLEARED" || c.status === "BOUNCED" || c.status === "IN_CLEARING" ? c.status : "OTHER"
+      statusCounts[key].value += Number(c.amount)
+      statusCounts[key].count += 1
+    }
+    return Object.values(statusCounts).filter((s) => s.count > 0)
+  }, [data.cheques])
+
+  // Chart data for Income vs Expense P&L comparison
+  const chartPnlComparisonData = useMemo(() => {
+    const topIncomes = [...data.pnl.incomeHeads]
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 4)
+      .map((i) => ({ name: i.category, Income: i.amount, Expense: 0 }))
+
+    const topExpenses = [...data.pnl.expenseHeads]
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 4)
+      .map((e) => ({ name: e.category, Income: 0, Expense: e.amount }))
+
+    return [...topIncomes, ...topExpenses]
+  }, [data.pnl.incomeHeads, data.pnl.expenseHeads])
+
   // CSV Export Utility
   const handleExportCSV = (reportType: string) => {
     let headers: string[] = []
@@ -1453,6 +1508,50 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                 </AdminCard>
               ) : (
                 <>
+                  {/* Schemes Capital Realization Visual Overview */}
+                  {chartCampaignsData.length > 0 && (
+                    <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+                      <div className="mb-3 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-bold text-stone-950">
+                            Special Assessment Schemes Capital Realization
+                          </h3>
+                          <p className="text-xs text-stone-500">
+                            Target goals vs. realized collections vs. pending balances across schemes
+                          </p>
+                        </div>
+                        <AdminBadge variant="neutral" size="sm">
+                          {chartCampaignsData.length} Schemes
+                        </AdminBadge>
+                      </div>
+                      <div className="h-56 w-full min-w-0">
+                        {isMounted ? (
+                          <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
+                            <BarChart data={chartCampaignsData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                              <YAxis
+                                tick={{ fontSize: 11, fill: "#78716c" }}
+                                axisLine={{ stroke: "#e7e5e4" }}
+                                tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                              />
+                              <Tooltip
+                                formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
+                                contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                              />
+                              <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "4px" }} />
+                              <Bar dataKey="Target" fill="#1c1917" radius={[4, 4, 0, 0]} />
+                              <Bar dataKey="Collected" fill="#059669" radius={[4, 4, 0, 0]} />
+                              <Bar dataKey="Outstanding" fill="#e11d48" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Campaign Selector & Overview Card */}
                   <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm space-y-6">
                     <div className="flex flex-wrap items-center justify-between gap-4 border-b border-stone-100 pb-4">
@@ -1689,6 +1788,53 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                   />
                 </div>
               </div>
+
+              {/* Member Deposits Distribution Donut */}
+              {chartDepositsTypeData.length > 0 && (
+                <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-stone-950">
+                        Member Deposits & Corpus Allocation
+                      </h3>
+                      <p className="text-xs text-stone-500">
+                        Capital distribution across Corpus, Security, and Fit-out liabilities
+                      </p>
+                    </div>
+                    <AdminBadge variant="neutral" size="sm">
+                      {sym}{data.oneTimeFunds.totalDepositsHeld.toLocaleString("en-IN")} Total
+                    </AdminBadge>
+                  </div>
+                  <div className="h-44 w-full min-w-0">
+                    {isMounted ? (
+                      <ResponsiveContainer width="100%" height={170} minWidth={100} minHeight={100}>
+                        <PieChart>
+                          <Pie
+                            data={chartDepositsTypeData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={38}
+                            outerRadius={62}
+                            paddingAngle={3}
+                            dataKey="value"
+                          >
+                            {chartDepositsTypeData.map((_, index) => (
+                              <Cell key={`dep-cell-${index}`} fill={CHART_COLORS[(index + 3) % CHART_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
+                            contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: "11px" }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                    )}
+                  </div>
+                </div>
+              )}
 
               <AdminCard
                 title={`Member Deposits & Corpus Fund Register (${filteredMemberDeposits.length} Records)`}
@@ -2993,6 +3139,72 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
             </div>
           </div>
 
+          {/* Cheque Clearing Realization Donut */}
+          {chartChequesStatusData.length > 0 && (
+            <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-stone-950">
+                    Cheque Clearing & Realization Status
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    Instrument realization, clearing pipeline, and bounce rate tracking
+                  </p>
+                </div>
+                <AdminBadge variant="neutral" size="sm">
+                  {data.cheques.length} Instruments
+                </AdminBadge>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-3 items-center">
+                <div className="h-44 w-full min-w-0 md:col-span-1">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height={170} minWidth={100} minHeight={100}>
+                      <PieChart>
+                        <Pie
+                          data={chartChequesStatusData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={38}
+                          outerRadius={62}
+                          paddingAngle={3}
+                          dataKey="value"
+                        >
+                          {chartChequesStatusData.map((entry, index) => (
+                            <Cell key={`cheque-cell-${index}`} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
+                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 md:col-span-2 sm:grid-cols-3">
+                  {chartChequesStatusData.map((item) => (
+                    <div key={item.name} className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: item.fill }} />
+                          <span className="text-xs font-bold text-stone-900">{item.name}</span>
+                        </div>
+                        <AdminBadge variant="neutral" size="sm">{item.count}</AdminBadge>
+                      </div>
+                      <p className="mt-2 text-base font-extrabold text-stone-950">
+                        {sym}{item.value.toLocaleString("en-IN")}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           <AdminCard
             title={`Bank Cheque Register (${filteredCheques.length} Instruments)`}
             description="Inward member receipts and outward vendor payment cheques tracking"
@@ -3120,6 +3332,44 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                 Statement of Income & Expenditure
               </p>
             </div>
+
+            {/* Income vs Expense Statement Overview BarChart */}
+            {chartPnlComparisonData.length > 0 && (
+              <div className="mt-6 rounded-2xl border border-stone-100 bg-stone-50/50 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-stone-700">
+                    Key Revenue Sources vs. Operating Cost Heads
+                  </span>
+                  <AdminBadge variant="neutral" size="sm">
+                    Statement Snapshot
+                  </AdminBadge>
+                </div>
+                <div className="h-56 w-full min-w-0">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
+                      <BarChart data={chartPnlComparisonData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                        <YAxis
+                          tick={{ fontSize: 11, fill: "#78716c" }}
+                          axisLine={{ stroke: "#e7e5e4" }}
+                          tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                        />
+                        <Tooltip
+                          formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
+                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "4px" }} />
+                        <Bar dataKey="Income" fill="#059669" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Expense" fill="#d97706" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="mt-6 grid grid-cols-1 gap-8 md:grid-cols-2">
               {/* INCOME */}
