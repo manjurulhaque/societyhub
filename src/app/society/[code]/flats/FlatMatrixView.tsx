@@ -238,11 +238,11 @@ export function FlatMatrixView({
       {/* Tower Selection & Color Mode Bar */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between rounded-2xl border border-stone-200 bg-white p-4 shadow-xs">
         {/* Block Selector Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <button
             type="button"
             onClick={() => setSelectedBlockId("ALL")}
-            className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap transition ${
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
               selectedBlockId === "ALL"
                 ? "bg-stone-900 text-white shadow-xs"
                 : "bg-stone-100 text-stone-600 hover:bg-stone-200"
@@ -258,7 +258,7 @@ export function FlatMatrixView({
                 key={b.id}
                 type="button"
                 onClick={() => setSelectedBlockId(b.id)}
-                className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap transition ${
+                className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
                   selectedBlockId === b.id
                     ? "bg-stone-900 text-white shadow-xs"
                     : "bg-stone-100 text-stone-600 hover:bg-stone-200"
