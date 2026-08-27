@@ -2,8 +2,12 @@
 
 import { useState, useTransition } from "react"
 import { AdminBadge } from "@/components/admin"
-import { createBlock, updateBlock, deleteBlock, batchUpdateBlockPrefix } from "./actions"
+import { createBlock, updateBlock, deleteBlock, batchUpdateBlockPrefix, getTowerDirectoryData } from "./actions"
 import type { BlockOption } from "./AddFlatModal"
+import {
+  generateTowerDirectoryPDF,
+  exportTowerDirectoryCSV,
+} from "@/lib/pdf/towerDirectoryPdfGenerator"
 
 export type BlockFinancialScorecard = {
   totalBilled: number
@@ -41,11 +45,44 @@ export function ManageBlocksModal({
   const [editingName, setEditingName] = useState("")
   const [newBlockName, setNewBlockName] = useState("")
   const [isAddingNew, setIsAddingNew] = useState(false)
+  const [downloadingBlockId, setDownloadingBlockId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   if (!isOpen) return null
+
+  const handleExportPDF = async (blockId: string) => {
+    try {
+      setDownloadingBlockId(blockId)
+      const res = await getTowerDirectoryData(societyCode, blockId)
+      if (res.error || !res.data) {
+        setError(res.error || "Failed to load tower directory.")
+        return
+      }
+      generateTowerDirectoryPDF(res.data)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to generate PDF.")
+    } finally {
+      setDownloadingBlockId(null)
+    }
+  }
+
+  const handleExportCSV = async (blockId: string) => {
+    try {
+      setDownloadingBlockId(blockId)
+      const res = await getTowerDirectoryData(societyCode, blockId)
+      if (res.error || !res.data) {
+        setError(res.error || "Failed to load tower roster.")
+        return
+      }
+      exportTowerDirectoryCSV(res.data)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to export CSV.")
+    } finally {
+      setDownloadingBlockId(null)
+    }
+  }
 
   const handleBatchPrefix = (newPrefix: "Wing" | "Tower" | "Block" | "Building") => {
     if (!confirm(`Are you sure you want to change the prefix of all ${blocks.length} block(s) to "${newPrefix}" (e.g. ${newPrefix} A, ${newPrefix} B)?`)) {
@@ -400,6 +437,32 @@ export function ManageBlocksModal({
                         >
                           {block.isActive !== false ? "Active" : "Inactive"}
                         </AdminBadge>
+
+                        {count > 0 && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleExportPDF(block.id)}
+                              disabled={downloadingBlockId === block.id}
+                              className="inline-flex items-center gap-1 rounded-xl border border-stone-200 bg-white px-2 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-950 transition disabled:opacity-50"
+                              title="Download official PDF Roster"
+                            >
+                              <span>{downloadingBlockId === block.id ? "⏳" : "📄"}</span>
+                              <span>PDF</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleExportCSV(block.id)}
+                              disabled={downloadingBlockId === block.id}
+                              className="inline-flex items-center gap-1 rounded-xl border border-stone-200 bg-white px-2 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-950 transition disabled:opacity-50"
+                              title="Download CSV Spreadsheet"
+                            >
+                              <span>📊</span>
+                              <span>CSV</span>
+                            </button>
+                          </div>
+                        )}
 
                         <button
                           type="button"

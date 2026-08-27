@@ -1356,4 +1356,169 @@ export async function getFlatStatementData(
   }
 }
 
+/**
+ * Fetches comprehensive tower/block roster data with letterhead, specs, occupants, parking, and dues
+ * for generating official Tower Directory PDF and CSV exports.
+ */
+export async function getTowerDirectoryData(
+  societyCode: string,
+  blockId: string
+) {
+  try {
+    const context = await requireCommitteeAccess(societyCode)
+    const society = context.society
 
+    const block = await prisma.block.findFirst({
+      where: {
+        id: blockId,
+        societyId: society.id,
+        deletedAt: null,
+      },
+      include: {
+        flats: {
+          where: {
+            isActive: true,
+            deletedAt: null,
+          },
+          orderBy: [
+            { floor: "asc" },
+            { number: "asc" },
+          ],
+          include: {
+            people: {
+              where: { toDate: null },
+              include: {
+                person: {
+                  select: {
+                    id: true,
+                    name: true,
+                    phone: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+            bills: {
+              select: {
+                amount: true,
+                status: true,
+                payments: {
+                  where: { status: "SUCCESS" },
+                  select: { amount: true },
+                },
+              },
+            },
+            shareCertificate: {
+              select: {
+                certificateNumber: true,
+              },
+            },
+          },
+        },
+      },
+    })
+
+    if (!block) return { error: "Block not found." }
+
+    const flatItems = block.flats.map((flat) => {
+      const primaryPerson = flat.people.find((p) => p.isPrimary) || flat.people[0]
+      const totalBilled = flat.bills.reduce((s, b) => s + Number(b.amount), 0)
+      const totalPaid = flat.bills.reduce((s, b) => {
+        const paid = b.payments.reduce((pS, p) => pS + Number(p.amount), 0)
+        return s + paid
+      }, 0)
+
+      const unpaidBills = flat.bills.filter(
+        (b) => b.status === "PENDING" || b.status === "OVERDUE" || b.status === "PARTIALLY_PAID"
+      )
+
+      const unpaidDues = unpaidBills.reduce((s, b) => {
+        const paid = b.payments.reduce((pS, p) => pS + Number(p.amount), 0)
+        return s + Math.max(0, Number(b.amount) - paid)
+      }, 0)
+
+      const isDefaulter = unpaidDues > 0 && flat.bills.some((b) => b.status === "OVERDUE")
+
+      return {
+        number: flat.number,
+        floor: flat.floor,
+        unitType: flat.unitType,
+        area: flat.area ? Number(flat.area) : null,
+        areaUnit: flat.areaUnit,
+        status: flat.status,
+        parkingSlot: flat.parkingSlot,
+        intercomNumber: flat.intercomNumber,
+        shareCertificateNumber: flat.shareCertificate?.certificateNumber || null,
+        primaryResident: primaryPerson
+          ? {
+              name: primaryPerson.person.name,
+              role: primaryPerson.role,
+              phone: primaryPerson.person.phone,
+              email: primaryPerson.person.email,
+            }
+          : null,
+        allOccupantsCount: flat.people.length,
+        unpaidDues,
+        isDefaulter,
+      }
+    })
+
+    const totalUnits = flatItems.length
+    const occupiedUnits = flatItems.filter((f) => f.status === "OCCUPIED").length
+    const vacantUnits = flatItems.filter((f) => f.status === "VACANT").length
+    const occupancyRate = totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 100) : 0
+    const totalBilled = block.flats.reduce(
+      (sum, f) => sum + f.bills.reduce((bSum, b) => bSum + Number(b.amount), 0),
+      0
+    )
+    const totalPaid = block.flats.reduce(
+      (sum, f) =>
+        sum +
+        f.bills.reduce(
+          (bSum, b) =>
+            bSum +
+            b.payments.reduce((pSum, p) => pSum + Number(p.amount), 0),
+          0
+        ),
+      0
+    )
+    const totalOutstanding = flatItems.reduce((sum, f) => sum + f.unpaidDues, 0)
+    const defaultersCount = flatItems.filter((f) => f.isDefaulter || f.unpaidDues > 0).length
+    const collectionRate = totalBilled > 0 ? Math.round((totalPaid / totalBilled) * 100) : 100
+
+    return {
+      success: true,
+      data: {
+        society: {
+          name: society.name,
+          code: society.code,
+          address: society.address,
+          city: society.city,
+          state: society.state,
+          pincode: society.pincode,
+          registrationNumber: society.registrationNumber,
+          panNumber: society.panNumber,
+          gstin: society.gstin,
+          currencySymbol: society.currencySymbol || "₹",
+        },
+        block: {
+          id: block.id,
+          name: block.name,
+          totalUnits,
+          occupiedUnits,
+          vacantUnits,
+          occupancyRate,
+          totalBilled,
+          totalPaid,
+          totalOutstanding,
+          collectionRate,
+          defaultersCount,
+        },
+        flats: flatItems,
+      },
+    }
+  } catch (err: unknown) {
+    console.error("Failed to fetch tower directory data:", err)
+    return { error: getSafeErrorMessage(err, "Failed to load tower directory data.") }
+  }
+}

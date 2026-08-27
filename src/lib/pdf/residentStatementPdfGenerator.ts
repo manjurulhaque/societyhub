@@ -14,6 +14,8 @@ export type SocietyLetterheadInfo = {
   panNumber?: string | null
   gstin?: string | null
   currencySymbol?: string
+  email?: string | null
+  phone?: string | null
 }
 
 export type ResidentStatementData = {

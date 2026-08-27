@@ -4,6 +4,11 @@ import { useState, useMemo } from "react"
 import { AdminBadge } from "@/components/admin"
 import type { FlatListItem } from "./FlatsClientView"
 import type { BlockOption } from "./AddFlatModal"
+import { getTowerDirectoryData } from "./actions"
+import {
+  generateTowerDirectoryPDF,
+  exportTowerDirectoryCSV,
+} from "@/lib/pdf/towerDirectoryPdfGenerator"
 
 export type ColorMode = "occupancy" | "tenancy" | "dues" | "config"
 
@@ -30,6 +35,39 @@ export function FlatMatrixView({
 }: FlatMatrixViewProps) {
   const [selectedBlockId, setSelectedBlockId] = useState<string>(blocks[0]?.id || "ALL")
   const [colorMode, setColorMode] = useState<ColorMode>("occupancy")
+  const [downloadingTowerId, setDownloadingTowerId] = useState<string | null>(null)
+
+  const handleExportPDF = async (blockId: string) => {
+    try {
+      setDownloadingTowerId(blockId)
+      const res = await getTowerDirectoryData(societyCode, blockId)
+      if (res.error || !res.data) {
+        alert(res.error || "Failed to load tower directory data.")
+        return
+      }
+      generateTowerDirectoryPDF(res.data)
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to generate tower directory PDF.")
+    } finally {
+      setDownloadingTowerId(null)
+    }
+  }
+
+  const handleExportCSV = async (blockId: string) => {
+    try {
+      setDownloadingTowerId(blockId)
+      const res = await getTowerDirectoryData(societyCode, blockId)
+      if (res.error || !res.data) {
+        alert(res.error || "Failed to load tower roster data.")
+        return
+      }
+      exportTowerDirectoryCSV(res.data)
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to export tower roster CSV.")
+    } finally {
+      setDownloadingTowerId(null)
+    }
+  }
 
   // Filter flats by search query
   const filteredFlats = useMemo(() => {
@@ -476,6 +514,31 @@ export function FlatMatrixView({
                         <span>Rename / Edit</span>
                       </button>
                     )}
+
+                    {/* Export Directory Buttons */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleExportPDF(block.id)}
+                        disabled={downloadingTowerId === block.id}
+                        className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-950 transition disabled:opacity-50"
+                        title="Download official print-ready PDF Directory"
+                      >
+                        <span>{downloadingTowerId === block.id ? "⏳" : "📄"}</span>
+                        <span>PDF Directory</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleExportCSV(block.id)}
+                        disabled={downloadingTowerId === block.id}
+                        className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-950 transition disabled:opacity-50"
+                        title="Export CSV / Excel Roster"
+                      >
+                        <span>📊</span>
+                        <span>CSV</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
