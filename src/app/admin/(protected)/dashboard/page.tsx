@@ -54,7 +54,15 @@ export default async function DashboardPage() {
       take: 6,
       include: {
         _count: {
-          select: { blocks: true, people: true, members: true, flats: true },
+          select: { blocks: true, people: true, members: true },
+        },
+        blocks: {
+          where: { isActive: true, deletedAt: null },
+          select: {
+            _count: {
+              select: { flats: true },
+            },
+          },
         },
       },
     }),
@@ -119,7 +127,7 @@ export default async function DashboardPage() {
   const societyScaleData = recentSocieties.map((s) => ({
     name: s.name,
     code: s.code,
-    flatsCount: s._count.flats,
+    flatsCount: s.blocks.reduce((acc, b) => acc + b._count.flats, 0),
     membersCount: s._count.members,
     blocksCount: s._count.blocks,
   }))
