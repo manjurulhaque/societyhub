@@ -68,6 +68,87 @@ const CHART_COLORS = [
   "#4b5563",
 ]
 
+interface CustomChartTooltipProps {
+  active?: boolean
+  payload?: Array<{
+    name?: string
+    value?: number | string
+    color?: string
+    fill?: string
+    dataKey?: string
+    payload?: Record<string, unknown>
+  }>
+  label?: string
+  currencySymbol?: string
+  unitLabel?: string
+  showPercentage?: boolean
+  interactiveHint?: string
+}
+
+function ReportCustomTooltip({
+  active,
+  payload,
+  label,
+  currencySymbol = "₹",
+  unitLabel,
+  showPercentage,
+  interactiveHint,
+}: CustomChartTooltipProps) {
+  if (!active || !payload || payload.length === 0) return null
+
+  return (
+    <div className="min-w-[170px] max-w-[290px] rounded-2xl border border-stone-800/90 bg-stone-950/95 p-3.5 text-white shadow-2xl backdrop-blur-md">
+      {label && (
+        <div className="mb-2 border-b border-stone-800 pb-1.5 flex items-center justify-between">
+          <span className="text-xs font-bold text-stone-200">{label}</span>
+        </div>
+      )}
+      <div className="space-y-1.5">
+        {payload.map((item, idx) => {
+          const itemColor = item.color || item.fill || "#38bdf8"
+          const valNum = typeof item.value === "number" ? item.value : Number(item.value ?? 0)
+          const p = (item.payload || {}) as Record<string, unknown>
+          const percentage = typeof p.percentage === "number" ? p.percentage : undefined
+          const count = typeof p.count === "number" ? p.count : undefined
+          const isCurrency = !unitLabel && typeof item.value === "number"
+
+          return (
+            <div key={idx} className="flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: itemColor }} />
+                <span className="text-stone-300 font-medium truncate">{item.name || "Value"}</span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="font-bold text-stone-50 font-mono">
+                  {unitLabel
+                    ? `${valNum.toLocaleString("en-IN")} ${unitLabel}`
+                    : isCurrency
+                      ? `${currencySymbol}${valNum.toLocaleString("en-IN")}`
+                      : `${item.value}`}
+                </span>
+                {showPercentage && percentage !== undefined && (
+                  <span className="rounded bg-stone-800 px-1 py-0.5 text-[10px] font-semibold text-emerald-400">
+                    {percentage}%
+                  </span>
+                )}
+                {count !== undefined && !showPercentage && (
+                  <span className="text-[10px] text-stone-400">({count})</span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {interactiveHint && (
+        <div className="mt-2.5 border-t border-stone-800 pt-1.5 text-[10px] text-amber-300/90 flex items-center gap-1">
+          <span>👆</span>
+          <span>{interactiveHint}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export type SocietyReportData = {
   society: {
     id: string
@@ -1704,10 +1785,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                                 axisLine={{ stroke: "#e7e5e4" }}
                                 tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
                               />
-                              <Tooltip
-                                formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")} — Click to view scheme`, ""]}
-                                contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                              />
+                              <Tooltip content={<ReportCustomTooltip currencySymbol={sym} interactiveHint="Click to view scheme" />} />
                               <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "4px" }} />
                               <Bar dataKey="Target" fill="#1c1917" radius={[4, 4, 0, 0]} cursor="pointer" />
                               <Bar dataKey="Collected" fill="#059669" radius={[4, 4, 0, 0]} cursor="pointer" />
@@ -2015,13 +2093,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                               )
                             })}
                           </Pie>
-                          <Tooltip
-                            formatter={(val: unknown) => [
-                              `${sym}${Number(val ?? 0).toLocaleString("en-IN")} — Click to filter`,
-                              "",
-                            ]}
-                            contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                          />
+                          <Tooltip content={<ReportCustomTooltip currencySymbol={sym} showPercentage interactiveHint="Click to filter by deposit type" />} />
                           <Legend wrapperStyle={{ fontSize: "11px" }} />
                         </PieChart>
                       </ResponsiveContainer>
@@ -2149,10 +2221,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                         axisLine={{ stroke: "#e7e5e4" }}
                         tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
                       />
-                      <Tooltip
-                        formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
-                        contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                      />
+                      <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
                       <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
                       <Bar dataKey="Billed" fill="#1c1917" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="Collected" fill="#059669" radius={[4, 4, 0, 0]} />
@@ -2196,10 +2265,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                             <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip
-                          formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
-                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                        />
+                        <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
                         <Legend wrapperStyle={{ fontSize: "11px" }} />
                       </PieChart>
                     </ResponsiveContainer>
@@ -2248,10 +2314,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                         tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
                       />
                       <ReferenceLine y={0} stroke="#f43f5e" strokeDasharray="3 3" />
-                      <Tooltip
-                        formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, "Net Cashflow"]}
-                        contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                      />
+                      <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
                       <Area
                         type="monotone"
                         dataKey="Cashflow"
@@ -2294,10 +2357,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                       endAngle={0}
                     >
                       <RadialBar background dataKey="value" cornerRadius={10} />
-                      <Tooltip
-                        formatter={(val: unknown) => [`${val}%`, "Recovery Rate"]}
-                        contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                      />
+                      <Tooltip content={<ReportCustomTooltip unitLabel="%" />} />
                     </RadialBarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -2346,10 +2406,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                               <Cell key={`bill-cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip
-                            formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
-                            contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                          />
+                          <Tooltip content={<ReportCustomTooltip currencySymbol={sym} showPercentage />} />
                           <Legend wrapperStyle={{ fontSize: "11px" }} />
                         </PieChart>
                       </ResponsiveContainer>
@@ -2445,10 +2502,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                               <Cell key={`pay-mode-cell-${index}`} fill={CHART_COLORS[(index + 2) % CHART_COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip
-                            formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
-                            contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                          />
+                          <Tooltip content={<ReportCustomTooltip currencySymbol={sym} showPercentage />} />
                           <Legend wrapperStyle={{ fontSize: "11px" }} />
                         </PieChart>
                       </ResponsiveContainer>
@@ -2568,10 +2622,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                         axisLine={{ stroke: "#e7e5e4" }}
                         width={140}
                       />
-                      <Tooltip
-                        formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
-                        contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                      />
+                      <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
                       <Legend wrapperStyle={{ fontSize: "11px" }} />
                       <Bar dataKey="Asset" fill="#059669" radius={[0, 4, 4, 0]} />
                       <Bar dataKey="Liability" fill="#d97706" radius={[0, 4, 4, 0]} />
@@ -2758,10 +2809,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                             axisLine={{ stroke: "#e7e5e4" }}
                             tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
                           />
-                          <Tooltip
-                            formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
-                            contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                          />
+                          <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
                           <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "4px" }} />
                           <Bar dataKey="Allocated" fill="#1c1917" radius={[4, 4, 0, 0]} />
                           <Bar dataKey="Utilized" fill="#d97706" radius={[4, 4, 0, 0]} />
@@ -2960,13 +3008,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                           axisLine={{ stroke: "#e7e5e4" }}
                           width={110}
                         />
-                        <Tooltip
-                          formatter={(val: unknown, _name: unknown, item: { payload?: { count?: number } }) => [
-                            `${sym}${Number(val ?? 0).toLocaleString("en-IN")} (${item?.payload?.count ?? 0} units) — Click to filter`,
-                            "Overdue Dues",
-                          ]}
-                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                        />
+                        <Tooltip content={<ReportCustomTooltip currencySymbol={sym} interactiveHint="Click bar to filter register" />} />
                         <Bar dataKey="amount" radius={[0, 6, 6, 0]}>
                           {agingChartData.map((entry, index) => {
                             const isSelected = defaulterAgingFilter === entry.bucketKey
@@ -3039,19 +3081,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
                         <XAxis dataKey="block" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
                         <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
-                        <Tooltip
-                          formatter={(val: unknown, name: unknown) => [
-                            `${val} flats (Click to filter)`,
-                            name === "cleared"
-                              ? "Cleared / No Dues"
-                              : name === "current"
-                                ? "0-30d Current"
-                                : name === "attention"
-                                  ? "31-60d Overdue"
-                                  : ">60d Chronic Overdue",
-                          ]}
-                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                        />
+                        <Tooltip content={<ReportCustomTooltip unitLabel="flats" interactiveHint="Click bar to filter by block" />} />
                         <Legend
                           formatter={(val) =>
                             val === "cleared"
@@ -3492,13 +3522,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                             <Cell key={`v-age-cell-${index}`} fill={entry.fill} />
                           ))}
                         </Pie>
-                        <Tooltip
-                          formatter={(val: unknown, _name: unknown, item: { payload?: { count?: number } }) => [
-                            `${sym}${Number(val ?? 0).toLocaleString("en-IN")} (${item?.payload?.count ?? 0} bills)`,
-                            "Payable Amount",
-                          ]}
-                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                        />
+                        <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
                         <Legend wrapperStyle={{ fontSize: "11px" }} />
                       </PieChart>
                     </ResponsiveContainer>
@@ -3541,10 +3565,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                           axisLine={{ stroke: "#e7e5e4" }}
                           width={100}
                         />
-                        <Tooltip
-                          formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, "Outstanding"]}
-                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                        />
+                        <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
                         <Bar dataKey="Outstanding" fill="#e11d48" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -3704,13 +3725,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                             )
                           })}
                         </Pie>
-                        <Tooltip
-                          formatter={(val: unknown) => [
-                            `${sym}${Number(val ?? 0).toLocaleString("en-IN")} — Click to filter`,
-                            "",
-                          ]}
-                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                        />
+                        <Tooltip content={<ReportCustomTooltip currencySymbol={sym} interactiveHint="Click to filter by status" />} />
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (
@@ -3859,15 +3874,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                             axisLine={{ stroke: "#e7e5e4" }}
                             tickFormatter={(val) => `${val}%`}
                           />
-                          <Tooltip
-                            formatter={(val: unknown, name: unknown) => [
-                              String(name) === "Collection Rate (%)"
-                                ? `${val}%`
-                                : `${sym}${Number(val ?? 0).toLocaleString("en-IN")}`,
-                              String(name),
-                            ]}
-                            contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                          />
+                          <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
                           <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "4px" }} />
                           <Bar yAxisId="left" dataKey="billedAmount" name="Billed Demand" fill="#1c1917" radius={[4, 4, 0, 0]} />
                           <Bar yAxisId="left" dataKey="collectedAmount" name="Collections Realized" fill="#059669" radius={[4, 4, 0, 0]} />
@@ -3970,10 +3977,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                           axisLine={{ stroke: "#e7e5e4" }}
                           tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
                         />
-                        <Tooltip
-                          formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
-                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                        />
+                        <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
                         <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "4px" }} />
                         <Bar dataKey="Income" fill="#059669" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="Expense" fill="#d97706" radius={[4, 4, 0, 0]} />
@@ -4012,10 +4016,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                         stroke="#fff"
                         fill="#78716c"
                       >
-                        <Tooltip
-                          formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, "Expense"]}
-                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                        />
+                        <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
                       </Treemap>
                     </ResponsiveContainer>
                   ) : (
@@ -4195,13 +4196,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                             )
                           })}
                         </Pie>
-                        <Tooltip
-                          formatter={(val: unknown) => [
-                            `${val} flats (${data.unitLedger.length > 0 ? Math.round((Number(val) / data.unitLedger.length) * 100) : 0}%) — Click to filter`,
-                            "",
-                          ]}
-                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                        />
+                        <Tooltip content={<ReportCustomTooltip unitLabel="flats" showPercentage interactiveHint="Click to filter unit ledger" />} />
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (
