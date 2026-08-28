@@ -4,6 +4,7 @@ import { useState, useMemo, useTransition } from "react"
 import { AdminTable, AdminBadge, AdminStatCard } from "@/components/admin"
 import { BatchBillModal } from "./BatchBillModal"
 import { CreateBillModal, type FlatOption } from "./CreateBillModal"
+import { BillsVisualAnalytics } from "./BillsVisualAnalytics"
 import { cancelBill } from "./actions"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
 
@@ -156,6 +157,9 @@ export function BillsClientView({
           }
         />
       </div>
+
+      {/* Interactive Visual Analytics */}
+      <BillsVisualAnalytics bills={bills} />
 
       {/* Toolbar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

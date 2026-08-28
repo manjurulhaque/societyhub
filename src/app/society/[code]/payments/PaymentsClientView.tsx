@@ -10,6 +10,7 @@ import {
   type FlatOption,
 } from "./RecordPaymentModal"
 import { PaymentReceiptModal, type PaymentReceiptData } from "./PaymentReceiptModal"
+import { PaymentsVisualAnalytics } from "./PaymentsVisualAnalytics"
 import { voidPayment } from "./actions"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
 
@@ -192,6 +193,9 @@ export function PaymentsClientView({
           }
         />
       </div>
+
+      {/* Interactive Visual Analytics */}
+      <PaymentsVisualAnalytics payments={payments} />
 
       {/* Toolbar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
