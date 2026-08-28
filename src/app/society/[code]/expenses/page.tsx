@@ -7,6 +7,7 @@ import { formatDateInAppTimeZone } from "@/lib/datetime"
 import { approveExpenseAction, rejectExpenseAction } from "./actions"
 import { ensureStandardExpenseCategories } from "@/lib/expenseCategories"
 import { ExpenseCategoriesModal } from "./ExpenseCategoriesModal"
+import { ExpensesVisualAnalytics } from "./ExpensesVisualAnalytics"
 
 export default async function SocietyExpensesPage({
   params,
@@ -277,6 +278,17 @@ export default async function SocietyExpensesPage({
           </p>
         </div>
       </div>
+
+      {/* Interactive Visual Analytics */}
+      <ExpensesVisualAnalytics
+        expenses={expenses.map((e) => ({
+          id: e.id,
+          expenseDate: e.expenseDate.toISOString(),
+          amount: Number(e.amount),
+          status: e.status,
+          categoryName: e.category.name,
+        }))}
+      />
 
       {/* Filter Tabs */}
       <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 pb-3">

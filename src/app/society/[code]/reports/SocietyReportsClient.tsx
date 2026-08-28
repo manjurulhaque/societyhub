@@ -16,6 +16,12 @@ import {
   Cell,
   AreaChart,
   Area,
+  ReferenceLine,
+  ComposedChart,
+  Line,
+  RadialBarChart,
+  RadialBar,
+  Treemap,
 } from "recharts"
 import {
   AdminCard,
@@ -32,6 +38,25 @@ import { formatDateInAppTimeZone } from "@/lib/datetime"
 import { maskBankAccount } from "@/lib/masking"
 import { generateSafeCsv } from "@/lib/csv"
 
+function formatCompactCurrency(value: number, sym: string = "₹"): string {
+  if (value === 0) return `${sym}0`
+  const isNegative = value < 0
+  const absVal = Math.abs(value)
+  let formatted = ""
+
+  if (absVal >= 10_000_000) {
+    formatted = `${(absVal / 10_000_000).toFixed(1).replace(/\.0$/, "")}Cr`
+  } else if (absVal >= 100_000) {
+    formatted = `${(absVal / 100_000).toFixed(1).replace(/\.0$/, "")}L`
+  } else if (absVal >= 1_000) {
+    formatted = `${(absVal / 1_000).toFixed(0)}K`
+  } else {
+    formatted = `${absVal}`
+  }
+
+  return isNegative ? `-${sym}${formatted}` : `${sym}${formatted}`
+}
+
 const CHART_COLORS = [
   "#059669",
   "#2563eb",
@@ -42,6 +67,87 @@ const CHART_COLORS = [
   "#ea580c",
   "#4b5563",
 ]
+
+interface CustomChartTooltipProps {
+  active?: boolean
+  payload?: Array<{
+    name?: string
+    value?: number | string
+    color?: string
+    fill?: string
+    dataKey?: string
+    payload?: Record<string, unknown>
+  }>
+  label?: string
+  currencySymbol?: string
+  unitLabel?: string
+  showPercentage?: boolean
+  interactiveHint?: string
+}
+
+function ReportCustomTooltip({
+  active,
+  payload,
+  label,
+  currencySymbol = "₹",
+  unitLabel,
+  showPercentage,
+  interactiveHint,
+}: CustomChartTooltipProps) {
+  if (!active || !payload || payload.length === 0) return null
+
+  return (
+    <div className="min-w-[170px] max-w-[290px] rounded-2xl border border-stone-800/90 bg-stone-950/95 p-3.5 text-white shadow-2xl backdrop-blur-md">
+      {label && (
+        <div className="mb-2 border-b border-stone-800 pb-1.5 flex items-center justify-between">
+          <span className="text-xs font-bold text-stone-200">{label}</span>
+        </div>
+      )}
+      <div className="space-y-1.5">
+        {payload.map((item, idx) => {
+          const itemColor = item.color || item.fill || "#38bdf8"
+          const valNum = typeof item.value === "number" ? item.value : Number(item.value ?? 0)
+          const p = (item.payload || {}) as Record<string, unknown>
+          const percentage = typeof p.percentage === "number" ? p.percentage : undefined
+          const count = typeof p.count === "number" ? p.count : undefined
+          const isCurrency = !unitLabel && typeof item.value === "number"
+
+          return (
+            <div key={idx} className="flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: itemColor }} />
+                <span className="text-stone-300 font-medium truncate">{item.name || "Value"}</span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="font-bold text-stone-50 font-mono">
+                  {unitLabel
+                    ? `${valNum.toLocaleString("en-IN")} ${unitLabel}`
+                    : isCurrency
+                      ? `${currencySymbol}${valNum.toLocaleString("en-IN")}`
+                      : `${item.value}`}
+                </span>
+                {showPercentage && percentage !== undefined && (
+                  <span className="rounded bg-stone-800 px-1 py-0.5 text-[10px] font-semibold text-emerald-400">
+                    {percentage}%
+                  </span>
+                )}
+                {count !== undefined && !showPercentage && (
+                  <span className="text-[10px] text-stone-400">({count})</span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {interactiveHint && (
+        <div className="mt-2.5 border-t border-stone-800 pt-1.5 text-[10px] text-amber-300/90 flex items-center gap-1">
+          <span>👆</span>
+          <span>{interactiveHint}</span>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export type SocietyReportData = {
   society: {
@@ -507,6 +613,283 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
       value: e.amount,
     }))
   }, [data.expensesByCategory])
+
+  // Chart data for defaulters aging distribution
+  const agingChartData = useMemo(() => [
+    {
+      bucket: ">90d (Chronic)",
+      bucketKey: "OVER_90",
+      amount: data.agingSummary.over90.amount,
+      count: data.agingSummary.over90.count,
+      fill: "#e11d48",
+    },
+    {
+      bucket: "61-90d",
+      bucketKey: "DAYS_61_90",
+      amount: data.agingSummary.days61To90.amount,
+      count: data.agingSummary.days61To90.count,
+      fill: "#f59e0b",
+    },
+    {
+      bucket: "31-60d",
+      bucketKey: "DAYS_31_60",
+      amount: data.agingSummary.days31To60.amount,
+      count: data.agingSummary.days31To60.count,
+      fill: "#eab308",
+    },
+    {
+      bucket: "0-30d",
+      bucketKey: "DAYS_0_30",
+      amount: data.agingSummary.days0To30.amount,
+      count: data.agingSummary.days0To30.count,
+      fill: "#0284c7",
+    },
+  ], [data.agingSummary])
+
+  const totalDefaulterDues = useMemo(() => {
+    return (
+      data.agingSummary.over90.amount +
+      data.agingSummary.days61To90.amount +
+      data.agingSummary.days31To60.amount +
+      data.agingSummary.days0To30.amount
+    )
+  }, [data.agingSummary])
+
+  // Chart data for revenue streams
+  const chartBillCategoryData = useMemo(() => {
+    return data.billsByCategory.map((b) => ({
+      name: b.billType.replace(/_/g, " "),
+      value: b.amount,
+      count: b.count,
+      percentage: b.percentage,
+    }))
+  }, [data.billsByCategory])
+
+  // Chart data for payment channels
+  const chartPaymentModeData = useMemo(() => {
+    return data.paymentsByMode.map((p) => ({
+      name: p.mode,
+      value: p.amount,
+      count: p.count,
+      percentage: p.percentage,
+    }))
+  }, [data.paymentsByMode])
+
+  // Chart data for budget variance
+  const chartBudgetData = useMemo(() => {
+    return data.budgetVariance.map((b) => ({
+      name: b.headName,
+      Allocated: b.allocatedAmount,
+      Utilized: b.utilizedAmount,
+      Remaining: b.remainingAmount,
+      rate: b.utilizationRate,
+    }))
+  }, [data.budgetVariance])
+
+  // Chart data for special assessment schemes
+  const chartCampaignsData = useMemo(() => {
+    return data.oneTimeFunds.campaigns.map((c) => ({
+      id: c.id,
+      name: c.title,
+      Target: c.totalTargetAmount,
+      Collected: c.totalCollectedAmount,
+      Outstanding: c.totalOutstandingAmount,
+      rate: c.realizationRate,
+    }))
+  }, [data.oneTimeFunds.campaigns])
+
+  // Chart data for member deposits distribution
+  const chartDepositsTypeData = useMemo(() => {
+    const map = new Map<string, { name: string; value: number; rawType: string }>()
+    for (const d of data.oneTimeFunds.deposits) {
+      const typeName = d.depositType.replace(/_/g, " ")
+      const existing = map.get(d.depositType) || { name: typeName, value: 0, rawType: d.depositType }
+      existing.value += Number(d.amount)
+      map.set(d.depositType, existing)
+    }
+    return Array.from(map.values())
+  }, [data.oneTimeFunds.deposits])
+
+  // Chart data for cheque clearing status
+  const chartChequesStatusData = useMemo(() => {
+    const statusCounts: Record<string, { name: string; statusKey: string; value: number; count: number; fill: string }> = {
+      CLEARED: { name: "Cleared", statusKey: "CLEARED", value: 0, count: 0, fill: "#059669" },
+      IN_CLEARING: { name: "In Clearing", statusKey: "IN_CLEARING", value: 0, count: 0, fill: "#d97706" },
+      BOUNCED: { name: "Bounced", statusKey: "BOUNCED", value: 0, count: 0, fill: "#e11d48" },
+      OTHER: { name: "Other", statusKey: "ALL", value: 0, count: 0, fill: "#78716c" },
+    }
+    for (const c of data.cheques) {
+      const key = c.status === "CLEARED" || c.status === "BOUNCED" || c.status === "IN_CLEARING" ? c.status : "OTHER"
+      statusCounts[key].value += Number(c.amount)
+      statusCounts[key].count += 1
+    }
+    return Object.values(statusCounts).filter((s) => s.count > 0)
+  }, [data.cheques])
+
+  // Chart data for Income vs Expense P&L comparison
+  const chartPnlComparisonData = useMemo(() => {
+    const topIncomes = [...data.pnl.incomeHeads]
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 4)
+      .map((i) => ({ name: i.category, Income: i.amount, Expense: 0 }))
+
+    const topExpenses = [...data.pnl.expenseHeads]
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 4)
+      .map((e) => ({ name: e.category, Income: 0, Expense: e.amount }))
+
+    return [...topIncomes, ...topExpenses]
+  }, [data.pnl.incomeHeads, data.pnl.expenseHeads])
+
+  // Chart data for Unit account solvency & status breakdown
+  const chartUnitStatusData = useMemo(() => {
+    const counts: Record<string, { name: string; statusKey: string; filterTarget: string; count: number; fill: string }> = {
+      CLEAR: { name: "Fully Cleared", statusKey: "CLEAR", filterTarget: "CLEAR", count: 0, fill: "#059669" },
+      ADVANCE: { name: "In Advance Float", statusKey: "ADVANCE", filterTarget: "ADVANCE", count: 0, fill: "#0284c7" },
+      PENDING: { name: "Current Pending", statusKey: "PENDING", filterTarget: "DUES", count: 0, fill: "#d97706" },
+      OVERDUE: { name: "Arrears Overdue", statusKey: "OVERDUE", filterTarget: "DUES", count: 0, fill: "#e11d48" },
+      NO_BILLS: { name: "No Invoices", statusKey: "NO_BILLS", filterTarget: "ALL", count: 0, fill: "#78716c" },
+    }
+    for (const u of data.unitLedger) {
+      if (counts[u.accountStatus]) {
+        counts[u.accountStatus].count += 1
+      }
+    }
+    return Object.values(counts).filter((c) => c.count > 0)
+  }, [data.unitLedger])
+
+  // Chart data for vendor creditor aging
+  const chartVendorAgingData = useMemo(() => {
+    const buckets = {
+      OVER_60: { name: ">60d Overdue", amount: 0, count: 0, fill: "#e11d48" },
+      DAYS_31_60: { name: "31-60 Days", amount: 0, count: 0, fill: "#f59e0b" },
+      DAYS_0_30: { name: "0-30 Days (Current)", amount: 0, count: 0, fill: "#0284c7" },
+    }
+    for (const v of data.vendorAging) {
+      if (buckets[v.agingBucket]) {
+        buckets[v.agingBucket].amount += v.outstandingDue
+        buckets[v.agingBucket].count += v.pendingBillsCount
+      }
+    }
+    return Object.values(buckets).filter((b) => b.amount > 0 || b.count > 0)
+  }, [data.vendorAging])
+
+  // Chart data for top vendor payables
+  const chartTopVendorsData = useMemo(() => {
+    return [...data.vendorAging]
+      .filter((v) => v.outstandingDue > 0)
+      .sort((a, b) => b.outstandingDue - a.outstandingDue)
+      .slice(0, 5)
+      .map((v) => ({
+        name: v.vendorName,
+        Outstanding: v.outstandingDue,
+        Paid: v.totalPaidAmount,
+      }))
+  }, [data.vendorAging])
+
+  // Chart data for Block-by-Block Stacked Arrears & Solvency
+  const chartBlockDefaultersData = useMemo(() => {
+    const blockMap = new Map<
+      string,
+      { block: string; rawBlock: string; cleared: number; current: number; attention: number; chronic: number; total: number }
+    >()
+    for (const b of data.blocks) {
+      blockMap.set(b, { block: `Block ${b}`, rawBlock: b, cleared: 0, current: 0, attention: 0, chronic: 0, total: 0 })
+    }
+    for (const u of data.unitLedger) {
+      const entry = blockMap.get(u.blockName) || {
+        block: `Block ${u.blockName}`,
+        rawBlock: u.blockName,
+        cleared: 0,
+        current: 0,
+        attention: 0,
+        chronic: 0,
+        total: 0,
+      }
+      entry.total += 1
+      if (u.accountStatus === "CLEAR" || u.accountStatus === "ADVANCE" || u.accountStatus === "NO_BILLS") {
+        entry.cleared += 1
+      } else {
+        const def = data.defaulters.find((d) => d.flatId === u.flatId)
+        if (def?.agingBucket === "OVER_90") {
+          entry.chronic += 1
+        } else if (def?.agingBucket === "DAYS_61_90" || def?.agingBucket === "DAYS_31_60") {
+          entry.attention += 1
+        } else {
+          entry.current += 1
+        }
+      }
+      blockMap.set(u.blockName, entry)
+    }
+    return Array.from(blockMap.values()).filter((b) => b.total > 0)
+  }, [data.blocks, data.unitLedger, data.defaulters])
+
+  // Chart data for Balance Sheet Assets vs Liabilities
+  const chartBalanceSheetData = useMemo(() => {
+    return [
+      {
+        category: "Liquid Cash & Bank",
+        Asset: data.balanceSheet.assets.liquidBankCash,
+        Liability: 0,
+      },
+      {
+        category: "Fixed Deposits (FDs)",
+        Asset: data.balanceSheet.assets.fixedDeposits,
+        Liability: 0,
+      },
+      {
+        category: "Maintenance Arrears",
+        Asset: data.balanceSheet.assets.maintenanceArrears,
+        Liability: 0,
+      },
+      {
+        category: "Fixed Assets (Net)",
+        Asset: data.balanceSheet.assets.fixedAssetsBookValue,
+        Liability: 0,
+      },
+      {
+        category: "Member Caution Deposits",
+        Asset: 0,
+        Liability: data.balanceSheet.liabilities.memberDepositsHeld,
+      },
+      {
+        category: "Vendor Payables",
+        Asset: 0,
+        Liability: data.balanceSheet.liabilities.vendorPayables,
+      },
+      {
+        category: "Advance Receipts",
+        Asset: 0,
+        Liability: data.balanceSheet.liabilities.advanceCollections,
+      },
+      {
+        category: "Sinking / Capital Reserves",
+        Asset: 0,
+        Liability: data.balanceSheet.liabilities.sinkingAndGeneralReserves,
+      },
+    ]
+  }, [data.balanceSheet])
+
+  // Chart data for Expense Treemap
+  const chartExpenseTreemapData = useMemo(() => {
+    return data.pnl.expenseHeads.map((head, idx) => ({
+      name: head.category,
+      size: head.amount,
+      fill: CHART_COLORS[idx % CHART_COLORS.length],
+    }))
+  }, [data.pnl.expenseHeads])
+
+  // Chart data for Radial Collection Gauge
+  const chartRadialRecoveryData = useMemo(() => {
+    const rate = data.summary.collectionRate || 0
+    return [
+      {
+        name: "Collection Efficiency",
+        value: Math.min(100, rate),
+        fill: rate >= 85 ? "#059669" : rate >= 60 ? "#d97706" : "#e11d48",
+      },
+    ]
+  }, [data.summary.collectionRate])
 
   // CSV Export Utility
   const handleExportCSV = (reportType: string) => {
@@ -1365,6 +1748,57 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                 </AdminCard>
               ) : (
                 <>
+                  {/* Schemes Capital Realization Visual Overview */}
+                  {chartCampaignsData.length > 0 && (
+                    <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+                      <div className="mb-3 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-bold text-stone-950">
+                            Special Assessment Schemes Capital Realization
+                          </h3>
+                          <p className="text-xs text-stone-500">
+                            Click any scheme bar to view its unit contributions and details
+                          </p>
+                        </div>
+                        <AdminBadge variant="neutral" size="sm">
+                          Interactive ({chartCampaignsData.length} Schemes)
+                        </AdminBadge>
+                      </div>
+                      <div className="h-56 w-full min-w-0">
+                        {isMounted ? (
+                          <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
+                            <BarChart
+                              data={chartCampaignsData}
+                              margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                              onClick={(state: unknown) => {
+                                const s = state as { activePayload?: Array<{ payload?: { id?: string } }> } | null
+                                const id = s?.activePayload?.[0]?.payload?.id
+                                if (id) {
+                                  setSelectedCampaignId(id)
+                                }
+                              }}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                              <YAxis
+                                tick={{ fontSize: 11, fill: "#78716c" }}
+                                axisLine={{ stroke: "#e7e5e4" }}
+                                tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                              />
+                              <Tooltip content={<ReportCustomTooltip currencySymbol={sym} interactiveHint="Click to view scheme" />} />
+                              <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "4px" }} />
+                              <Bar dataKey="Target" fill="#1c1917" radius={[4, 4, 0, 0]} cursor="pointer" />
+                              <Bar dataKey="Collected" fill="#059669" radius={[4, 4, 0, 0]} cursor="pointer" />
+                              <Bar dataKey="Outstanding" fill="#e11d48" radius={[4, 4, 0, 0]} cursor="pointer" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Campaign Selector & Overview Card */}
                   <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-sm space-y-6">
                     <div className="flex flex-wrap items-center justify-between gap-4 border-b border-stone-100 pb-4">
@@ -1602,6 +2036,74 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                 </div>
               </div>
 
+              {/* Member Deposits Distribution Donut */}
+              {chartDepositsTypeData.length > 0 && (
+                <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-stone-950">
+                        Member Deposits &amp; Corpus Allocation
+                      </h3>
+                      <p className="text-xs text-stone-500">
+                        Click any segment to filter deposit records by liability type
+                      </p>
+                    </div>
+                    {oneTimeStatus !== "ALL" ? (
+                      <AdminButton
+                        variant="outline"
+                        size="xs"
+                        onClick={() => setOneTimeStatus("ALL")}
+                      >
+                        Reset ({oneTimeStatus.replace(/_/g, " ")}) ✕
+                      </AdminButton>
+                    ) : (
+                      <AdminBadge variant="neutral" size="sm">
+                        Interactive ({sym}{data.oneTimeFunds.totalDepositsHeld.toLocaleString("en-IN")})
+                      </AdminBadge>
+                    )}
+                  </div>
+                  <div className="h-44 w-full min-w-0">
+                    {isMounted ? (
+                      <ResponsiveContainer width="100%" height={170} minWidth={100} minHeight={100}>
+                        <PieChart>
+                          <Pie
+                            data={chartDepositsTypeData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={38}
+                            outerRadius={62}
+                            paddingAngle={3}
+                            dataKey="value"
+                          >
+                            {chartDepositsTypeData.map((entry, index) => {
+                              const isSelected = oneTimeStatus === entry.rawType
+                              const isDimmed = oneTimeStatus !== "ALL" && !isSelected
+                              return (
+                                <Cell
+                                  key={`dep-cell-${index}`}
+                                  fill={CHART_COLORS[(index + 3) % CHART_COLORS.length]}
+                                  cursor="pointer"
+                                  opacity={isDimmed ? 0.35 : 1}
+                                  stroke={isSelected ? "#1c1917" : "none"}
+                                  strokeWidth={isSelected ? 2 : 0}
+                                  onClick={() => {
+                                    setOneTimeStatus((prev) => (prev === entry.rawType ? "ALL" : entry.rawType))
+                                  }}
+                                />
+                              )
+                            })}
+                          </Pie>
+                          <Tooltip content={<ReportCustomTooltip currencySymbol={sym} showPercentage interactiveHint="Click to filter by deposit type" />} />
+                          <Legend wrapperStyle={{ fontSize: "11px" }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                    )}
+                  </div>
+                </div>
+              )}
+
               <AdminCard
                 title={`Member Deposits & Corpus Fund Register (${filteredMemberDeposits.length} Records)`}
                 description="Statutory audit of refundable caution deposits, renovation fit-out floats, and initial member corpus capital"
@@ -1705,16 +2207,21 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
               </div>
 
               <div className="h-72 w-full min-w-0">
-                {isMounted ? (
+                {chartMonthlyData.length === 0 ? (
+                  <div className="flex h-72 items-center justify-center text-xs text-stone-400">
+                    No billing or collection history recorded for this period
+                  </div>
+                ) : isMounted ? (
                   <ResponsiveContainer width="100%" height={280} minWidth={100} minHeight={100}>
-                    <BarChart data={chartMonthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <BarChart data={chartMonthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
                       <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
-                      <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
-                      <Tooltip
-                        formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
-                        contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
+                      <YAxis
+                        tick={{ fontSize: 11, fill: "#78716c" }}
+                        axisLine={{ stroke: "#e7e5e4" }}
+                        tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
                       />
+                      <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
                       <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
                       <Bar dataKey="Billed" fill="#1c1917" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="Collected" fill="#059669" radius={[4, 4, 0, 0]} />
@@ -1758,10 +2265,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                             <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip
-                          formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
-                          contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                        />
+                        <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
                         <Legend wrapperStyle={{ fontSize: "11px" }} />
                       </PieChart>
                     </ResponsiveContainer>
@@ -1773,49 +2277,104 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
             </div>
           </div>
 
-          {/* Operating Cashflow Surplus / Deficit Area Trend */}
-          <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-stone-950">
-                  Operating Net Cashflow Trajectory
-                </h3>
-                <p className="text-xs text-stone-500">
-                  Monthly Surplus (Positive) vs Deficit (Negative) trend
-                </p>
+          {/* Operating Cashflow & Radial Collection Efficiency Row */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            {/* Operating Cashflow Surplus / Deficit Area Trend (2 cols) */}
+            <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm lg:col-span-2">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-stone-950">
+                    Operating Net Cashflow Trajectory
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    Monthly Surplus (Positive) vs Deficit (Negative) trend
+                  </p>
+                </div>
+              </div>
+
+              <div className="h-56 w-full min-w-0">
+                {chartMonthlyData.length === 0 ? (
+                  <div className="flex h-56 items-center justify-center text-xs text-stone-400">
+                    No cashflow trend data recorded for this period
+                  </div>
+                ) : isMounted ? (
+                  <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
+                    <AreaChart data={chartMonthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorCashflow" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#059669" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#059669" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: "#78716c" }}
+                        axisLine={{ stroke: "#e7e5e4" }}
+                        tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                      />
+                      <ReferenceLine y={0} stroke="#f43f5e" strokeDasharray="3 3" />
+                      <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
+                      <Area
+                        type="monotone"
+                        dataKey="Cashflow"
+                        stroke="#059669"
+                        strokeWidth={2.5}
+                        fillOpacity={1}
+                        fill="url(#colorCashflow)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                )}
               </div>
             </div>
 
-            <div className="h-56 w-full min-w-0">
-              {isMounted ? (
-                <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
-                  <AreaChart data={chartMonthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorCashflow" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#059669" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#059669" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
-                    <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
-                    <Tooltip
-                      formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, "Net Cashflow"]}
-                      contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="Cashflow"
-                      stroke="#059669"
-                      strokeWidth={2.5}
-                      fillOpacity={1}
-                      fill="url(#colorCashflow)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
-              )}
+            {/* Radial Collection Efficiency Gauge (1 col) */}
+            <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm flex flex-col justify-between">
+              <div className="mb-2 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-stone-950">Collection Realization Rate</h3>
+                  <p className="text-xs text-stone-500">Statutory recovery efficiency</p>
+                </div>
+                <AdminBadge variant={data.summary.collectionRate >= 85 ? "success" : "warning"} size="sm">
+                  {data.summary.collectionRate >= 85 ? "Healthy" : "Attention"}
+                </AdminBadge>
+              </div>
+
+              <div className="relative flex h-48 items-center justify-center">
+                {isMounted ? (
+                  <ResponsiveContainer width="100%" height={180} minWidth={100} minHeight={100}>
+                    <RadialBarChart
+                      cx="50%"
+                      cy="60%"
+                      innerRadius="65%"
+                      outerRadius="95%"
+                      barSize={14}
+                      data={chartRadialRecoveryData}
+                      startAngle={180}
+                      endAngle={0}
+                    >
+                      <RadialBar background dataKey="value" cornerRadius={10} />
+                      <Tooltip content={<ReportCustomTooltip unitLabel="%" />} />
+                    </RadialBarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                )}
+                <div className="absolute inset-0 top-8 flex flex-col items-center justify-center">
+                  <span className="text-3xl font-black text-stone-950">{data.summary.collectionRate}%</span>
+                  <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">Realized</span>
+                </div>
+              </div>
+
+              <div className="border-t border-stone-100 pt-3 flex items-center justify-between text-xs text-stone-600">
+                <span>Target: 85%+</span>
+                <span className="font-semibold text-stone-900">
+                  {data.summary.totalPaymentsCount} of {data.summary.totalBillsCount} demands settled
+                </span>
+              </div>
             </div>
           </div>
 
@@ -1829,21 +2388,61 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
               {data.billsByCategory.length === 0 ? (
                 <p className="py-6 text-center text-xs text-stone-500">No bills recorded yet.</p>
               ) : (
-                <div className="space-y-3">
-                  {data.billsByCategory.map((cat) => (
-                    <div key={cat.billType} className="rounded-2xl border border-stone-100 bg-stone-50/60 p-3.5 space-y-1.5">
-                      <div className="flex items-center justify-between text-xs font-semibold">
-                        <span className="text-stone-900">{cat.billType.replace(/_/g, " ")}</span>
-                        <span className="text-stone-950 font-bold">
-                          {sym}{cat.amount.toLocaleString("en-IN")} ({cat.percentage}%)
-                        </span>
+                <div className="space-y-4">
+                  <div className="h-44 w-full min-w-0">
+                    {isMounted ? (
+                      <ResponsiveContainer width="100%" height={170} minWidth={100} minHeight={100}>
+                        <PieChart>
+                          <Pie
+                            data={chartBillCategoryData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={38}
+                            outerRadius={62}
+                            paddingAngle={3}
+                            dataKey="value"
+                          >
+                            {chartBillCategoryData.map((_, index) => (
+                              <Cell key={`bill-cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip content={<ReportCustomTooltip currencySymbol={sym} showPercentage />} />
+                          <Legend wrapperStyle={{ fontSize: "11px" }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    {data.billsByCategory.map((cat, idx) => (
+                      <div key={cat.billType} className="rounded-2xl border border-stone-100 bg-stone-50/60 p-3.5 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs font-semibold">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="h-2.5 w-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}
+                            />
+                            <span className="text-stone-900">{cat.billType.replace(/_/g, " ")}</span>
+                          </div>
+                          <span className="text-stone-950 font-bold">
+                            {sym}{cat.amount.toLocaleString("en-IN")} ({cat.percentage}%)
+                          </span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-stone-200 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${cat.percentage}%`,
+                              backgroundColor: CHART_COLORS[idx % CHART_COLORS.length],
+                            }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-stone-500">{cat.count} invoices generated</span>
                       </div>
-                      <div className="h-2 w-full rounded-full bg-stone-200 overflow-hidden">
-                        <div className="h-full bg-stone-900 rounded-full transition-all" style={{ width: `${cat.percentage}%` }} />
-                      </div>
-                      <span className="text-[10px] text-stone-500">{cat.count} invoices generated</span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
             </AdminCard>
@@ -1885,19 +2484,53 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
               {data.paymentsByMode.length === 0 ? (
                 <p className="py-6 text-center text-xs text-stone-500">No payment records found.</p>
               ) : (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {data.paymentsByMode.map((mode) => (
-                    <div key={mode.mode} className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-stone-900">{mode.mode}</span>
-                        <AdminBadge variant="neutral" size="sm">{mode.percentage}%</AdminBadge>
+                <div className="space-y-4">
+                  <div className="h-44 w-full min-w-0">
+                    {isMounted ? (
+                      <ResponsiveContainer width="100%" height={170} minWidth={100} minHeight={100}>
+                        <PieChart>
+                          <Pie
+                            data={chartPaymentModeData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={38}
+                            outerRadius={62}
+                            paddingAngle={3}
+                            dataKey="value"
+                          >
+                            {chartPaymentModeData.map((_, index) => (
+                              <Cell key={`pay-mode-cell-${index}`} fill={CHART_COLORS[(index + 2) % CHART_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip content={<ReportCustomTooltip currencySymbol={sym} showPercentage />} />
+                          <Legend wrapperStyle={{ fontSize: "11px" }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {data.paymentsByMode.map((mode, idx) => (
+                      <div key={mode.mode} className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span
+                              className="h-2 w-2 rounded-full shrink-0"
+                              style={{ backgroundColor: CHART_COLORS[(idx + 2) % CHART_COLORS.length] }}
+                            />
+                            <span className="text-xs font-bold text-stone-900 truncate">{mode.mode}</span>
+                          </div>
+                          <AdminBadge variant="neutral" size="sm">{mode.percentage}%</AdminBadge>
+                        </div>
+                        <p className="mt-2 text-base font-extrabold text-emerald-800">
+                          {sym}{mode.amount.toLocaleString("en-IN")}
+                        </p>
+                        <p className="text-[11px] text-stone-500 mt-0.5">{mode.count} transactions</p>
                       </div>
-                      <p className="mt-2 text-base font-extrabold text-emerald-800">
-                        {sym}{mode.amount.toLocaleString("en-IN")}
-                      </p>
-                      <p className="text-[11px] text-stone-500 mt-0.5">{mode.count} transactions</p>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
             </AdminCard>
@@ -1954,6 +2587,51 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
               <p className="text-[11px] text-stone-400 mt-0.5">
                 Audit Snapshot as of {formatDateInAppTimeZone(new Date().toISOString())}
               </p>
+            </div>
+
+            {/* Assets vs Liabilities Solvency Comparative Chart */}
+            <div className="mt-6 rounded-2xl border border-stone-100 bg-stone-50/50 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-stone-700">
+                    Balance Sheet Composition &amp; Solvency
+                  </span>
+                  <p className="text-[11px] text-stone-500">
+                    Comparative Asset allocations vs. Liability &amp; Reserve obligations
+                  </p>
+                </div>
+                <AdminBadge variant="neutral" size="sm">
+                  Solvency Map
+                </AdminBadge>
+              </div>
+              <div className="h-64 w-full min-w-0">
+                {isMounted ? (
+                  <ResponsiveContainer width="100%" height={240} minWidth={100} minHeight={100}>
+                    <BarChart data={chartBalanceSheetData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e7e5e4" />
+                      <XAxis
+                        type="number"
+                        tick={{ fontSize: 10, fill: "#78716c" }}
+                        axisLine={{ stroke: "#e7e5e4" }}
+                        tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="category"
+                        tick={{ fontSize: 10, fill: "#78716c" }}
+                        axisLine={{ stroke: "#e7e5e4" }}
+                        width={140}
+                      />
+                      <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
+                      <Legend wrapperStyle={{ fontSize: "11px" }} />
+                      <Bar dataKey="Asset" fill="#059669" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="Liability" fill="#d97706" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                )}
+              </div>
             </div>
 
             <div className="mt-8 grid grid-cols-1 gap-8 md:grid-cols-2">
@@ -2110,9 +2788,43 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                 No active budget plan configured for the current financial year.
               </div>
             ) : (
-              <AdminTable
-                headers={[
-                  "Budget Plan",
+              <div className="space-y-6">
+                <div className="rounded-2xl border border-stone-100 bg-stone-50/50 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-stone-700">
+                      Budget Cap vs. Actual Disbursement Comparison
+                    </span>
+                    <AdminBadge variant="neutral" size="sm">
+                      {data.budgetVariance.length} Heads
+                    </AdminBadge>
+                  </div>
+                  <div className="h-64 w-full min-w-0">
+                    {isMounted ? (
+                      <ResponsiveContainer width="100%" height={240} minWidth={100} minHeight={100}>
+                        <BarChart data={chartBudgetData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                          <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                          <YAxis
+                            tick={{ fontSize: 11, fill: "#78716c" }}
+                            axisLine={{ stroke: "#e7e5e4" }}
+                            tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                          />
+                          <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
+                          <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "4px" }} />
+                          <Bar dataKey="Allocated" fill="#1c1917" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="Utilized" fill="#d97706" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="Remaining" fill="#059669" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                    )}
+                  </div>
+                </div>
+
+                <AdminTable
+                  headers={[
+                    "Budget Plan",
                   "Expenditure Head",
                   "Allocated Cap",
                   "Utilized / Spent",
@@ -2176,9 +2888,10 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                   </tr>
                 ))}
               />
-            )}
-          </AdminCard>
-        </div>
+            </div>
+          )}
+        </AdminCard>
+      </div>
       )}
 
       {/* ========================================== */}
@@ -2247,6 +2960,153 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
               </p>
             </div>
           </div>
+
+          {/* 2-column Defaulters & Arrears Visuals */}
+          {totalDefaulterDues > 0 && (
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              {/* 1. Aging Curve */}
+              <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-stone-950">
+                      Overdue Arrears Aging Distribution
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Click any bar to filter register by aging severity
+                    </p>
+                  </div>
+                  {defaulterAgingFilter !== "ALL" ? (
+                    <AdminButton
+                      variant="outline"
+                      size="xs"
+                      onClick={() => setDefaulterAgingFilter("ALL")}
+                    >
+                      Reset ({defaulterAgingFilter.replace(/_/g, " ")}) ✕
+                    </AdminButton>
+                  ) : (
+                    <AdminBadge variant="neutral" size="sm">
+                      Interactive
+                    </AdminBadge>
+                  )}
+                </div>
+
+                <div className="h-56 w-full min-w-0">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
+                      <BarChart data={agingChartData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e7e5e4" />
+                        <XAxis
+                          type="number"
+                          tick={{ fontSize: 11, fill: "#78716c" }}
+                          axisLine={{ stroke: "#e7e5e4" }}
+                          tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="bucket"
+                          tick={{ fontSize: 11, fill: "#78716c" }}
+                          axisLine={{ stroke: "#e7e5e4" }}
+                          width={110}
+                        />
+                        <Tooltip content={<ReportCustomTooltip currencySymbol={sym} interactiveHint="Click bar to filter register" />} />
+                        <Bar dataKey="amount" radius={[0, 6, 6, 0]}>
+                          {agingChartData.map((entry, index) => {
+                            const isSelected = defaulterAgingFilter === entry.bucketKey
+                            const isDimmed = defaulterAgingFilter !== "ALL" && !isSelected
+                            return (
+                              <Cell
+                                key={`aging-cell-${index}`}
+                                fill={entry.fill}
+                                cursor="pointer"
+                                opacity={isDimmed ? 0.35 : 1}
+                                stroke={isSelected ? "#1c1917" : "none"}
+                                strokeWidth={isSelected ? 2 : 0}
+                                onClick={() => {
+                                  setDefaulterAgingFilter((prev) =>
+                                    prev === entry.bucketKey ? "ALL" : entry.bucketKey
+                                  )
+                                }}
+                              />
+                            )
+                          })}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                  )}
+                </div>
+              </div>
+
+              {/* 2. Block-by-Block Stacked Arrears & Solvency */}
+              <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-stone-950">
+                      Block / Wing Solvency &amp; Arrears
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Click any block bar to filter register by block
+                    </p>
+                  </div>
+                  {defaulterBlock !== "ALL" ? (
+                    <AdminButton
+                      variant="outline"
+                      size="xs"
+                      onClick={() => setDefaulterBlock("ALL")}
+                    >
+                      Reset (Block {defaulterBlock}) ✕
+                    </AdminButton>
+                  ) : (
+                    <AdminBadge variant="neutral" size="sm">
+                      Interactive
+                    </AdminBadge>
+                  )}
+                </div>
+
+                <div className="h-56 w-full min-w-0">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
+                      <BarChart
+                        data={chartBlockDefaultersData}
+                        margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                        onClick={(state: unknown) => {
+                          const s = state as { activePayload?: Array<{ payload?: { rawBlock?: string } }> } | null
+                          const raw = s?.activePayload?.[0]?.payload?.rawBlock
+                          if (raw) {
+                            setDefaulterBlock((prev) => (prev === raw ? "ALL" : raw))
+                          }
+                        }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                        <XAxis dataKey="block" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                        <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                        <Tooltip content={<ReportCustomTooltip unitLabel="flats" interactiveHint="Click bar to filter by block" />} />
+                        <Legend
+                          formatter={(val) =>
+                            val === "cleared"
+                              ? "Cleared"
+                              : val === "current"
+                                ? "0-30d"
+                                : val === "attention"
+                                  ? "31-60d"
+                                  : ">60d Chronic"
+                          }
+                          wrapperStyle={{ fontSize: "11px", paddingTop: "4px" }}
+                        />
+                        <Bar dataKey="cleared" stackId="a" fill="#059669" cursor="pointer" />
+                        <Bar dataKey="current" stackId="a" fill="#0284c7" cursor="pointer" />
+                        <Bar dataKey="attention" stackId="a" fill="#f59e0b" cursor="pointer" />
+                        <Bar dataKey="chronic" stackId="a" fill="#e11d48" radius={[4, 4, 0, 0]} cursor="pointer" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Filter Bar */}
           <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50/70 p-4">
@@ -2627,6 +3487,96 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
       {/* ========================================== */}
       {activeTab === "vendors" && (
         <div className="space-y-6">
+          {/* Vendor Creditors Overview Visuals */}
+          {chartVendorAgingData.length > 0 && (
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              {/* Aging Breakdown */}
+              <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-stone-950">
+                      Creditor Arrears Aging Distribution
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Payables concentration across 0-30d, 31-60d, and &gt;60d overdue
+                    </p>
+                  </div>
+                  <AdminBadge variant="neutral" size="sm">
+                    Creditors
+                  </AdminBadge>
+                </div>
+                <div className="h-48 w-full min-w-0">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height={180} minWidth={100} minHeight={100}>
+                      <PieChart>
+                        <Pie
+                          data={chartVendorAgingData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={38}
+                          outerRadius={62}
+                          paddingAngle={3}
+                          dataKey="amount"
+                        >
+                          {chartVendorAgingData.map((entry, index) => (
+                            <Cell key={`v-age-cell-${index}`} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
+                        <Legend wrapperStyle={{ fontSize: "11px" }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                  )}
+                </div>
+              </div>
+
+              {/* Top Vendors by Outstanding */}
+              <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-stone-950">
+                      Top Vendor Payables
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      Highest pending balances across operational service providers
+                    </p>
+                  </div>
+                  <AdminBadge variant="neutral" size="sm">
+                    Payables
+                  </AdminBadge>
+                </div>
+                <div className="h-48 w-full min-w-0">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height={180} minWidth={100} minHeight={100}>
+                      <BarChart data={chartTopVendorsData} layout="vertical" margin={{ top: 5, right: 15, left: 10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e7e5e4" />
+                        <XAxis
+                          type="number"
+                          tick={{ fontSize: 10, fill: "#78716c" }}
+                          axisLine={{ stroke: "#e7e5e4" }}
+                          tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          tick={{ fontSize: 10, fill: "#78716c" }}
+                          axisLine={{ stroke: "#e7e5e4" }}
+                          width={100}
+                        />
+                        <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
+                        <Bar dataKey="Outstanding" fill="#e11d48" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <AdminCard
             title={`Vendor Payables & Outstanding Aging (${data.vendorAging.length} Vendors)`}
             description="Itemized payables aging across operational suppliers, AMC contracts, and service providers"
@@ -2714,6 +3664,111 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
             </div>
           </div>
 
+          {/* Cheque Clearing Realization Donut */}
+          {chartChequesStatusData.length > 0 && (
+            <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-stone-950">
+                    Cheque Clearing &amp; Realization Status
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    Click any segment or stat card to filter register by clearing status
+                  </p>
+                </div>
+                {chequeStatusFilter !== "ALL" ? (
+                  <AdminButton
+                    variant="outline"
+                    size="xs"
+                    onClick={() => setChequeStatusFilter("ALL")}
+                  >
+                    Reset ({chequeStatusFilter}) ✕
+                  </AdminButton>
+                ) : (
+                  <AdminBadge variant="neutral" size="sm">
+                    Interactive
+                  </AdminBadge>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-3 items-center">
+                <div className="h-44 w-full min-w-0 md:col-span-1">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height={170} minWidth={100} minHeight={100}>
+                      <PieChart>
+                        <Pie
+                          data={chartChequesStatusData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={38}
+                          outerRadius={62}
+                          paddingAngle={3}
+                          dataKey="value"
+                        >
+                          {chartChequesStatusData.map((entry, index) => {
+                            const isSelected = chequeStatusFilter === entry.statusKey
+                            const isDimmed = chequeStatusFilter !== "ALL" && !isSelected
+                            return (
+                              <Cell
+                                key={`cheque-cell-${index}`}
+                                fill={entry.fill}
+                                cursor="pointer"
+                                opacity={isDimmed ? 0.35 : 1}
+                                stroke={isSelected ? "#1c1917" : "none"}
+                                strokeWidth={isSelected ? 2 : 0}
+                                onClick={() => {
+                                  setChequeStatusFilter((prev) =>
+                                    prev === entry.statusKey ? "ALL" : entry.statusKey
+                                  )
+                                }}
+                              />
+                            )
+                          })}
+                        </Pie>
+                        <Tooltip content={<ReportCustomTooltip currencySymbol={sym} interactiveHint="Click to filter by status" />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 md:col-span-2 sm:grid-cols-3">
+                  {chartChequesStatusData.map((item) => {
+                    const isSelected = chequeStatusFilter === item.statusKey
+                    return (
+                      <button
+                        type="button"
+                        key={item.name}
+                        onClick={() => {
+                          setChequeStatusFilter((prev) =>
+                            prev === item.statusKey ? "ALL" : item.statusKey
+                          )
+                        }}
+                        className={`text-left rounded-2xl border p-3.5 transition-all cursor-pointer ${
+                          isSelected
+                            ? "border-stone-900 bg-stone-900/5 shadow-sm"
+                            : "border-stone-200 bg-stone-50/70 hover:border-stone-400"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: item.fill }} />
+                            <span className="text-xs font-bold text-stone-900 truncate">{item.name}</span>
+                          </div>
+                          <AdminBadge variant="neutral" size="sm">{item.count}</AdminBadge>
+                        </div>
+                        <p className="mt-2 text-base font-extrabold text-stone-950">
+                          {sym}{item.value.toLocaleString("en-IN")}
+                        </p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
           <AdminCard
             title={`Bank Cheque Register (${filteredCheques.length} Instruments)`}
             description="Inward member receipts and outward vendor payment cheques tracking"
@@ -2784,46 +3839,104 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
             {data.monthlyTrends.length === 0 ? (
               <p className="py-6 text-center text-xs text-stone-500">No monthly billing trends available.</p>
             ) : (
-              <AdminTable
-                headers={[
-                  "Billing Period",
-                  "Invoices Issued",
-                  "Billed Demand",
-                  "Collections Realized",
-                  "Recovery Rate",
-                  "Operational Expenses",
-                  "Net Monthly Cashflow",
-                ]}
-                rows={data.monthlyTrends.map((trend) => (
-                  <tr key={trend.key} className="border-t border-stone-100 hover:bg-stone-50/60">
-                    <td className="px-4 py-3.5 font-bold text-xs text-stone-950">{trend.label}</td>
-                    <td className="px-4 py-3.5 text-xs text-stone-600">{trend.billedCount} invoice(s)</td>
-                    <td className="px-4 py-3.5 text-xs font-semibold text-stone-900">
-                      {sym}{trend.billedAmount.toLocaleString("en-IN")}
-                    </td>
-                    <td className="px-4 py-3.5 text-xs font-bold text-emerald-700">
-                      {sym}{trend.collectedAmount.toLocaleString("en-IN")}
-                      <span className="block text-[10px] text-stone-400 font-normal">{trend.collectedCount} receipt(s)</span>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <AdminBadge
-                        variant={trend.collectionRate >= 80 ? "success" : trend.collectionRate >= 50 ? "warning" : "danger"}
-                        size="sm"
-                      >
-                        {trend.collectionRate}%
-                      </AdminBadge>
-                    </td>
-                    <td className="px-4 py-3.5 text-xs font-semibold text-amber-700">
-                      {sym}{trend.expenseAmount.toLocaleString("en-IN")}
-                    </td>
-                    <td className="px-4 py-3.5 text-xs font-extrabold">
-                      <span className={trend.netCashflow >= 0 ? "text-emerald-700" : "text-rose-700"}>
-                        {trend.netCashflow >= 0 ? "+" : ""}{sym}{trend.netCashflow.toLocaleString("en-IN")}
+              <div className="space-y-6">
+                <div className="rounded-2xl border border-stone-100 bg-stone-50/50 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-stone-700">
+                        Monthly Demands, Collections &amp; Realization Rate
                       </span>
-                    </td>
-                  </tr>
-                ))}
-              />
+                      <p className="text-[11px] text-stone-500">
+                        Billing &amp; Collection volume (Left Axis) vs. Realization Rate % (Right Axis)
+                      </p>
+                    </div>
+                    <AdminBadge variant="neutral" size="sm">
+                      Dual-Axis Trend
+                    </AdminBadge>
+                  </div>
+                  <div className="h-64 w-full min-w-0">
+                    {isMounted ? (
+                      <ResponsiveContainer width="100%" height={240} minWidth={100} minHeight={100}>
+                        <ComposedChart data={data.monthlyTrends} margin={{ top: 10, right: 15, left: 0, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                          <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                          <YAxis
+                            yAxisId="left"
+                            tick={{ fontSize: 11, fill: "#78716c" }}
+                            axisLine={{ stroke: "#e7e5e4" }}
+                            tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                          />
+                          <YAxis
+                            yAxisId="right"
+                            orientation="right"
+                            domain={[0, 100]}
+                            tick={{ fontSize: 11, fill: "#2563eb" }}
+                            axisLine={{ stroke: "#e7e5e4" }}
+                            tickFormatter={(val) => `${val}%`}
+                          />
+                          <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
+                          <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "4px" }} />
+                          <Bar yAxisId="left" dataKey="billedAmount" name="Billed Demand" fill="#1c1917" radius={[4, 4, 0, 0]} />
+                          <Bar yAxisId="left" dataKey="collectedAmount" name="Collections Realized" fill="#059669" radius={[4, 4, 0, 0]} />
+                          <Bar yAxisId="left" dataKey="expenseAmount" name="Expenses" fill="#d97706" radius={[4, 4, 0, 0]} />
+                          <Line
+                            yAxisId="right"
+                            type="monotone"
+                            dataKey="collectionRate"
+                            name="Collection Rate (%)"
+                            stroke="#2563eb"
+                            strokeWidth={3}
+                            dot={{ r: 4, fill: "#2563eb" }}
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                    )}
+                  </div>
+                </div>
+
+                <AdminTable
+                  headers={[
+                    "Billing Period",
+                    "Invoices Issued",
+                    "Billed Demand",
+                    "Collections Realized",
+                    "Recovery Rate",
+                    "Operational Expenses",
+                    "Net Monthly Cashflow",
+                  ]}
+                  rows={data.monthlyTrends.map((trend) => (
+                    <tr key={trend.key} className="border-t border-stone-100 hover:bg-stone-50/60">
+                      <td className="px-4 py-3.5 font-bold text-xs text-stone-950">{trend.label}</td>
+                      <td className="px-4 py-3.5 text-xs text-stone-600">{trend.billedCount} invoice(s)</td>
+                      <td className="px-4 py-3.5 text-xs font-semibold text-stone-900">
+                        {sym}{trend.billedAmount.toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-4 py-3.5 text-xs font-bold text-emerald-700">
+                        {sym}{trend.collectedAmount.toLocaleString("en-IN")}
+                        <span className="block text-[10px] text-stone-400 font-normal">{trend.collectedCount} receipt(s)</span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <AdminBadge
+                          variant={trend.collectionRate >= 80 ? "success" : trend.collectionRate >= 50 ? "warning" : "danger"}
+                          size="sm"
+                        >
+                          {trend.collectionRate}%
+                        </AdminBadge>
+                      </td>
+                      <td className="px-4 py-3.5 text-xs font-semibold text-amber-700">
+                        {sym}{trend.expenseAmount.toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-4 py-3.5 text-xs font-extrabold">
+                        <span className={trend.netCashflow >= 0 ? "text-emerald-700" : "text-rose-700"}>
+                          {trend.netCashflow >= 0 ? "+" : ""}{sym}{trend.netCashflow.toLocaleString("en-IN")}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                />
+              </div>
             )}
           </AdminCard>
         </div>
@@ -2841,6 +3954,77 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                 Statement of Income & Expenditure
               </p>
             </div>
+
+            {/* Income vs Expense Statement Overview BarChart */}
+            {chartPnlComparisonData.length > 0 && (
+              <div className="mt-6 rounded-2xl border border-stone-100 bg-stone-50/50 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-stone-700">
+                    Key Revenue Sources vs. Operating Cost Heads
+                  </span>
+                  <AdminBadge variant="neutral" size="sm">
+                    Statement Snapshot
+                  </AdminBadge>
+                </div>
+                <div className="h-56 w-full min-w-0">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
+                      <BarChart data={chartPnlComparisonData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
+                        <YAxis
+                          tick={{ fontSize: 11, fill: "#78716c" }}
+                          axisLine={{ stroke: "#e7e5e4" }}
+                          tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
+                        />
+                        <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
+                        <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "4px" }} />
+                        <Bar dataKey="Income" fill="#059669" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Expense" fill="#d97706" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Expenditure Categories Proportional Treemap */}
+            {chartExpenseTreemapData.length > 0 && (
+              <div className="mt-6 rounded-2xl border border-stone-100 bg-stone-50/50 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-stone-700">
+                      Operational Expenditure Category Weights (Treemap)
+                    </span>
+                    <p className="text-[11px] text-stone-500">
+                      Proportional visual mapping of major operational cost centers
+                    </p>
+                  </div>
+                  <AdminBadge variant="neutral" size="sm">
+                    {data.pnl.expenseHeads.length} Heads
+                  </AdminBadge>
+                </div>
+                <div className="h-52 w-full min-w-0">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height={200} minWidth={100} minHeight={100}>
+                      <Treemap
+                        data={chartExpenseTreemapData}
+                        dataKey="size"
+                        aspectRatio={4 / 3}
+                        stroke="#fff"
+                        fill="#78716c"
+                      >
+                        <Tooltip content={<ReportCustomTooltip currencySymbol={sym} />} />
+                      </Treemap>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="mt-6 grid grid-cols-1 gap-8 md:grid-cols-2">
               {/* INCOME */}
@@ -2950,6 +4134,111 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
               />
             </div>
           </div>
+
+          {/* Unit Solvency Overview Donut */}
+          {chartUnitStatusData.length > 0 && (
+            <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-stone-950">
+                    Unit Account Health &amp; Solvency Distribution
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    Click any segment or stat card to filter ledger by account solvency
+                  </p>
+                </div>
+                {unitStatusFilter !== "ALL" ? (
+                  <AdminButton
+                    variant="outline"
+                    size="xs"
+                    onClick={() => setUnitStatusFilter("ALL")}
+                  >
+                    Reset ({unitStatusFilter}) ✕
+                  </AdminButton>
+                ) : (
+                  <AdminBadge variant="neutral" size="sm">
+                    Interactive
+                  </AdminBadge>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-3 items-center">
+                <div className="h-44 w-full min-w-0 md:col-span-1">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height={170} minWidth={100} minHeight={100}>
+                      <PieChart>
+                        <Pie
+                          data={chartUnitStatusData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={38}
+                          outerRadius={62}
+                          paddingAngle={3}
+                          dataKey="count"
+                        >
+                          {chartUnitStatusData.map((entry, index) => {
+                            const isSelected = unitStatusFilter === entry.filterTarget
+                            const isDimmed = unitStatusFilter !== "ALL" && !isSelected
+                            return (
+                              <Cell
+                                key={`unit-cell-${index}`}
+                                fill={entry.fill}
+                                cursor="pointer"
+                                opacity={isDimmed ? 0.35 : 1}
+                                stroke={isSelected ? "#1c1917" : "none"}
+                                strokeWidth={isSelected ? 2 : 0}
+                                onClick={() => {
+                                  setUnitStatusFilter((prev) =>
+                                    prev === entry.filterTarget ? "ALL" : entry.filterTarget
+                                  )
+                                }}
+                              />
+                            )
+                          })}
+                        </Pie>
+                        <Tooltip content={<ReportCustomTooltip unitLabel="flats" showPercentage interactiveHint="Click to filter unit ledger" />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full w-full animate-pulse rounded-2xl bg-stone-100/60" />
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 md:col-span-2 sm:grid-cols-3">
+                  {chartUnitStatusData.map((item) => {
+                    const isSelected = unitStatusFilter === item.filterTarget
+                    return (
+                      <button
+                        type="button"
+                        key={item.name}
+                        onClick={() => {
+                          setUnitStatusFilter((prev) =>
+                            prev === item.filterTarget ? "ALL" : item.filterTarget
+                          )
+                        }}
+                        className={`text-left rounded-2xl border p-3.5 transition-all cursor-pointer ${
+                          isSelected
+                            ? "border-stone-900 bg-stone-900/5 shadow-sm"
+                            : "border-stone-200 bg-stone-50/70 hover:border-stone-400"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: item.fill }} />
+                            <span className="text-xs font-bold text-stone-900 truncate">{item.name}</span>
+                          </div>
+                          {isSelected && <span className="text-[10px] font-bold text-stone-900">✓</span>}
+                        </div>
+                        <p className="mt-2 text-xl font-black text-stone-950">
+                          {item.count} <span className="text-xs font-medium text-stone-500">flats</span>
+                        </p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
 
           <AdminCard
             title={`Unit Maintenance & Dues Ledger (${filteredUnitLedger.length} Flats)`}
