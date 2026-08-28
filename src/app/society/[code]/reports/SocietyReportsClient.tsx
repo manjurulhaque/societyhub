@@ -537,24 +537,28 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
   const agingChartData = useMemo(() => [
     {
       bucket: ">90d (Chronic)",
+      bucketKey: "OVER_90",
       amount: data.agingSummary.over90.amount,
       count: data.agingSummary.over90.count,
       fill: "#e11d48",
     },
     {
       bucket: "61-90d",
+      bucketKey: "DAYS_61_90",
       amount: data.agingSummary.days61To90.amount,
       count: data.agingSummary.days61To90.count,
       fill: "#f59e0b",
     },
     {
       bucket: "31-60d",
+      bucketKey: "DAYS_31_60",
       amount: data.agingSummary.days31To60.amount,
       count: data.agingSummary.days31To60.count,
       fill: "#eab308",
     },
     {
       bucket: "0-30d",
+      bucketKey: "DAYS_0_30",
       amount: data.agingSummary.days0To30.amount,
       count: data.agingSummary.days0To30.count,
       fill: "#0284c7",
@@ -604,6 +608,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
   // Chart data for special assessment schemes
   const chartCampaignsData = useMemo(() => {
     return data.oneTimeFunds.campaigns.map((c) => ({
+      id: c.id,
       name: c.title,
       Target: c.totalTargetAmount,
       Collected: c.totalCollectedAmount,
@@ -614,24 +619,23 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
 
   // Chart data for member deposits distribution
   const chartDepositsTypeData = useMemo(() => {
-    const map = new Map<string, number>()
+    const map = new Map<string, { name: string; value: number; rawType: string }>()
     for (const d of data.oneTimeFunds.deposits) {
       const typeName = d.depositType.replace(/_/g, " ")
-      map.set(typeName, (map.get(typeName) || 0) + Number(d.amount))
+      const existing = map.get(d.depositType) || { name: typeName, value: 0, rawType: d.depositType }
+      existing.value += Number(d.amount)
+      map.set(d.depositType, existing)
     }
-    return Array.from(map.entries()).map(([name, value]) => ({
-      name,
-      value,
-    }))
+    return Array.from(map.values())
   }, [data.oneTimeFunds.deposits])
 
   // Chart data for cheque clearing status
   const chartChequesStatusData = useMemo(() => {
-    const statusCounts = {
-      CLEARED: { name: "Cleared", value: 0, count: 0, fill: "#059669" },
-      IN_CLEARING: { name: "In Clearing", value: 0, count: 0, fill: "#d97706" },
-      BOUNCED: { name: "Bounced", value: 0, count: 0, fill: "#e11d48" },
-      OTHER: { name: "Other", value: 0, count: 0, fill: "#78716c" },
+    const statusCounts: Record<string, { name: string; statusKey: string; value: number; count: number; fill: string }> = {
+      CLEARED: { name: "Cleared", statusKey: "CLEARED", value: 0, count: 0, fill: "#059669" },
+      IN_CLEARING: { name: "In Clearing", statusKey: "IN_CLEARING", value: 0, count: 0, fill: "#d97706" },
+      BOUNCED: { name: "Bounced", statusKey: "BOUNCED", value: 0, count: 0, fill: "#e11d48" },
+      OTHER: { name: "Other", statusKey: "ALL", value: 0, count: 0, fill: "#78716c" },
     }
     for (const c of data.cheques) {
       const key = c.status === "CLEARED" || c.status === "BOUNCED" || c.status === "IN_CLEARING" ? c.status : "OTHER"
@@ -658,12 +662,12 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
 
   // Chart data for Unit account solvency & status breakdown
   const chartUnitStatusData = useMemo(() => {
-    const counts: Record<string, { name: string; count: number; fill: string }> = {
-      CLEAR: { name: "Fully Cleared", count: 0, fill: "#059669" },
-      ADVANCE: { name: "In Advance Float", count: 0, fill: "#0284c7" },
-      PENDING: { name: "Current Pending", count: 0, fill: "#d97706" },
-      OVERDUE: { name: "Arrears Overdue", count: 0, fill: "#e11d48" },
-      NO_BILLS: { name: "No Invoices", count: 0, fill: "#78716c" },
+    const counts: Record<string, { name: string; statusKey: string; filterTarget: string; count: number; fill: string }> = {
+      CLEAR: { name: "Fully Cleared", statusKey: "CLEAR", filterTarget: "CLEAR", count: 0, fill: "#059669" },
+      ADVANCE: { name: "In Advance Float", statusKey: "ADVANCE", filterTarget: "ADVANCE", count: 0, fill: "#0284c7" },
+      PENDING: { name: "Current Pending", statusKey: "PENDING", filterTarget: "DUES", count: 0, fill: "#d97706" },
+      OVERDUE: { name: "Arrears Overdue", statusKey: "OVERDUE", filterTarget: "DUES", count: 0, fill: "#e11d48" },
+      NO_BILLS: { name: "No Invoices", statusKey: "NO_BILLS", filterTarget: "ALL", count: 0, fill: "#78716c" },
     }
     for (const u of data.unitLedger) {
       if (counts[u.accountStatus]) {
@@ -706,14 +710,15 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
   const chartBlockDefaultersData = useMemo(() => {
     const blockMap = new Map<
       string,
-      { block: string; cleared: number; current: number; attention: number; chronic: number; total: number }
+      { block: string; rawBlock: string; cleared: number; current: number; attention: number; chronic: number; total: number }
     >()
     for (const b of data.blocks) {
-      blockMap.set(b, { block: `Block ${b}`, cleared: 0, current: 0, attention: 0, chronic: 0, total: 0 })
+      blockMap.set(b, { block: `Block ${b}`, rawBlock: b, cleared: 0, current: 0, attention: 0, chronic: 0, total: 0 })
     }
     for (const u of data.unitLedger) {
       const entry = blockMap.get(u.blockName) || {
         block: `Block ${u.blockName}`,
+        rawBlock: u.blockName,
         cleared: 0,
         current: 0,
         attention: 0,
@@ -1671,17 +1676,27 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                             Special Assessment Schemes Capital Realization
                           </h3>
                           <p className="text-xs text-stone-500">
-                            Target goals vs. realized collections vs. pending balances across schemes
+                            Click any scheme bar to view its unit contributions and details
                           </p>
                         </div>
                         <AdminBadge variant="neutral" size="sm">
-                          {chartCampaignsData.length} Schemes
+                          Interactive ({chartCampaignsData.length} Schemes)
                         </AdminBadge>
                       </div>
                       <div className="h-56 w-full min-w-0">
                         {isMounted ? (
                           <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
-                            <BarChart data={chartCampaignsData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                            <BarChart
+                              data={chartCampaignsData}
+                              margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                              onClick={(state: unknown) => {
+                                const s = state as { activePayload?: Array<{ payload?: { id?: string } }> } | null
+                                const id = s?.activePayload?.[0]?.payload?.id
+                                if (id) {
+                                  setSelectedCampaignId(id)
+                                }
+                              }}
+                            >
                               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
                               <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
                               <YAxis
@@ -1690,13 +1705,13 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                                 tickFormatter={(val) => formatCompactCurrency(Number(val), sym)}
                               />
                               <Tooltip
-                                formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
+                                formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")} — Click to view scheme`, ""]}
                                 contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
                               />
                               <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "4px" }} />
-                              <Bar dataKey="Target" fill="#1c1917" radius={[4, 4, 0, 0]} />
-                              <Bar dataKey="Collected" fill="#059669" radius={[4, 4, 0, 0]} />
-                              <Bar dataKey="Outstanding" fill="#e11d48" radius={[4, 4, 0, 0]} />
+                              <Bar dataKey="Target" fill="#1c1917" radius={[4, 4, 0, 0]} cursor="pointer" />
+                              <Bar dataKey="Collected" fill="#059669" radius={[4, 4, 0, 0]} cursor="pointer" />
+                              <Bar dataKey="Outstanding" fill="#e11d48" radius={[4, 4, 0, 0]} cursor="pointer" />
                             </BarChart>
                           </ResponsiveContainer>
                         ) : (
@@ -1949,15 +1964,25 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                   <div className="mb-3 flex items-center justify-between">
                     <div>
                       <h3 className="text-sm font-bold text-stone-950">
-                        Member Deposits & Corpus Allocation
+                        Member Deposits &amp; Corpus Allocation
                       </h3>
                       <p className="text-xs text-stone-500">
-                        Capital distribution across Corpus, Security, and Fit-out liabilities
+                        Click any segment to filter deposit records by liability type
                       </p>
                     </div>
-                    <AdminBadge variant="neutral" size="sm">
-                      {sym}{data.oneTimeFunds.totalDepositsHeld.toLocaleString("en-IN")} Total
-                    </AdminBadge>
+                    {oneTimeStatus !== "ALL" ? (
+                      <AdminButton
+                        variant="outline"
+                        size="xs"
+                        onClick={() => setOneTimeStatus("ALL")}
+                      >
+                        Reset ({oneTimeStatus.replace(/_/g, " ")}) ✕
+                      </AdminButton>
+                    ) : (
+                      <AdminBadge variant="neutral" size="sm">
+                        Interactive ({sym}{data.oneTimeFunds.totalDepositsHeld.toLocaleString("en-IN")})
+                      </AdminBadge>
+                    )}
                   </div>
                   <div className="h-44 w-full min-w-0">
                     {isMounted ? (
@@ -1972,12 +1997,29 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                             paddingAngle={3}
                             dataKey="value"
                           >
-                            {chartDepositsTypeData.map((_, index) => (
-                              <Cell key={`dep-cell-${index}`} fill={CHART_COLORS[(index + 3) % CHART_COLORS.length]} />
-                            ))}
+                            {chartDepositsTypeData.map((entry, index) => {
+                              const isSelected = oneTimeStatus === entry.rawType
+                              const isDimmed = oneTimeStatus !== "ALL" && !isSelected
+                              return (
+                                <Cell
+                                  key={`dep-cell-${index}`}
+                                  fill={CHART_COLORS[(index + 3) % CHART_COLORS.length]}
+                                  cursor="pointer"
+                                  opacity={isDimmed ? 0.35 : 1}
+                                  stroke={isSelected ? "#1c1917" : "none"}
+                                  strokeWidth={isSelected ? 2 : 0}
+                                  onClick={() => {
+                                    setOneTimeStatus((prev) => (prev === entry.rawType ? "ALL" : entry.rawType))
+                                  }}
+                                />
+                              )
+                            })}
                           </Pie>
                           <Tooltip
-                            formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
+                            formatter={(val: unknown) => [
+                              `${sym}${Number(val ?? 0).toLocaleString("en-IN")} — Click to filter`,
+                              "",
+                            ]}
                             contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
                           />
                           <Legend wrapperStyle={{ fontSize: "11px" }} />
@@ -2882,12 +2924,22 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                       Overdue Arrears Aging Distribution
                     </h3>
                     <p className="text-xs text-stone-500">
-                      Visual aging curve and recovery risk concentration
+                      Click any bar to filter register by aging severity
                     </p>
                   </div>
-                  <AdminBadge variant="neutral" size="sm">
-                    Aging Analysis
-                  </AdminBadge>
+                  {defaulterAgingFilter !== "ALL" ? (
+                    <AdminButton
+                      variant="outline"
+                      size="xs"
+                      onClick={() => setDefaulterAgingFilter("ALL")}
+                    >
+                      Reset ({defaulterAgingFilter.replace(/_/g, " ")}) ✕
+                    </AdminButton>
+                  ) : (
+                    <AdminBadge variant="neutral" size="sm">
+                      Interactive
+                    </AdminBadge>
+                  )}
                 </div>
 
                 <div className="h-56 w-full min-w-0">
@@ -2910,15 +2962,31 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                         />
                         <Tooltip
                           formatter={(val: unknown, _name: unknown, item: { payload?: { count?: number } }) => [
-                            `${sym}${Number(val ?? 0).toLocaleString("en-IN")} (${item?.payload?.count ?? 0} units)`,
+                            `${sym}${Number(val ?? 0).toLocaleString("en-IN")} (${item?.payload?.count ?? 0} units) — Click to filter`,
                             "Overdue Dues",
                           ]}
                           contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
                         />
                         <Bar dataKey="amount" radius={[0, 6, 6, 0]}>
-                          {agingChartData.map((entry, index) => (
-                            <Cell key={`aging-cell-${index}`} fill={entry.fill} />
-                          ))}
+                          {agingChartData.map((entry, index) => {
+                            const isSelected = defaulterAgingFilter === entry.bucketKey
+                            const isDimmed = defaulterAgingFilter !== "ALL" && !isSelected
+                            return (
+                              <Cell
+                                key={`aging-cell-${index}`}
+                                fill={entry.fill}
+                                cursor="pointer"
+                                opacity={isDimmed ? 0.35 : 1}
+                                stroke={isSelected ? "#1c1917" : "none"}
+                                strokeWidth={isSelected ? 2 : 0}
+                                onClick={() => {
+                                  setDefaulterAgingFilter((prev) =>
+                                    prev === entry.bucketKey ? "ALL" : entry.bucketKey
+                                  )
+                                }}
+                              />
+                            )
+                          })}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
@@ -2936,24 +3004,44 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                       Block / Wing Solvency &amp; Arrears
                     </h3>
                     <p className="text-xs text-stone-500">
-                      Unit payment standing across residential blocks
+                      Click any block bar to filter register by block
                     </p>
                   </div>
-                  <AdminBadge variant="neutral" size="sm">
-                    Block Analysis
-                  </AdminBadge>
+                  {defaulterBlock !== "ALL" ? (
+                    <AdminButton
+                      variant="outline"
+                      size="xs"
+                      onClick={() => setDefaulterBlock("ALL")}
+                    >
+                      Reset (Block {defaulterBlock}) ✕
+                    </AdminButton>
+                  ) : (
+                    <AdminBadge variant="neutral" size="sm">
+                      Interactive
+                    </AdminBadge>
+                  )}
                 </div>
 
                 <div className="h-56 w-full min-w-0">
                   {isMounted ? (
                     <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={100}>
-                      <BarChart data={chartBlockDefaultersData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <BarChart
+                        data={chartBlockDefaultersData}
+                        margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                        onClick={(state: unknown) => {
+                          const s = state as { activePayload?: Array<{ payload?: { rawBlock?: string } }> } | null
+                          const raw = s?.activePayload?.[0]?.payload?.rawBlock
+                          if (raw) {
+                            setDefaulterBlock((prev) => (prev === raw ? "ALL" : raw))
+                          }
+                        }}
+                      >
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
                         <XAxis dataKey="block" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
                         <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={{ stroke: "#e7e5e4" }} />
                         <Tooltip
                           formatter={(val: unknown, name: unknown) => [
-                            `${val} flats`,
+                            `${val} flats (Click to filter)`,
                             name === "cleared"
                               ? "Cleared / No Dues"
                               : name === "current"
@@ -2976,10 +3064,10 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                           }
                           wrapperStyle={{ fontSize: "11px", paddingTop: "4px" }}
                         />
-                        <Bar dataKey="cleared" stackId="a" fill="#059669" />
-                        <Bar dataKey="current" stackId="a" fill="#0284c7" />
-                        <Bar dataKey="attention" stackId="a" fill="#f59e0b" />
-                        <Bar dataKey="chronic" stackId="a" fill="#e11d48" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="cleared" stackId="a" fill="#059669" cursor="pointer" />
+                        <Bar dataKey="current" stackId="a" fill="#0284c7" cursor="pointer" />
+                        <Bar dataKey="attention" stackId="a" fill="#f59e0b" cursor="pointer" />
+                        <Bar dataKey="chronic" stackId="a" fill="#e11d48" radius={[4, 4, 0, 0]} cursor="pointer" />
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
@@ -3561,15 +3649,25 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
               <div className="mb-3 flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-bold text-stone-950">
-                    Cheque Clearing & Realization Status
+                    Cheque Clearing &amp; Realization Status
                   </h3>
                   <p className="text-xs text-stone-500">
-                    Instrument realization, clearing pipeline, and bounce rate tracking
+                    Click any segment or stat card to filter register by clearing status
                   </p>
                 </div>
-                <AdminBadge variant="neutral" size="sm">
-                  {data.cheques.length} Instruments
-                </AdminBadge>
+                {chequeStatusFilter !== "ALL" ? (
+                  <AdminButton
+                    variant="outline"
+                    size="xs"
+                    onClick={() => setChequeStatusFilter("ALL")}
+                  >
+                    Reset ({chequeStatusFilter}) ✕
+                  </AdminButton>
+                ) : (
+                  <AdminBadge variant="neutral" size="sm">
+                    Interactive
+                  </AdminBadge>
+                )}
               </div>
 
               <div className="grid grid-cols-1 gap-6 md:grid-cols-3 items-center">
@@ -3586,12 +3684,31 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                           paddingAngle={3}
                           dataKey="value"
                         >
-                          {chartChequesStatusData.map((entry, index) => (
-                            <Cell key={`cheque-cell-${index}`} fill={entry.fill} />
-                          ))}
+                          {chartChequesStatusData.map((entry, index) => {
+                            const isSelected = chequeStatusFilter === entry.statusKey
+                            const isDimmed = chequeStatusFilter !== "ALL" && !isSelected
+                            return (
+                              <Cell
+                                key={`cheque-cell-${index}`}
+                                fill={entry.fill}
+                                cursor="pointer"
+                                opacity={isDimmed ? 0.35 : 1}
+                                stroke={isSelected ? "#1c1917" : "none"}
+                                strokeWidth={isSelected ? 2 : 0}
+                                onClick={() => {
+                                  setChequeStatusFilter((prev) =>
+                                    prev === entry.statusKey ? "ALL" : entry.statusKey
+                                  )
+                                }}
+                              />
+                            )
+                          })}
                         </Pie>
                         <Tooltip
-                          formatter={(val: unknown) => [`${sym}${Number(val ?? 0).toLocaleString("en-IN")}`, ""]}
+                          formatter={(val: unknown) => [
+                            `${sym}${Number(val ?? 0).toLocaleString("en-IN")} — Click to filter`,
+                            "",
+                          ]}
                           contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
                         />
                       </PieChart>
@@ -3602,20 +3719,36 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 md:col-span-2 sm:grid-cols-3">
-                  {chartChequesStatusData.map((item) => (
-                    <div key={item.name} className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: item.fill }} />
-                          <span className="text-xs font-bold text-stone-900">{item.name}</span>
+                  {chartChequesStatusData.map((item) => {
+                    const isSelected = chequeStatusFilter === item.statusKey
+                    return (
+                      <button
+                        type="button"
+                        key={item.name}
+                        onClick={() => {
+                          setChequeStatusFilter((prev) =>
+                            prev === item.statusKey ? "ALL" : item.statusKey
+                          )
+                        }}
+                        className={`text-left rounded-2xl border p-3.5 transition-all cursor-pointer ${
+                          isSelected
+                            ? "border-stone-900 bg-stone-900/5 shadow-sm"
+                            : "border-stone-200 bg-stone-50/70 hover:border-stone-400"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: item.fill }} />
+                            <span className="text-xs font-bold text-stone-900 truncate">{item.name}</span>
+                          </div>
+                          <AdminBadge variant="neutral" size="sm">{item.count}</AdminBadge>
                         </div>
-                        <AdminBadge variant="neutral" size="sm">{item.count}</AdminBadge>
-                      </div>
-                      <p className="mt-2 text-base font-extrabold text-stone-950">
-                        {sym}{item.value.toLocaleString("en-IN")}
-                      </p>
-                    </div>
-                  ))}
+                        <p className="mt-2 text-base font-extrabold text-stone-950">
+                          {sym}{item.value.toLocaleString("en-IN")}
+                        </p>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             </div>
@@ -4010,12 +4143,22 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                     Unit Account Health &amp; Solvency Distribution
                   </h3>
                   <p className="text-xs text-stone-500">
-                    Account balances across Cleared, In Advance, Pending, and Arrears categories
+                    Click any segment or stat card to filter ledger by account solvency
                   </p>
                 </div>
-                <AdminBadge variant="neutral" size="sm">
-                  {data.unitLedger.length} Flats
-                </AdminBadge>
+                {unitStatusFilter !== "ALL" ? (
+                  <AdminButton
+                    variant="outline"
+                    size="xs"
+                    onClick={() => setUnitStatusFilter("ALL")}
+                  >
+                    Reset ({unitStatusFilter}) ✕
+                  </AdminButton>
+                ) : (
+                  <AdminBadge variant="neutral" size="sm">
+                    Interactive
+                  </AdminBadge>
+                )}
               </div>
 
               <div className="grid grid-cols-1 gap-6 md:grid-cols-3 items-center">
@@ -4032,13 +4175,29 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                           paddingAngle={3}
                           dataKey="count"
                         >
-                          {chartUnitStatusData.map((entry, index) => (
-                            <Cell key={`unit-cell-${index}`} fill={entry.fill} />
-                          ))}
+                          {chartUnitStatusData.map((entry, index) => {
+                            const isSelected = unitStatusFilter === entry.filterTarget
+                            const isDimmed = unitStatusFilter !== "ALL" && !isSelected
+                            return (
+                              <Cell
+                                key={`unit-cell-${index}`}
+                                fill={entry.fill}
+                                cursor="pointer"
+                                opacity={isDimmed ? 0.35 : 1}
+                                stroke={isSelected ? "#1c1917" : "none"}
+                                strokeWidth={isSelected ? 2 : 0}
+                                onClick={() => {
+                                  setUnitStatusFilter((prev) =>
+                                    prev === entry.filterTarget ? "ALL" : entry.filterTarget
+                                  )
+                                }}
+                              />
+                            )
+                          })}
                         </Pie>
                         <Tooltip
                           formatter={(val: unknown) => [
-                            `${val} flats (${data.unitLedger.length > 0 ? Math.round((Number(val) / data.unitLedger.length) * 100) : 0}%)`,
+                            `${val} flats (${data.unitLedger.length > 0 ? Math.round((Number(val) / data.unitLedger.length) * 100) : 0}%) — Click to filter`,
                             "",
                           ]}
                           contentStyle={{ backgroundColor: "#1c1917", borderRadius: "12px", color: "#fff", fontSize: "12px" }}
@@ -4051,19 +4210,36 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 md:col-span-2 sm:grid-cols-3">
-                  {chartUnitStatusData.map((item) => (
-                    <div key={item.name} className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: item.fill }} />
-                          <span className="text-xs font-bold text-stone-900 truncate">{item.name}</span>
+                  {chartUnitStatusData.map((item) => {
+                    const isSelected = unitStatusFilter === item.filterTarget
+                    return (
+                      <button
+                        type="button"
+                        key={item.name}
+                        onClick={() => {
+                          setUnitStatusFilter((prev) =>
+                            prev === item.filterTarget ? "ALL" : item.filterTarget
+                          )
+                        }}
+                        className={`text-left rounded-2xl border p-3.5 transition-all cursor-pointer ${
+                          isSelected
+                            ? "border-stone-900 bg-stone-900/5 shadow-sm"
+                            : "border-stone-200 bg-stone-50/70 hover:border-stone-400"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: item.fill }} />
+                            <span className="text-xs font-bold text-stone-900 truncate">{item.name}</span>
+                          </div>
+                          {isSelected && <span className="text-[10px] font-bold text-stone-900">✓</span>}
                         </div>
-                      </div>
-                      <p className="mt-2 text-xl font-black text-stone-950">
-                        {item.count} <span className="text-xs font-medium text-stone-500">flats</span>
-                      </p>
-                    </div>
-                  ))}
+                        <p className="mt-2 text-xl font-black text-stone-950">
+                          {item.count} <span className="text-xs font-medium text-stone-500">flats</span>
+                        </p>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             </div>
