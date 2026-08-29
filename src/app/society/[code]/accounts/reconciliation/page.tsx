@@ -106,7 +106,10 @@ export default async function SocietyBankReconciliationPage({
 
   const historicalRecons: HistoricalReconItem[] = rawRecons.map((r) => ({
     id: r.id,
+    accountId: r.accountId,
     accountName: r.account.name,
+    bankName: r.account.bankName,
+    accountNumber: r.account.accountNumber,
     statementDate: r.statementDate.toISOString(),
     statementBalance: Number(r.statementBalance),
     bookBalance: Number(r.ledgerBalance),
@@ -115,6 +118,7 @@ export default async function SocietyBankReconciliationPage({
     discrepancy: Number(r.difference),
     status: r.status,
     notes: r.notes,
+    reconciledAt: r.reconciledAt ? r.reconciledAt.toISOString() : null,
     createdAt: r.createdAt.toISOString(),
   }))
 

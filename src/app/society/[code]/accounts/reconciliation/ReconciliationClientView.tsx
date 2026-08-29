@@ -16,6 +16,12 @@ import {
   type UnpaidBillOption,
 } from "./AutoReconciliationEngine"
 import { BrsBalanceBridge } from "./BrsBalanceBridge"
+import {
+  HistoricalBrsModal,
+  type HistoricalReconItem,
+} from "./HistoricalBrsModal"
+
+export type { HistoricalReconItem }
 
 export type BankAccountOption = {
   id: string
@@ -33,20 +39,6 @@ export type UnclearedCheque = {
   amount: number
   direction: "INWARD" | "OUTWARD"
   status: string
-}
-
-export type HistoricalReconItem = {
-  id: string
-  accountName: string
-  statementDate: string
-  statementBalance: number
-  bookBalance: number
-  uncreditedAmount: number
-  unpresentedAmount: number
-  discrepancy: number
-  status: string
-  notes: string | null
-  createdAt: string
 }
 
 interface ReconciliationClientViewProps {
@@ -91,6 +83,9 @@ export function ReconciliationClientView({
   const [clearingTarget, setClearingTarget] = useState<UnclearedCheque | null>(null)
   const [clearedDateInput, setClearedDateInput] = useState(new Date().toISOString().split("T")[0])
   const [isClearingSubmitting, setIsClearingSubmitting] = useState(false)
+
+  // Historical BRS snapshot modal state
+  const [selectedHistoricalRecon, setSelectedHistoricalRecon] = useState<HistoricalReconItem | null>(null)
 
   // Sync state when props change
   useEffect(() => {
@@ -685,6 +680,7 @@ export function ReconciliationClientView({
                   "Discrepancy / Variance",
                   "Status",
                   "Auditor Notes",
+                  "Actions",
                 ]}
                 rows={historicalRecons.map((r) => (
                   <tr
@@ -733,12 +729,33 @@ export function ReconciliationClientView({
                     <td className="px-4 py-3.5 text-stone-600 max-w-xs truncate">
                       {r.notes || "—"}
                     </td>
+
+                    <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedHistoricalRecon(r)}
+                        className="inline-flex items-center gap-1 rounded-xl border border-stone-200 bg-white px-2.5 py-1 text-[11px] font-bold text-stone-700 hover:border-stone-400 hover:bg-stone-50 hover:text-stone-950 transition shadow-xs"
+                      >
+                        <span>View Snapshot</span>
+                        <span className="text-[10px]">→</span>
+                      </button>
+                    </td>
                   </tr>
                 ))}
               />
             )}
           </div>
         </div>
+      )}
+
+      {/* Historical BRS Snapshot Modal Dialog */}
+      {selectedHistoricalRecon && (
+        <HistoricalBrsModal
+          recon={selectedHistoricalRecon}
+          societyInfo={societyInfo}
+          currencySymbol={currencySymbol}
+          onClose={() => setSelectedHistoricalRecon(null)}
+        />
       )}
       {/* Inline Cheque Clearance Modal Dialog */}
       {clearingTarget && (
