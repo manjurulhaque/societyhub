@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import type { BankStatementRow, ParsedBankStatement } from "./bankStatementParser"
 import { ensureStandardExpenseCategories } from "@/lib/expenseCategories"
+import { matchRecurringUtilityRule } from "./recurringRuleEngine"
 
 export type ReconActionType =
   | "CLEAR_INWARD_CHEQUE"
@@ -645,7 +646,36 @@ export async function analyzeBankStatement(params: {
         continue
       }
 
-      // D3: Vendor Name Match
+      // D3: Recurring Utility & AMC Overhead Rule Engine
+      const ruleMatch = matchRecurringUtilityRule(row.narration, expenseCategories)
+      if (ruleMatch) {
+        matches.push({
+          rowId: row.rowId,
+          date: row.date,
+          rawDate: row.rawDate,
+          narration: row.narration,
+          referenceNumber: row.referenceNumber,
+          chequeNumber: row.chequeNumber,
+          debit: debitAmt,
+          credit: 0,
+          balance: row.balance,
+          type: "DEBIT",
+          actionType: "RECORD_VENDOR_EXPENSE",
+          confidence: "HIGH",
+          matchScore: 88,
+          reason: `⚡ Rule Match [${ruleMatch.matchedRule.name}]: Narration matched "${ruleMatch.matchedKeyword}" -> Auto-categorized as ${ruleMatch.categoryName}`,
+          matchedDetails: {
+            categoryId: ruleMatch.categoryId,
+            categoryName: ruleMatch.categoryName,
+          },
+          isAutoSelected: true,
+        })
+        highConfidenceCount++
+        matchedDebitAmount += debitAmt
+        continue
+      }
+
+      // D4: Vendor Name Match
       const matchedVendor = vendors.find((v) => {
         const vNameNorm = normalizeForMatch(v.name)
         const vCompNorm = v.companyName ? normalizeForMatch(v.companyName) : ""

@@ -6,6 +6,7 @@ import {
   generateSampleBankStatementCsv,
 } from "../src/lib/accounting/bankStatementParser"
 import { generateBankReconciliationCsv } from "../src/lib/pdf/bankReconPdfGenerator"
+import { matchRecurringUtilityRule } from "../src/lib/accounting/recurringRuleEngine"
 
 function assert(condition: boolean, msg: string) {
   if (!condition) {
@@ -121,6 +122,29 @@ const bsrCsv = generateBankReconciliationCsv({
 assert(bsrCsv.includes("Palm Meadows CHS") || bsrCsv.includes("Balance as per Society Bank Ledger"), "BRS CSV contains summary headers")
 assert(bsrCsv.includes("045231"), "BRS CSV contains unpresented cheque schedule")
 assert(bsrCsv.includes("892014"), "BRS CSV contains uncredited cheque schedule")
+
+// Test 9: Recurring Utility & Overhead Rule Engine
+console.log("\n▶ 9. Testing Recurring Utility & Overhead Rule Engine:")
+const mockCats = [
+  { id: "cat-elec", name: "Common Area Electricity Consumption" },
+  { id: "cat-water", name: "Supplementary Water Tanker Purchases" },
+  { id: "cat-lift", name: "Lift AMC & Breakdown Repairs" },
+  { id: "cat-sec", name: "Security Guard Services" },
+]
+
+const elecMatch = matchRecurringUtilityRule("ACH D- BESCOM BILL PAYMENT 0892341", mockCats)
+assert(elecMatch !== null && elecMatch.matchedRule.id === "RULE_ELECTRICITY", "Matches BESCOM to Electricity Rule")
+assert(elecMatch?.categoryId === "cat-elec", "Maps to Electricity category ID")
+
+const liftMatch = matchRecurringUtilityRule("NEFT-OTIS ELEVATOR INDIA LTD-AMC Q1", mockCats)
+assert(liftMatch !== null && liftMatch.matchedRule.id === "RULE_LIFT_AMC", "Matches OTIS to Lift AMC Rule")
+assert(liftMatch?.categoryId === "cat-lift", "Maps to Lift AMC category ID")
+
+const waterMatch = matchRecurringUtilityRule("CHQ 401290 WATER TANKER SUPPLY MAY", mockCats)
+assert(waterMatch !== null && waterMatch.matchedRule.id === "RULE_WATER", "Matches Water Tanker Rule")
+
+const secMatch = matchRecurringUtilityRule("NEFT/SIS INDIA SECURITY SERVICES/APR", mockCats)
+assert(secMatch !== null && secMatch.matchedRule.id === "RULE_SECURITY", "Matches Security Agency Rule")
 
 console.log("\n=======================================================")
 console.log(" 🎉 All Bank Statement Auto-Reconciliation Tests Passed! ")
