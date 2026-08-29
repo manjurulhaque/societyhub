@@ -243,9 +243,18 @@ export async function executeAutoReconciliationBatch(
             // Record Bank Charge Expense
             let categoryId = item.matchedDetails.categoryId
             if (!categoryId) {
-              const defaultCat = await tx.expenseCategory.findFirst({
-                where: { societyId, code: "5610", isActive: true },
-              })
+              const defaultCat =
+                (await tx.expenseCategory.findFirst({
+                  where: {
+                    societyId,
+                    name: { contains: "Bank", mode: "insensitive" },
+                    isActive: true,
+                    deletedAt: null,
+                  },
+                })) ||
+                (await tx.expenseCategory.findFirst({
+                  where: { societyId, isActive: true, deletedAt: null },
+                }))
               categoryId = defaultCat?.id
             }
 
