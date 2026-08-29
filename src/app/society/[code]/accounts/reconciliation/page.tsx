@@ -145,6 +145,16 @@ export default async function SocietyBankReconciliationPage({
 
       <ReconciliationClientView
         societyCode={code}
+        societyInfo={{
+          name: society.name,
+          address: society.address,
+          city: society.city,
+          state: society.state,
+          pincode: society.pincode,
+          registrationNumber: society.registrationNumber,
+          panNumber: society.panNumber,
+          currencySymbol: society.currencySymbol || "₹",
+        }}
         currencySymbol={society.currencySymbol || "₹"}
         bankAccounts={bankAccounts}
         unpresentedCheques={unpresentedCheques}

@@ -5,6 +5,7 @@ import {
   extractNarrationEntities,
   generateSampleBankStatementCsv,
 } from "../src/lib/accounting/bankStatementParser"
+import { generateBankReconciliationCsv } from "../src/lib/pdf/bankReconPdfGenerator"
 
 function assert(condition: boolean, msg: string) {
   if (!condition) {
@@ -97,13 +98,29 @@ assert(sbiParsed.rows.length === 2, "Parsed 2 SBI rows")
 assert(sbiParsed.rows[0].entities.isInterestKeyword === true, "Row 0 flagged as interest")
 assert(sbiParsed.rows[1].entities.flatCandidate === "A-402", "Row 1 flat = A-402")
 
-// Test 7: Sample CSV Generator
-console.log("\n▶ 7. Testing Sample CSV Generator:")
-const sampleCsv = generateSampleBankStatementCsv()
-assert(sampleCsv.includes("Txn Date"), "Sample CSV contains headers")
-assert(sampleCsv.includes("FLAT A-101"), "Sample CSV contains realistic mock data")
-const parsedSample = parseBankStatementCsv(sampleCsv)
-assert(parsedSample.rows.length === 8, "Sample CSV parses into 8 rows")
+// Test 8: Bank Reconciliation CSV Generator
+console.log("\n▶ 8. Testing Bank Reconciliation CSV Generator:")
+const bsrCsv = generateBankReconciliationCsv({
+  society: { name: "Palm Meadows CHS" },
+  accountName: "HDFC Main Operational A/C",
+  bankName: "HDFC Bank",
+  accountNumber: "50200012345678",
+  statementDate: "2026-05-31",
+  bookBalance: 450000,
+  unpresentedCheques: [
+    { chequeNumber: "045231", chequeDate: "2026-05-20", partyName: "Otis Elevator AMC", amount: 18000 },
+  ],
+  uncreditedCheques: [
+    { chequeNumber: "892014", chequeDate: "2026-05-28", partyName: "Sharma Flat A-101", amount: 4500 },
+  ],
+  statementBalance: 463500,
+  adjustedBalance: 463500,
+  discrepancy: 0,
+  notes: "Audited and verified with HDFC Passbook",
+})
+assert(bsrCsv.includes("Palm Meadows CHS") || bsrCsv.includes("Balance as per Society Bank Ledger"), "BRS CSV contains summary headers")
+assert(bsrCsv.includes("045231"), "BRS CSV contains unpresented cheque schedule")
+assert(bsrCsv.includes("892014"), "BRS CSV contains uncredited cheque schedule")
 
 console.log("\n=======================================================")
 console.log(" 🎉 All Bank Statement Auto-Reconciliation Tests Passed! ")

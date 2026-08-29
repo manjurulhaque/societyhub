@@ -6,6 +6,11 @@ import { AdminStatCard, AdminBadge, AdminTable, AdminCard } from "@/components/a
 import { commitBankReconciliation } from "./actions"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
 import {
+  generateBankReconciliationPDF,
+  generateBankReconciliationCsv,
+  type ReconPdfSocietyInfo,
+} from "@/lib/pdf/bankReconPdfGenerator"
+import {
   AutoReconciliationEngine,
   type FlatOption,
   type UnpaidBillOption,
@@ -45,6 +50,7 @@ export type HistoricalReconItem = {
 
 interface ReconciliationClientViewProps {
   societyCode: string
+  societyInfo?: ReconPdfSocietyInfo
   currencySymbol: string
   bankAccounts: BankAccountOption[]
   unpresentedCheques: UnclearedCheque[]
@@ -59,6 +65,7 @@ type ReconMode = "AUTO_STATEMENT" | "STATUTORY_BRS"
 
 export function ReconciliationClientView({
   societyCode,
+  societyInfo,
   currencySymbol,
   bankAccounts,
   unpresentedCheques,
@@ -90,6 +97,72 @@ export function ReconciliationClientView({
   const stmtBalNum = parseFloat(statementBalance) || 0
   const difference = stmtBalNum ? Math.round((adjustedBalance - stmtBalNum) * 100) / 100 : 0
   const isBalanced = statementBalance.trim() !== "" && Math.abs(difference) < 0.01
+
+  const handleDownloadPdf = () => {
+    if (!selectedAccount) return
+    generateBankReconciliationPDF({
+      society: societyInfo || { name: "Housing Society" },
+      accountName: selectedAccount.name,
+      bankName: selectedAccount.bankName,
+      accountNumber: selectedAccount.accountNumber,
+      statementDate,
+      bookBalance,
+      unpresentedCheques: unpresentedCheques.map((c) => ({
+        chequeNumber: c.chequeNumber,
+        chequeDate: c.chequeDate,
+        partyName: c.partyName,
+        amount: c.amount,
+      })),
+      uncreditedCheques: uncreditedCheques.map((c) => ({
+        chequeNumber: c.chequeNumber,
+        chequeDate: c.chequeDate,
+        partyName: c.partyName,
+        amount: c.amount,
+      })),
+      statementBalance: stmtBalNum,
+      adjustedBalance,
+      discrepancy: difference,
+      notes: notes || null,
+      currencySymbol,
+    })
+  }
+
+  const handleExportCsv = () => {
+    if (!selectedAccount) return
+    const csv = generateBankReconciliationCsv({
+      society: societyInfo || { name: "Housing Society" },
+      accountName: selectedAccount.name,
+      bankName: selectedAccount.bankName,
+      accountNumber: selectedAccount.accountNumber,
+      statementDate,
+      bookBalance,
+      unpresentedCheques: unpresentedCheques.map((c) => ({
+        chequeNumber: c.chequeNumber,
+        chequeDate: c.chequeDate,
+        partyName: c.partyName,
+        amount: c.amount,
+      })),
+      uncreditedCheques: uncreditedCheques.map((c) => ({
+        chequeNumber: c.chequeNumber,
+        chequeDate: c.chequeDate,
+        partyName: c.partyName,
+        amount: c.amount,
+      })),
+      statementBalance: stmtBalNum,
+      adjustedBalance,
+      discrepancy: difference,
+      notes: notes || null,
+      currencySymbol,
+    })
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `BRS_${selectedAccount.name.replace(/[^a-zA-Z0-9]/g, "_")}_${statementDate}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   const handleCommit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -260,14 +333,42 @@ export function ReconciliationClientView({
 
           {/* Interactive Reconciliation Engine Card */}
           <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-xs space-y-5">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
-                Statutory BRS Calculation
-              </span>
-              <h3 className="text-base font-bold text-stone-950">Bank Reconciliation Statement</h3>
-              <p className="text-xs text-stone-500">
-                Compare Society books with Passbook / Bank Statement closing figures and audit timing differences.
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-stone-100 pb-4">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
+                  Statutory BRS Calculation
+                </span>
+                <h3 className="text-base font-bold text-stone-950">Bank Reconciliation Statement</h3>
+                <p className="text-xs text-stone-500">
+                  Compare Society books with Passbook / Bank Statement closing figures and audit timing differences.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-950 transition shadow-xs"
+                  title="Export Bank Reconciliation Statement as CSV"
+                >
+                  <svg className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>Export CSV</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadPdf}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-stone-950 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-stone-800 transition"
+                  title="Download Official Signed Audit BRS PDF"
+                >
+                  <svg className="h-4 w-4 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>Download BRS PDF</span>
+                </button>
+              </div>
             </div>
 
             {saveMessage && (
