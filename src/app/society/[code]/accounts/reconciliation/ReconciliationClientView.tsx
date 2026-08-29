@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useEffect } from "react"
 import Link from "next/link"
 import { AdminStatCard, AdminBadge, AdminTable, AdminCard } from "@/components/admin"
-import { commitBankReconciliation } from "./actions"
+import { commitBankReconciliation, clearChequeInlineAction } from "./actions"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
 import {
   generateBankReconciliationPDF,
@@ -81,15 +81,37 @@ export function ReconciliationClientView({
   const [statementBalance, setStatementBalance] = useState("")
   const [notes, setNotes] = useState("")
 
+  // Local state for dynamic cheque clearing without full page reload
+  const [unpresentedList, setUnpresentedList] = useState<UnclearedCheque[]>(unpresentedCheques)
+  const [uncreditedList, setUncreditedList] = useState<UnclearedCheque[]>(uncreditedCheques)
+  const [accountBalanceOverride, setAccountBalanceOverride] = useState<number | null>(null)
+
+  // Cheque clearance modal state
+  const [clearingTarget, setClearingTarget] = useState<UnclearedCheque | null>(null)
+  const [clearedDateInput, setClearedDateInput] = useState(new Date().toISOString().split("T")[0])
+  const [isClearingSubmitting, setIsClearingSubmitting] = useState(false)
+
+  // Sync state when props change
+  useEffect(() => {
+    setUnpresentedList(unpresentedCheques)
+    setUncreditedList(uncreditedCheques)
+    setAccountBalanceOverride(null)
+  }, [unpresentedCheques, uncreditedCheques, selectedAccountId])
+
   const [isPending, startTransition] = useTransition()
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
 
   const selectedAccount = bankAccounts.find((a) => a.id === selectedAccountId) || bankAccounts[0]
-  const bookBalance = selectedAccount ? selectedAccount.currentBalance : 0
+  const bookBalance =
+    accountBalanceOverride !== null
+      ? accountBalanceOverride
+      : selectedAccount
+      ? selectedAccount.currentBalance
+      : 0
 
-  const unpresentedTotal = unpresentedCheques.reduce((sum, c) => sum + c.amount, 0)
-  const uncreditedTotal = uncreditedCheques.reduce((sum, c) => sum + c.amount, 0)
+  const unpresentedTotal = unpresentedList.reduce((sum, c) => sum + c.amount, 0)
+  const uncreditedTotal = uncreditedList.reduce((sum, c) => sum + c.amount, 0)
 
   // Standard BRS formula: Adjusted = Book Balance + Unpresented - Uncredited
   const adjustedBalance = bookBalance + unpresentedTotal - uncreditedTotal
@@ -97,6 +119,39 @@ export function ReconciliationClientView({
   const stmtBalNum = parseFloat(statementBalance) || 0
   const difference = stmtBalNum ? Math.round((adjustedBalance - stmtBalNum) * 100) / 100 : 0
   const isBalanced = statementBalance.trim() !== "" && Math.abs(difference) < 0.01
+
+  // Handle inline cheque clearance
+  const handleConfirmClearCheque = async () => {
+    if (!clearingTarget) return
+
+    setIsClearingSubmitting(true)
+    setSaveError(null)
+
+    try {
+      const res = await clearChequeInlineAction(societyCode, clearingTarget.id, clearedDateInput)
+      if (res.error) {
+        setSaveError(res.error)
+      } else {
+        setSaveMessage(res.message || `Cheque #${clearingTarget.chequeNumber} cleared successfully.`)
+
+        // Update local state dynamically
+        if (clearingTarget.direction === "OUTWARD") {
+          setUnpresentedList((prev) => prev.filter((c) => c.id !== clearingTarget.id))
+          setAccountBalanceOverride((prev) => (prev !== null ? prev : bookBalance) - clearingTarget.amount)
+        } else {
+          setUncreditedList((prev) => prev.filter((c) => c.id !== clearingTarget.id))
+          setAccountBalanceOverride((prev) => (prev !== null ? prev : bookBalance) + clearingTarget.amount)
+        }
+
+        setClearingTarget(null)
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to clear cheque."
+      setSaveError(msg)
+    } finally {
+      setIsClearingSubmitting(false)
+    }
+  }
 
   const handleDownloadPdf = () => {
     if (!selectedAccount) return
@@ -468,34 +523,56 @@ export function ReconciliationClientView({
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 pt-2">
               {/* Unpresented Outward Cheques */}
               <AdminCard
-                title={`Unpresented Outward Cheques (${unpresentedCheques.length})`}
+                title={`Unpresented Outward Cheques (${unpresentedList.length})`}
                 description="Cheques issued to vendors/contractors not yet debited by bank"
               >
-                {unpresentedCheques.length === 0 ? (
+                {unpresentedList.length === 0 ? (
                   <p className="text-xs text-stone-400 italic py-2">
                     No unpresented outward cheques.
                   </p>
                 ) : (
-                  <div className="space-y-2 text-xs pt-1">
-                    {unpresentedCheques.map((c) => (
+                  <div className="space-y-2.5 text-xs pt-1">
+                    {unpresentedList.map((c) => (
                       <div
                         key={c.id}
-                        className="flex items-center justify-between border-b border-stone-100 pb-2"
+                        className="flex items-center justify-between border-b border-stone-100 pb-2.5 gap-2"
                       >
-                        <div>
-                          <span className="font-mono font-bold text-stone-900">
-                            Cheque #{c.chequeNumber}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-bold text-stone-900">
+                              Cheque #{c.chequeNumber}
+                            </span>
+                            <span className="text-[10px] text-stone-400 font-mono">
+                              ({formatDateInAppTimeZone(c.chequeDate)})
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-stone-500 block truncate" title={c.partyName}>
+                            {c.partyName}
                           </span>
-                          <span className="text-[11px] text-stone-500 block">{c.partyName}</span>
                         </div>
-                        <div className="text-right">
-                          <span className="font-mono font-bold text-emerald-700">
-                            +{currencySymbol}
-                            {c.amount.toLocaleString("en-IN")}
-                          </span>
-                          <span className="text-[10px] text-stone-400 block">
-                            {formatDateInAppTimeZone(c.chequeDate)}
-                          </span>
+
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          <div className="text-right">
+                            <span className="font-mono font-bold text-emerald-700">
+                              +{currencySymbol}
+                              {c.amount.toLocaleString("en-IN")}
+                            </span>
+                          </div>
+
+                          {canManage && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setClearingTarget(c)
+                                setClearedDateInput(statementDate || new Date().toISOString().split("T")[0])
+                              }}
+                              className="inline-flex items-center gap-1 rounded-xl border border-stone-200 bg-stone-50/80 px-2.5 py-1 text-[10px] font-bold text-stone-700 hover:border-emerald-500 hover:bg-emerald-50 hover:text-emerald-800 transition"
+                              title="Mark this cheque cleared"
+                            >
+                              <span>✓</span>
+                              <span>Clear</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -505,34 +582,56 @@ export function ReconciliationClientView({
 
               {/* Uncredited Inward Cheques */}
               <AdminCard
-                title={`Uncredited Inward Cheques (${uncreditedCheques.length})`}
+                title={`Uncredited Inward Cheques (${uncreditedList.length})`}
                 description="Resident maintenance cheques deposited, pending bank clearing"
               >
-                {uncreditedCheques.length === 0 ? (
+                {uncreditedList.length === 0 ? (
                   <p className="text-xs text-stone-400 italic py-2">
                     No uncredited inward cheques.
                   </p>
                 ) : (
-                  <div className="space-y-2 text-xs pt-1">
-                    {uncreditedCheques.map((c) => (
+                  <div className="space-y-2.5 text-xs pt-1">
+                    {uncreditedList.map((c) => (
                       <div
                         key={c.id}
-                        className="flex items-center justify-between border-b border-stone-100 pb-2"
+                        className="flex items-center justify-between border-b border-stone-100 pb-2.5 gap-2"
                       >
-                        <div>
-                          <span className="font-mono font-bold text-stone-900">
-                            Cheque #{c.chequeNumber}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-bold text-stone-900">
+                              Cheque #{c.chequeNumber}
+                            </span>
+                            <span className="text-[10px] text-stone-400 font-mono">
+                              ({formatDateInAppTimeZone(c.chequeDate)})
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-stone-500 block truncate" title={c.partyName}>
+                            {c.partyName}
                           </span>
-                          <span className="text-[11px] text-stone-500 block">{c.partyName}</span>
                         </div>
-                        <div className="text-right">
-                          <span className="font-mono font-bold text-amber-700">
-                            -{currencySymbol}
-                            {c.amount.toLocaleString("en-IN")}
-                          </span>
-                          <span className="text-[10px] text-stone-400 block">
-                            {formatDateInAppTimeZone(c.chequeDate)}
-                          </span>
+
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          <div className="text-right">
+                            <span className="font-mono font-bold text-amber-700">
+                              -{currencySymbol}
+                              {c.amount.toLocaleString("en-IN")}
+                            </span>
+                          </div>
+
+                          {canManage && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setClearingTarget(c)
+                                setClearedDateInput(statementDate || new Date().toISOString().split("T")[0])
+                              }}
+                              className="inline-flex items-center gap-1 rounded-xl border border-stone-200 bg-stone-50/80 px-2.5 py-1 text-[10px] font-bold text-stone-700 hover:border-emerald-500 hover:bg-emerald-50 hover:text-emerald-800 transition"
+                              title="Mark this cheque cleared"
+                            >
+                              <span>✓</span>
+                              <span>Clear</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -622,6 +721,97 @@ export function ReconciliationClientView({
                 ))}
               />
             )}
+          </div>
+        </div>
+      )}
+      {/* Inline Cheque Clearance Modal Dialog */}
+      {clearingTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl border border-stone-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
+                  ✓
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-stone-950">
+                    Mark Cheque as Cleared
+                  </h3>
+                  <p className="text-[11px] text-stone-500">
+                    {clearingTarget.direction === "OUTWARD" ? "Outward Vendor Cheque" : "Inward Resident Cheque"}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setClearingTarget(null)}
+                className="text-stone-400 hover:text-stone-700 font-bold text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="rounded-2xl bg-stone-50 p-3.5 space-y-2 border border-stone-200/80 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-stone-500">Cheque Number:</span>
+                <span className="font-mono font-bold text-stone-900">
+                  #{clearingTarget.chequeNumber}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-stone-500">Party / Name:</span>
+                <span className="font-semibold text-stone-900 truncate max-w-[200px]">
+                  {clearingTarget.partyName}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-stone-500">Issue / Deposit Date:</span>
+                <span className="font-mono text-stone-700">
+                  {formatDateInAppTimeZone(clearingTarget.chequeDate)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between border-t border-stone-200/60 pt-2">
+                <span className="font-bold text-stone-700">Cheque Amount:</span>
+                <span className={`font-mono font-bold text-sm ${clearingTarget.direction === "OUTWARD" ? "text-emerald-700" : "text-amber-700"}`}>
+                  {clearingTarget.direction === "OUTWARD" ? "+" : "-"}{currencySymbol}{clearingTarget.amount.toLocaleString("en-IN")}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-stone-800">
+                Bank Statement Clearing Date *
+              </label>
+              <input
+                type="date"
+                required
+                value={clearedDateInput}
+                onChange={(e) => setClearedDateInput(e.target.value)}
+                className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs text-stone-900 focus:border-stone-900 focus:outline-none"
+              />
+              <p className="text-[11px] text-stone-400">
+                The date when this cheque was cleared/debited in the bank passbook.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setClearingTarget(null)}
+                className="rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isClearingSubmitting}
+                onClick={handleConfirmClearCheque}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition disabled:opacity-50"
+              >
+                {isClearingSubmitting ? "Clearing..." : "Confirm Clearance"}
+              </button>
+            </div>
           </div>
         </div>
       )}

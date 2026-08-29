@@ -85,3 +85,93 @@ export async function commitBankReconciliation(
     return { error: message }
   }
 }
+
+export type ClearChequeActionState = {
+  success?: boolean
+  error?: string
+  message?: string
+  chequeId?: string
+}
+
+/**
+ * Inline 1-click clearance of a cheque directly from the Bank Reconciliation workspace
+ */
+export async function clearChequeInlineAction(
+  societyCode: string,
+  chequeId: string,
+  clearedDateStr?: string
+): Promise<ClearChequeActionState> {
+  try {
+    const context = await requireCommitteeAccess(societyCode, COMMITTEE_ROLES)
+    const societyId = context.society.id
+
+    const cheque = await prisma.chequeRegister.findFirst({
+      where: { id: chequeId, societyId },
+      include: { account: true },
+    })
+
+    if (!cheque) {
+      return { error: "Cheque record not found in this society." }
+    }
+
+    if (cheque.status === "CLEARED") {
+      return { error: "This cheque is already marked as cleared." }
+    }
+
+    const clearedOn = clearedDateStr ? new Date(clearedDateStr) : new Date()
+
+    await prisma.$transaction(async (tx) => {
+      await tx.chequeRegister.update({
+        where: { id: cheque.id },
+        data: {
+          status: "CLEARED",
+          clearedOn,
+        },
+      })
+
+      // If inward, credit the account balance; if outward, debit
+      if (cheque.direction === "INWARD") {
+        await tx.account.update({
+          where: { id: cheque.accountId },
+          data: {
+            currentBalance: { increment: cheque.amount },
+          },
+        })
+      } else {
+        await tx.account.update({
+          where: { id: cheque.accountId },
+          data: {
+            currentBalance: { decrement: cheque.amount },
+          },
+        })
+      }
+    })
+
+    await recordAuditLog({
+      societyId,
+      userId: context.user.id,
+      action: "STATUS_CHANGE",
+      entity: "ChequeRegister",
+      entityId: cheque.id,
+      description: `${context.user.email} marked ${cheque.direction} Cheque #${cheque.chequeNumber} (${cheque.partyName}) as CLEARED on ${clearedOn.toLocaleDateString()} (₹${Number(cheque.amount).toLocaleString("en-IN")}) via Reconciliation workspace`,
+      oldData: { status: cheque.status },
+      newData: { status: "CLEARED", clearedOn: clearedOn.toISOString() },
+    })
+
+    revalidatePath(`/society/${societyCode}/accounts/reconciliation`)
+    revalidatePath(`/society/${societyCode}/accounts`)
+    revalidatePath(`/society/${societyCode}/cheques`)
+    revalidatePath(`/society/${societyCode}/dashboard`)
+
+    return {
+      success: true,
+      message: `Cheque #${cheque.chequeNumber} (₹${Number(cheque.amount).toLocaleString("en-IN")}) marked as CLEARED.`,
+      chequeId: cheque.id,
+    }
+  } catch (err: unknown) {
+    console.error("Failed to mark cheque as cleared:", err)
+    const message = err instanceof Error ? err.message : "Failed to clear cheque."
+    return { error: message }
+  }
+}
+
