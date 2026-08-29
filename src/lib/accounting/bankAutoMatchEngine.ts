@@ -10,6 +10,7 @@ export type ReconActionType =
   | "RECORD_BANK_CHARGE_EXPENSE"
   | "RECORD_BANK_INTEREST"
   | "RECORD_VENDOR_EXPENSE"
+  | "ALREADY_RECONCILED"
   | "MANUAL_REVIEW"
   | "IGNORE"
 
@@ -47,6 +48,8 @@ export interface ReconciledTransactionMatch {
   reason: string
   matchedDetails: MatchedEntityDetail
   isAutoSelected: boolean // True if confidence === HIGH
+  isDuplicate?: boolean
+  duplicateReason?: string
 }
 
 export interface AutoReconciliationAnalysisResult {
@@ -62,6 +65,7 @@ export interface AutoReconciliationAnalysisResult {
     highConfidenceCount: number
     mediumConfidenceCount: number
     unmatchedCount: number
+    duplicateCount: number
     totalCredits: number
     totalDebits: number
     matchedCreditAmount: number
@@ -159,7 +163,52 @@ export async function analyzeBankStatement(params: {
     },
   })
 
-  // 6. Fetch active vendors
+  // 6. Fetch cleared cheques (to prevent duplicate clearing)
+  const clearedCheques = await prisma.chequeRegister.findMany({
+    where: {
+      societyId,
+      accountId,
+      status: "CLEARED",
+    },
+  })
+
+  // 7. Fetch existing payments (to detect already recorded collections/receipts)
+  const existingPayments = await prisma.payment.findMany({
+    where: {
+      societyId,
+      status: "SUCCESS",
+    },
+    select: {
+      id: true,
+      receiptNumber: true,
+      amount: true,
+      paidOn: true,
+      reference: true,
+      flatId: true,
+      flat: { select: { number: true, block: { select: { name: true } } } },
+    },
+    take: 500,
+    orderBy: { paidOn: "desc" },
+  })
+
+  // 8. Fetch existing expenses (to detect already recorded expenses/debits)
+  const existingExpenses = await prisma.expense.findMany({
+    where: {
+      societyId,
+      status: "PAID",
+    },
+    select: {
+      id: true,
+      title: true,
+      amount: true,
+      expenseDate: true,
+      reference: true,
+    },
+    take: 500,
+    orderBy: { expenseDate: "desc" },
+  })
+
+  // 9. Fetch active vendors
   const vendors = await prisma.vendor.findMany({
     where: { societyId, isActive: true, deletedAt: null },
   })
@@ -168,6 +217,7 @@ export async function analyzeBankStatement(params: {
   let highConfidenceCount = 0
   let mediumConfidenceCount = 0
   let unmatchedCount = 0
+  let duplicateCount = 0
   let matchedCreditAmount = 0
   let matchedDebitAmount = 0
 
@@ -176,6 +226,82 @@ export async function analyzeBankStatement(params: {
 
     if (row.type === "CREDIT") {
       const creditAmt = row.credit
+
+      // D1: Already Cleared Cheque Check
+      if (row.chequeNumber) {
+        const clearedChq = clearedCheques.find(
+          (c) =>
+            c.direction === "INWARD" &&
+            c.chequeNumber === row.chequeNumber &&
+            Math.abs(Number(c.amount) - creditAmt) < 0.01
+        )
+        if (clearedChq) {
+          matches.push({
+            rowId: row.rowId,
+            date: row.date,
+            rawDate: row.rawDate,
+            narration: row.narration,
+            referenceNumber: row.referenceNumber,
+            chequeNumber: row.chequeNumber,
+            debit: 0,
+            credit: creditAmt,
+            balance: row.balance,
+            type: "CREDIT",
+            actionType: "ALREADY_RECONCILED",
+            confidence: "NONE",
+            matchScore: 0,
+            reason: `Already Cleared: Inward Cheque #${clearedChq.chequeNumber} (${clearedChq.partyName})`,
+            matchedDetails: {
+              chequeRegisterId: clearedChq.id,
+              chequeNumber: clearedChq.chequeNumber,
+              partyName: clearedChq.partyName,
+            },
+            isAutoSelected: false,
+            isDuplicate: true,
+            duplicateReason: `Inward cheque #${clearedChq.chequeNumber} was already cleared on ${clearedChq.clearedOn ? new Date(clearedChq.clearedOn).toLocaleDateString() : "prior date"}.`,
+          })
+          duplicateCount++
+          continue
+        }
+      }
+
+      // D2: Existing Payment with exact Reference / UTR Match
+      const refToMatch = row.referenceNumber || row.entities.utrReferenceCandidate
+      if (refToMatch && refToMatch.length >= 6) {
+        const existingPayment = existingPayments.find(
+          (p) =>
+            p.reference &&
+            p.reference.toLowerCase().includes(refToMatch.toLowerCase()) &&
+            Math.abs(Number(p.amount) - creditAmt) < 0.01
+        )
+        if (existingPayment) {
+          matches.push({
+            rowId: row.rowId,
+            date: row.date,
+            rawDate: row.rawDate,
+            narration: row.narration,
+            referenceNumber: row.referenceNumber,
+            chequeNumber: row.chequeNumber,
+            debit: 0,
+            credit: creditAmt,
+            balance: row.balance,
+            type: "CREDIT",
+            actionType: "ALREADY_RECONCILED",
+            confidence: "NONE",
+            matchScore: 0,
+            reason: `Already Accounted: Payment Receipt ${existingPayment.receiptNumber}`,
+            matchedDetails: {
+              flatId: existingPayment.flatId || undefined,
+              flatLabel: existingPayment.flat ? `${existingPayment.flat.block?.name ? `${existingPayment.flat.block.name}-` : ""}${existingPayment.flat.number}` : undefined,
+            },
+            isAutoSelected: false,
+            isDuplicate: true,
+            duplicateReason: `Already recorded in books as Payment ${existingPayment.receiptNumber} on ${new Date(existingPayment.paidOn).toLocaleDateString()}.`,
+          })
+          duplicateCount++
+          continue
+        }
+      }
 
       // C1: Cheque Number match (Inward Cheques)
       if (row.chequeNumber) {
@@ -382,6 +508,78 @@ export async function analyzeBankStatement(params: {
       // DEBIT / Outward Withdrawal
       const debitAmt = row.debit
 
+      // D0: Already Cleared Outward Cheque
+      if (row.chequeNumber) {
+        const clearedChq = clearedCheques.find(
+          (c) =>
+            c.direction === "OUTWARD" &&
+            c.chequeNumber === row.chequeNumber &&
+            Math.abs(Number(c.amount) - debitAmt) < 0.01
+        )
+        if (clearedChq) {
+          matches.push({
+            rowId: row.rowId,
+            date: row.date,
+            rawDate: row.rawDate,
+            narration: row.narration,
+            referenceNumber: row.referenceNumber,
+            chequeNumber: row.chequeNumber,
+            debit: debitAmt,
+            credit: 0,
+            balance: row.balance,
+            type: "DEBIT",
+            actionType: "ALREADY_RECONCILED",
+            confidence: "NONE",
+            matchScore: 0,
+            reason: `Already Cleared: Outward Cheque #${clearedChq.chequeNumber} (${clearedChq.partyName})`,
+            matchedDetails: {
+              chequeRegisterId: clearedChq.id,
+              chequeNumber: clearedChq.chequeNumber,
+              partyName: clearedChq.partyName,
+            },
+            isAutoSelected: false,
+            isDuplicate: true,
+            duplicateReason: `Outward cheque #${clearedChq.chequeNumber} was already cleared on ${clearedChq.clearedOn ? new Date(clearedChq.clearedOn).toLocaleDateString() : "prior date"}.`,
+          })
+          duplicateCount++
+          continue
+        }
+      }
+
+      // D0.2: Existing Expense with exact Reference Match
+      if (row.referenceNumber && row.referenceNumber.length >= 6) {
+        const existingExp = existingExpenses.find(
+          (e) =>
+            e.reference &&
+            e.reference.toLowerCase().includes(row.referenceNumber!.toLowerCase()) &&
+            Math.abs(Number(e.amount) - debitAmt) < 0.01
+        )
+        if (existingExp) {
+          matches.push({
+            rowId: row.rowId,
+            date: row.date,
+            rawDate: row.rawDate,
+            narration: row.narration,
+            referenceNumber: row.referenceNumber,
+            chequeNumber: row.chequeNumber,
+            debit: debitAmt,
+            credit: 0,
+            balance: row.balance,
+            type: "DEBIT",
+            actionType: "ALREADY_RECONCILED",
+            confidence: "NONE",
+            matchScore: 0,
+            reason: `Already Booked: Expense "${existingExp.title}"`,
+            matchedDetails: {},
+            isAutoSelected: false,
+            isDuplicate: true,
+            duplicateReason: `Expense "${existingExp.title}" (Ref: ${existingExp.reference}) was already recorded on ${new Date(existingExp.expenseDate).toLocaleDateString()}.`,
+          })
+          duplicateCount++
+          continue
+        }
+      }
+
       // D1: Outward Cheque Number Match
       if (row.chequeNumber) {
         const matchedCheque = unclearedCheques.find(
@@ -519,6 +717,7 @@ export async function analyzeBankStatement(params: {
       highConfidenceCount,
       mediumConfidenceCount,
       unmatchedCount,
+      duplicateCount,
       totalCredits: statement.totalCredits,
       totalDebits: statement.totalDebits,
       matchedCreditAmount: Math.round(matchedCreditAmount * 100) / 100,

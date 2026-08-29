@@ -50,7 +50,7 @@ interface AutoReconciliationEngineProps {
   onReconciliationComplete?: () => void
 }
 
-type FilterTab = "ALL" | "HIGH" | "MEDIUM" | "UNMATCHED" | "CREDITS" | "DEBITS"
+type FilterTab = "ALL" | "HIGH" | "MEDIUM" | "DUPLICATES" | "UNMATCHED" | "CREDITS" | "DEBITS"
 
 export function AutoReconciliationEngine({
   societyCode,
@@ -78,36 +78,37 @@ export function AutoReconciliationEngine({
 
   // Handle file upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setErrorMessage(null)
-    setSuccessMessage(null)
     const file = e.target.files?.[0]
     if (!file) return
 
     setFileName(file.name)
+    setErrorMessage(null)
     const reader = new FileReader()
-    reader.onload = (event) => {
-      const text = event.target?.result as string
-      setCsvContent(text)
+    reader.onload = (evt) => {
+      const text = evt.target?.result as string
+      setCsvContent(text || "")
     }
     reader.onerror = () => {
-      setErrorMessage("Failed to read the selected file.")
+      setErrorMessage("Failed to read the uploaded CSV file.")
     }
     reader.readAsText(file)
   }
 
-  // Handle Drag and Drop
+  // Handle Drag & Drop
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
-    setErrorMessage(null)
-    setSuccessMessage(null)
     const file = e.dataTransfer.files?.[0]
     if (!file) return
 
     setFileName(file.name)
+    setErrorMessage(null)
     const reader = new FileReader()
-    reader.onload = (event) => {
-      const text = event.target?.result as string
-      setCsvContent(text)
+    reader.onload = (evt) => {
+      const text = evt.target?.result as string
+      setCsvContent(text || "")
+    }
+    reader.onerror = () => {
+      setErrorMessage("Failed to read the dropped CSV file.")
     }
     reader.readAsText(file)
   }
@@ -128,15 +129,10 @@ export function AutoReconciliationEngine({
     }
   }
 
-  // Run Analysis
+  // Trigger Analysis Server Action
   const handleAnalyze = () => {
     if (!csvContent.trim()) {
-      setErrorMessage("Please select or paste a bank statement CSV first.")
-      return
-    }
-
-    if (!selectedAccountId) {
-      setErrorMessage("Please select a target bank account to reconcile.")
+      setErrorMessage("Please select or drop a bank statement CSV file first.")
       return
     }
 
@@ -144,20 +140,26 @@ export function AutoReconciliationEngine({
     setSuccessMessage(null)
 
     startAnalyzing(async () => {
-      const res = await analyzeStatementAction(societyCode, selectedAccountId, csvContent)
-      if (res.error) {
-        setErrorMessage(res.error)
-      } else if (res.result) {
-        setAnalysisResult(res.result)
-        setMatches(res.result.matches)
-        // Auto-select all HIGH confidence items by default
-        const autoSelected = new Set<string>()
-        res.result.matches.forEach((m) => {
-          if (m.isAutoSelected) {
-            autoSelected.add(m.rowId)
-          }
-        })
-        setSelectedRowIds(autoSelected)
+      try {
+        const res = await analyzeStatementAction(societyCode, selectedAccountId, csvContent)
+        if (res.error || !res.result) {
+          setErrorMessage(res.error || "Failed to analyze bank statement.")
+        } else {
+          setAnalysisResult(res.result)
+          setMatches(res.result.matches)
+
+          // Pre-select high confidence matches that are not duplicates
+          const initialSelected = new Set<string>()
+          res.result.matches.forEach((m) => {
+            if (m.isAutoSelected && !m.isDuplicate) {
+              initialSelected.add(m.rowId)
+            }
+          })
+          setSelectedRowIds(initialSelected)
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Error analyzing statement."
+        setErrorMessage(msg)
       }
     })
   }
@@ -173,22 +175,30 @@ export function AutoReconciliationEngine({
     setSuccessMessage(null)
   }
 
-  // Toggle selection
+  // Row selection toggle
   const toggleRow = (rowId: string) => {
-    const next = new Set(selectedRowIds)
-    if (next.has(rowId)) {
-      next.delete(rowId)
-    } else {
-      next.add(rowId)
-    }
-    setSelectedRowIds(next)
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(rowId)) {
+        next.delete(rowId)
+      } else {
+        next.add(rowId)
+      }
+      return next
+    })
   }
 
-  // Select all matching filter
+  // Select all in current filter view (skip duplicates by default)
   const handleSelectAllInView = () => {
-    const next = new Set(selectedRowIds)
-    filteredMatches.forEach((m) => next.add(m.rowId))
-    setSelectedRowIds(next)
+    setSelectedRowIds((prev) => {
+      const next = new Set(prev)
+      filteredMatches.forEach((m) => {
+        if (!m.isDuplicate && m.actionType !== "IGNORE") {
+          next.add(m.rowId)
+        }
+      })
+      return next
+    })
   }
 
   // Deselect all
@@ -196,11 +206,11 @@ export function AutoReconciliationEngine({
     setSelectedRowIds(new Set())
   }
 
-  // Select only High Confidence
+  // Select only high confidence matches
   const handleSelectHighOnly = () => {
     const next = new Set<string>()
     matches.forEach((m) => {
-      if (m.confidence === "HIGH") next.add(m.rowId)
+      if (m.confidence === "HIGH" && !m.isDuplicate) next.add(m.rowId)
     })
     setSelectedRowIds(next)
   }
@@ -252,7 +262,7 @@ export function AutoReconciliationEngine({
           matchedDetails: {
             ...item.matchedDetails,
             flatId,
-            flatLabel: targetFlat?.label,
+            flatLabel: targetFlat ? targetFlat.label : undefined,
           },
         }
       })
@@ -263,9 +273,10 @@ export function AutoReconciliationEngine({
   const filteredMatches = useMemo(() => {
     return matches.filter((item) => {
       // Tab filter
-      if (filterTab === "HIGH" && item.confidence !== "HIGH") return false
-      if (filterTab === "MEDIUM" && item.confidence !== "MEDIUM") return false
-      if (filterTab === "UNMATCHED" && item.confidence !== "NONE") return false
+      if (filterTab === "HIGH" && (item.confidence !== "HIGH" || item.isDuplicate)) return false
+      if (filterTab === "MEDIUM" && (item.confidence !== "MEDIUM" || item.isDuplicate)) return false
+      if (filterTab === "DUPLICATES" && !item.isDuplicate) return false
+      if (filterTab === "UNMATCHED" && (item.confidence !== "NONE" || item.isDuplicate)) return false
       if (filterTab === "CREDITS" && item.type !== "CREDIT") return false
       if (filterTab === "DEBITS" && item.type !== "DEBIT") return false
 
@@ -280,6 +291,7 @@ export function AutoReconciliationEngine({
           item.matchedDetails.partyName || "",
           item.matchedDetails.vendorName || "",
           item.reason,
+          item.duplicateReason || "",
         ]
           .join(" ")
           .toLowerCase()
@@ -618,6 +630,19 @@ export function AutoReconciliationEngine({
                 >
                   🟡 Probable ({analysisResult.summary.mediumConfidenceCount})
                 </button>
+                {analysisResult.summary.duplicateCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setFilterTab("DUPLICATES")}
+                    className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                      filterTab === "DUPLICATES"
+                        ? "bg-purple-700 text-white shadow-xs"
+                        : "text-purple-700 hover:bg-purple-100/50"
+                    }`}
+                  >
+                    🛡️ Already Accounted ({analysisResult.summary.duplicateCount})
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setFilterTab("UNMATCHED")}
@@ -771,7 +796,7 @@ export function AutoReconciliationEngine({
                         <tr
                           key={item.rowId}
                           className={`transition hover:bg-stone-50/80 ${
-                            isSelected ? "bg-emerald-50/30" : ""
+                            isSelected ? "bg-emerald-50/30" : item.isDuplicate ? "bg-stone-50/60 opacity-80" : ""
                           }`}
                         >
                           <td className="p-3.5 pl-5">
@@ -792,6 +817,11 @@ export function AutoReconciliationEngine({
                               {item.narration}
                             </div>
                             <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                              {item.isDuplicate && (
+                                <span className="inline-flex items-center rounded-md bg-purple-100 text-purple-800 px-1.5 py-0.5 text-[10px] font-bold">
+                                  🛡️ Duplicate / Past Upload
+                                </span>
+                              )}
                               {item.chequeNumber && (
                                 <span className="inline-flex items-center rounded-md bg-stone-100 px-1.5 py-0.5 text-[10px] font-mono font-bold text-stone-700">
                                   Chq #{item.chequeNumber}
@@ -828,7 +858,11 @@ export function AutoReconciliationEngine({
                           </td>
 
                           <td className="p-3.5 whitespace-nowrap">
-                            {item.confidence === "HIGH" ? (
+                            {item.isDuplicate ? (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-purple-50 border border-purple-200/80 px-2 py-0.5 text-[10px] font-bold text-purple-700">
+                                🛡️ Already Accounted
+                              </span>
+                            ) : item.confidence === "HIGH" ? (
                               <AdminBadge variant="success" size="sm" dot>
                                 Exact Match ({item.matchScore}%)
                               </AdminBadge>
@@ -841,8 +875,8 @@ export function AutoReconciliationEngine({
                                 Unmatched
                               </AdminBadge>
                             )}
-                            <p className="text-[11px] text-stone-500 mt-1 max-w-[220px] truncate" title={item.reason}>
-                              {item.reason}
+                            <p className="text-[11px] text-stone-500 mt-1 max-w-[220px] truncate" title={item.duplicateReason || item.reason}>
+                              {item.duplicateReason || item.reason}
                             </p>
                           </td>
 
@@ -856,7 +890,17 @@ export function AutoReconciliationEngine({
                                 }
                                 className="w-full rounded-xl border border-stone-200 bg-white px-2.5 py-1 text-xs font-semibold text-stone-900 focus:border-stone-900 focus:outline-none"
                               >
-                                {isCredit ? (
+                                {item.isDuplicate ? (
+                                  <>
+                                    <option value="ALREADY_RECONCILED">🛡️ Already Accounted (Skip)</option>
+                                    <option value="IGNORE">Ignore</option>
+                                    {isCredit ? (
+                                      <option value="RECORD_BILL_PAYMENT">Force: Apply to Bill</option>
+                                    ) : (
+                                      <option value="RECORD_VENDOR_EXPENSE">Force: Record Expense</option>
+                                    )}
+                                  </>
+                                ) : isCredit ? (
                                   <>
                                     <option value="RECORD_BILL_PAYMENT">Apply to Maintenance Bill</option>
                                     <option value="RECORD_ADVANCE_PAYMENT">Apply as Flat Advance Credit</option>
