@@ -15,6 +15,7 @@ import {
   type FlatOption,
   type UnpaidBillOption,
 } from "./AutoReconciliationEngine"
+import { BrsBalanceBridge } from "./BrsBalanceBridge"
 
 export type BankAccountOption = {
   id: string
@@ -385,6 +386,21 @@ export function ReconciliationClientView({
               }
             />
           </div>
+
+          {/* Visual Financial Waterfall Bridge */}
+          <BrsBalanceBridge
+            currencySymbol={currencySymbol}
+            bookBalance={bookBalance}
+            unpresentedTotal={unpresentedTotal}
+            unpresentedCount={unpresentedList.length}
+            uncreditedTotal={uncreditedTotal}
+            uncreditedCount={uncreditedList.length}
+            adjustedBalance={adjustedBalance}
+            statementBalanceNum={stmtBalNum}
+            hasStatementBalance={statementBalance.trim() !== ""}
+            difference={difference}
+            isBalanced={isBalanced}
+          />
 
           {/* Interactive Reconciliation Engine Card */}
           <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-xs space-y-5">
