@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
@@ -14,6 +15,10 @@ import {
 } from "@/components/admin"
 import { formatDateInAppTimeZone } from "@/lib/datetime"
 import { SocietyDashboardCharts } from "./SocietyDashboardCharts"
+
+export const metadata: Metadata = {
+  title: "Dashboard",
+}
 
 export default async function SocietyDashboardPage({
   params,

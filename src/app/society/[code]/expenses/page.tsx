@@ -1,5 +1,8 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+
+export const metadata: Metadata = { title: "Expenses" }
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { canApproveDataEntry, isManagerRole } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"

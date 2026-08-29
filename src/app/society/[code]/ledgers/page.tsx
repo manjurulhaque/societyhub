@@ -1,5 +1,8 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+
+export const metadata: Metadata = { title: "Chart of Accounts" }
 import { revalidatePath } from "next/cache"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
