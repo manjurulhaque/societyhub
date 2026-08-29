@@ -8,6 +8,7 @@ import {
   type UnclearedCheque,
   type HistoricalReconItem,
 } from "./ReconciliationClientView"
+import type { FlatOption, UnpaidBillOption } from "./AutoReconciliationEngine"
 import { COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import type { SocietyRole } from "@/generated/prisma/client"
 
@@ -26,7 +27,7 @@ export default async function SocietyBankReconciliationPage({
   const { society, designation, isSuperAdmin } = context
   const canManage = isSuperAdmin || COMMITTEE_ROLES.includes(designation as SocietyRole)
 
-  const [rawAccounts, rawCheques, rawRecons] = await Promise.all([
+  const [rawAccounts, rawCheques, rawRecons, rawFlats, rawBills] = await Promise.all([
     prisma.account.findMany({
       where: {
         societyId: society.id,
@@ -49,6 +50,25 @@ export default async function SocietyBankReconciliationPage({
         account: true,
       },
       orderBy: { statementDate: "desc" },
+    }),
+    prisma.flat.findMany({
+      where: {
+        block: { societyId: society.id },
+        isActive: true,
+        deletedAt: null,
+      },
+      include: { block: true },
+      orderBy: [{ block: { name: "asc" } }, { number: "asc" }],
+    }),
+    prisma.bill.findMany({
+      where: {
+        societyId: society.id,
+        status: { in: ["PENDING", "PARTIALLY_PAID"] },
+      },
+      include: {
+        flat: { include: { block: true } },
+      },
+      orderBy: [{ year: "asc" }, { month: "asc" }],
     }),
   ])
 
@@ -98,6 +118,23 @@ export default async function SocietyBankReconciliationPage({
     createdAt: r.createdAt.toISOString(),
   }))
 
+  const flats: FlatOption[] = rawFlats.map((f) => ({
+    id: f.id,
+    label: `${f.block.name ? `${f.block.name}-` : ""}${f.number}`,
+    flatNumber: f.number,
+    blockName: f.block.name,
+  }))
+
+  const unpaidBills: UnpaidBillOption[] = rawBills.map((b) => ({
+    id: b.id,
+    flatId: b.flatId,
+    flatLabel: `${b.flat.block.name ? `${b.flat.block.name}-` : ""}${b.flat.number}`,
+    title: b.title || `${b.month}/${b.year} Maintenance Bill`,
+    amount: Number(b.amount),
+    month: b.month,
+    year: b.year,
+  }))
+
   return (
     <div className="space-y-6">
       <AdminPageHeader
@@ -113,6 +150,8 @@ export default async function SocietyBankReconciliationPage({
         unpresentedCheques={unpresentedCheques}
         uncreditedCheques={uncreditedCheques}
         historicalRecons={historicalRecons}
+        flats={flats}
+        unpaidBills={unpaidBills}
         canManage={canManage}
       />
     </div>
