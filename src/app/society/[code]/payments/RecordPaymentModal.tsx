@@ -46,6 +46,7 @@ interface RecordPaymentModalProps {
   residents: ResidentOption[]
   accounts: AccountOption[]
   flats: FlatOption[]
+  onOptimisticAdd?: (payment: import("./PaymentsClientView").PaymentListItem) => void
 }
 
 const PAYMENT_MODES: { value: PaymentMode; label: string }[] = [
@@ -65,6 +66,7 @@ export function RecordPaymentModal({
   residents,
   accounts,
   flats,
+  onOptimisticAdd,
 }: RecordPaymentModalProps) {
   const [paymentType, setPaymentType] = useState<"BILL" | "ADVANCE">(
     outstandingBills.length > 0 ? "BILL" : "ADVANCE"
@@ -134,6 +136,35 @@ export function RecordPaymentModal({
     startTransition(async () => {
       try {
         const isAdvance = paymentType === "ADVANCE"
+
+        // Build optimistic preview row
+        if (onOptimisticAdd) {
+          const bill = outstandingBills.find((b) => b.id === selectedBillId)
+          const resident = residents.find((r) => r.id === selectedResidentId)
+          const flat = flats.find((f) => f.id === selectedFlatId)
+
+          onOptimisticAdd({
+            id: `optimistic-${Date.now()}`,
+            receiptNumber: null,
+            amount: numAmount,
+            mode,
+            status: "SUCCESS",
+            reference: reference.trim() || null,
+            remarks: remarks.trim() || null,
+            paidOn,
+            createdAt: new Date().toISOString(),
+            isAdvance,
+            payerName: resident?.name || bill?.residentName || "Resident",
+            flatDisplay: isAdvance
+              ? `${flat?.blockName || ""} - ${flat?.number || ""}`
+              : `${bill?.blockName || ""} - ${bill?.flatNumber || ""}`,
+            billPeriod: bill ? `${bill.month}/${bill.year}` : null,
+            billType: bill?.billType || null,
+            accountName: null,
+            isOptimistic: true,
+          })
+        }
+
         const res = await recordPayment(societyCode, {
           billId: isAdvance ? null : selectedBillId,
           flatId: isAdvance ? selectedFlatId : null,
