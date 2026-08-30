@@ -1,6 +1,39 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
+// ─────────────────────────────────────────────────────────────────
+// Route Protection Matrix
+//
+// All routes are PROTECTED by default. Only routes matching the
+// public allowlist below bypass the authentication gate.
+// This is a defense-in-depth layer — page-level auth checks in
+// layouts/pages still run, but the proxy catches any route that
+// might accidentally ship without an explicit auth guard.
+// ─────────────────────────────────────────────────────────────────
+
+/** Routes that are accessible without authentication */
+const PUBLIC_ROUTES: string[] = [
+  "/",
+  "/login",
+  "/auth/callback",
+  "/auth/confirm",
+  "/api/health",
+]
+
+/** Route prefixes that are accessible without authentication */
+const PUBLIC_PREFIXES: string[] = [
+  "/auth/",
+  "/api/auth/",
+  "/api/health/",
+]
+
+function isPublicRoute(pathname: string): boolean {
+  if (PUBLIC_ROUTES.includes(pathname)) {
+    return true
+  }
+  return PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+}
+
 export async function updateSession(request: NextRequest) {
   // CSRF Defense: For state-mutating methods, verify Origin matches host
   const method = request.method.toUpperCase()
@@ -26,7 +59,6 @@ export async function updateSession(request: NextRequest) {
     },
   })
 
-
   // Set standard hardened security headers
   response.headers.set("X-Frame-Options", "DENY")
   response.headers.set("X-Content-Type-Options", "nosniff")
@@ -47,17 +79,31 @@ export async function updateSession(request: NextRequest) {
   response.headers.set("Cross-Origin-Opener-Policy", "same-origin")
   response.headers.set("Cross-Origin-Resource-Policy", "same-origin")
 
-
-
-
   // Pass current pathname to Server Components
   response.headers.set("x-pathname", request.nextUrl.pathname)
 
-  // Optimization: Skip remote Supabase auth token refresh if no auth cookie is present
+  // Check for auth session cookies
   const hasAuthCookies = request.cookies
     .getAll()
     .some((cookie) => cookie.name.startsWith("sb-") && cookie.name.includes("auth-token"))
 
+  // ─────────────────────────────────────────────────────────────
+  // Route-Level Auth Gate
+  //
+  // For protected routes, redirect unauthenticated users to /login
+  // with a return URL. This runs BEFORE any server component executes,
+  // providing an early rejection without wasting compute.
+  // ─────────────────────────────────────────────────────────────
+  const pathname = request.nextUrl.pathname
+
+  if (!isPublicRoute(pathname) && !hasAuthCookies) {
+    const loginUrl = request.nextUrl.clone()
+    loginUrl.pathname = "/login"
+    loginUrl.searchParams.set("next", pathname)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  // Refresh auth session if cookies are present
   if (hasAuthCookies) {
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -83,7 +129,20 @@ export async function updateSession(request: NextRequest) {
     )
 
     // Refresh auth token if expired
-    await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    // If session token exists but is invalid/expired, redirect to login
+    if (!user && !isPublicRoute(pathname)) {
+      const loginUrl = request.nextUrl.clone()
+      loginUrl.pathname = "/login"
+      loginUrl.searchParams.set("next", pathname)
+      // Clear stale auth cookies
+      response = NextResponse.redirect(loginUrl)
+      request.cookies.getAll()
+        .filter((cookie) => cookie.name.startsWith("sb-"))
+        .forEach((cookie) => response.cookies.delete(cookie.name))
+      return response
+    }
   }
 
   return response
