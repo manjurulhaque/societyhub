@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { createBlock } from "./actions"
 
@@ -34,6 +36,7 @@ export function AddBlockModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Block created successfully")
           setName("")
           onClose()
         }

@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { AdminModal } from "@/components/admin"
 import { createMaintenanceRate } from "./actions"
@@ -85,6 +87,7 @@ export function CreateRateModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Rate created successfully")
           onClose()
           setRatePerSqft("")
           setFixedRate("")

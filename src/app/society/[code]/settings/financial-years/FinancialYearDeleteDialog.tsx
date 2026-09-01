@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { deleteFinancialYear } from "./actions"
 import type { FinancialYearItem } from "./FinancialYearModal"
@@ -35,6 +37,7 @@ export function FinancialYearDeleteDialog({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Financial year deleted")
           onClose()
         }
       } catch (err: unknown) {

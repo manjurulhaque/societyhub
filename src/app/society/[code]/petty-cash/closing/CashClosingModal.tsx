@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useMemo, useTransition } from "react"
 import { AdminModal } from "@/components/admin"
 import { recordCashClosing } from "./actions"
@@ -76,6 +78,7 @@ export function CashClosingModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Cash closing recorded")
           onClose()
           setC500(0)
           setC200(0)

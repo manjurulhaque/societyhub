@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { createFlat } from "./actions"
 import type { UnitType, OccupancyStatus } from "@/generated/prisma/client"
@@ -85,6 +87,7 @@ export function AddFlatModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Flat added successfully")
           setNumber("")
           setFloor("")
           setArea("")

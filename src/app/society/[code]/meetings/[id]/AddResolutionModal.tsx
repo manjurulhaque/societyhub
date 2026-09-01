@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { AdminModal } from "@/components/admin"
 import { createResolution } from "../actions"
@@ -59,6 +61,7 @@ export function AddResolutionModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Resolution added successfully")
           onClose()
           setResolutionNumber("")
           setTitle("")

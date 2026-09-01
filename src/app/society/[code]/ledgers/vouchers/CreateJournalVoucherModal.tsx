@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { AdminModal } from "@/components/admin"
 import { postJournalVoucher, type JournalEntryLineInput } from "./actions"
@@ -116,6 +118,7 @@ export function CreateJournalVoucherModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Journal voucher created")
           onClose()
           setReference("")
           setNarration("")

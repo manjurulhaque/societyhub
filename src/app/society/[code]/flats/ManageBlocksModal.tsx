@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { AdminBadge } from "@/components/admin"
 import { createBlock, updateBlock, deleteBlock, batchUpdateBlockPrefix, getTowerDirectoryData } from "./actions"
@@ -96,6 +98,7 @@ export function ManageBlocksModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Block updated successfully")
           setSuccessMsg(res.message || `All blocks updated to "${newPrefix}".`)
         }
       } catch (err: unknown) {
@@ -130,6 +133,7 @@ export function ManageBlocksModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Block updated successfully")
           setSuccessMsg(`Block renamed to "${editingName.trim()}" successfully.`)
           setEditingBlockId(null)
           setEditingName("")
@@ -153,6 +157,7 @@ export function ManageBlocksModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Block updated successfully")
           setSuccessMsg(`Block "${newBlockName.trim()}" created successfully.`)
           setNewBlockName("")
           setIsAddingNew(false)
@@ -179,6 +184,7 @@ export function ManageBlocksModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Block updated successfully")
           setSuccessMsg(`Block "${block.name}" deleted.`)
         }
       } catch (err: unknown) {

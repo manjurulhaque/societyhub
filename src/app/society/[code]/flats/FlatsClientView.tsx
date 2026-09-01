@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useMemo, useTransition } from "react"
 import Link from "next/link"
 import { AdminTable, AdminBadge, AdminStatCard } from "@/components/admin"
@@ -127,6 +129,7 @@ export function FlatsClientView({
         if (res.error) {
           setDeleteError(res.error)
         } else {
+          toast.success("Flat deleted successfully")
           setDeletingFlat(null)
         }
       } catch (err: unknown) {

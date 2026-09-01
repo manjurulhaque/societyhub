@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { updateFlatDetails } from "./actions"
 import type { UnitType, OccupancyStatus } from "@/generated/prisma/client"
@@ -126,6 +128,7 @@ function EditFlatDialogContent({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Flat updated successfully")
           onClose()
         }
       } catch (err: unknown) {

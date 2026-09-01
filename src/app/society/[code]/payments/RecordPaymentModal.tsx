@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { recordPayment } from "./actions"
 import type { PaymentMode } from "@/generated/prisma/client"
@@ -181,6 +183,7 @@ export function RecordPaymentModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Payment recorded successfully")
           setAmount("")
           setReference("")
           setRemarks("")

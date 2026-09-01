@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition, useMemo } from "react"
 import { AdminModal } from "@/components/admin"
 import { addFlatPerson } from "../../flats/actions"
@@ -80,6 +82,7 @@ export function MapFlatToResidentModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Flat assigned successfully")
           setSuccess(res.message || "Flat mapped successfully.")
           setTimeout(() => {
             onClose()

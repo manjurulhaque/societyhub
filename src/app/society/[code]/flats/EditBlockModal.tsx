@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useEffect, useTransition } from "react"
 import { updateBlock, deleteBlock } from "./actions"
 import type { BlockOption } from "./AddFlatModal"
@@ -54,6 +56,7 @@ export function EditBlockModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Block updated successfully")
           onClose()
         }
       } catch (err: unknown) {
@@ -80,6 +83,7 @@ export function EditBlockModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Block updated successfully")
           onDeleted?.(block.id)
           onClose()
         }

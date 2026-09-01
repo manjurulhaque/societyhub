@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition, useMemo } from "react"
 import { AdminModal, AdminButton, AdminAlert } from "@/components/admin"
 import { createBudget, updateBudget, type BudgetItemInput } from "./actions"
@@ -174,6 +176,7 @@ function BudgetModalForm({
       if (res.error) {
         setError(res.error)
       } else {
+        toast.success("Budget saved successfully")
         onSuccess(res.message || (isEditing ? "Budget updated successfully." : "Budget created successfully."))
         onClose()
       }

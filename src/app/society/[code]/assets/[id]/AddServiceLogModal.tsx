@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { AdminModal } from "@/components/admin"
 import { createServiceLog } from "../actions"
@@ -53,6 +55,7 @@ export function AddServiceLogModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Service log recorded")
           onClose()
           setDescription("")
           setCost("")

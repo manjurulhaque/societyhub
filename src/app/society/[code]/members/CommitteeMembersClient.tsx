@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import Link from "next/link"
 import { AdminTable, AdminBadge } from "@/components/admin"
@@ -115,6 +117,7 @@ export function CommitteeMembersClient({
         if (res.error) {
           setDeleteError(res.error)
         } else {
+          toast.success("Committee member removed")
           setDeletingMember(null)
         }
       } catch (err: unknown) {

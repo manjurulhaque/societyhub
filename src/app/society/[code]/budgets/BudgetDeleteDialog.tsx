@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { AdminModal, AdminButton, AdminAlert } from "@/components/admin"
 import { deleteBudget } from "./actions"
@@ -39,6 +41,7 @@ export function BudgetDeleteDialog({
       if (res.error) {
         setError(res.error)
       } else {
+        toast.success("Budget deleted successfully")
         onSuccess(res.message || "Budget plan deleted successfully.")
         onClose()
       }

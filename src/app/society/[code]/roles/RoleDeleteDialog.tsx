@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { deleteCustomRole } from "./actions"
 
@@ -34,6 +36,7 @@ export function RoleDeleteDialog({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Role removed successfully")
           onClose()
         }
       } catch (err: unknown) {

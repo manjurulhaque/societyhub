@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { AdminModal } from "@/components/admin"
 import { transferFlatOwnership } from "../actions"
@@ -77,6 +79,7 @@ export function TransferOwnershipModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Ownership transferred successfully")
           onClose()
           setRegisteredDocNumber("")
           setTransferFeePaid("")

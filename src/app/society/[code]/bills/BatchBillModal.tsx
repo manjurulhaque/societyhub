@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { generateBatchBills } from "./actions"
 
@@ -70,6 +72,7 @@ export function BatchBillModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Bills generated successfully")
           setResultMessage(res.message || "Batch bill generation completed.")
         }
       } catch (err: unknown) {

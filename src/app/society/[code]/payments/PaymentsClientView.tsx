@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useMemo, useTransition, useOptimistic } from "react"
 import { AdminTable, AdminBadge, AdminStatCard } from "@/components/admin"
 import {
@@ -145,6 +147,7 @@ export function PaymentsClientView({
         if (res.error) {
           setVoidError(res.error)
         } else {
+          toast.success("Payment voided successfully")
           setVoidingPayment(null)
           setVoidReason("")
         }

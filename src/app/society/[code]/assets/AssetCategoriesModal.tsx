@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { AdminModal, AdminTable } from "@/components/admin"
 import { createAssetCategory } from "./actions"
@@ -54,6 +56,7 @@ export function AssetCategoriesModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Asset category saved")
           setName("")
           setDepreciationRate("")
           setDescription("")

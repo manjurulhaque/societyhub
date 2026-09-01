@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useMemo, useTransition } from "react"
 import {
   AdminCard,
@@ -97,8 +99,10 @@ export function FinancialYearsClientView({
     startTransition(async () => {
       const res = await setCurrentFinancialYear(societyCode, fy.id)
       if (res.error) {
+        toast.error(res.error)
         setActionMessage({ text: res.error, type: "error" })
       } else {
+        toast.success(`Active financial year changed to ${fy.name}`)
         setActionMessage({ text: `Active financial year changed to ${fy.name}.`, type: "success" })
       }
     })
@@ -109,8 +113,10 @@ export function FinancialYearsClientView({
     startTransition(async () => {
       const res = await toggleYearClosure(societyCode, fy.id, !fy.isClosed)
       if (res.error) {
+        toast.error(res.error)
         setActionMessage({ text: res.error, type: "error" })
       } else {
+        toast.success(fy.isClosed ? `Reopened ${fy.name}` : `Closed ${fy.name}`)
         setActionMessage({
           text: fy.isClosed ? `Reopened ${fy.name}.` : `Closed ${fy.name}.`,
           type: "success",

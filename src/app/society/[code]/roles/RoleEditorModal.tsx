@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useMemo, useTransition } from "react"
 import { MODULE_ORDER, MODULE_LABELS } from "@/lib/auth/permissionConstants"
 import { createCustomRole, updateRole } from "./actions"
@@ -133,6 +135,7 @@ export function RoleEditorModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Role saved successfully")
           onClose()
         }
       } catch (err: unknown) {

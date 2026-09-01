@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { AdminModal } from "@/components/admin"
 import { createBooking } from "./actions"
@@ -97,6 +99,7 @@ export function CreateBookingModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Booking created successfully")
           onClose()
           setEventTitle("")
           setRemarks("")

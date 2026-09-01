@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { AdminModal } from "@/components/admin"
 import { createMeeting } from "./actions"
@@ -52,6 +54,7 @@ export function CreateMeetingModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Meeting scheduled successfully")
           onClose()
           setTitle("")
           setMeetingType("MANAGING_COMMITTEE")

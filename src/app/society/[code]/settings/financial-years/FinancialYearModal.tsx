@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useEffect, useTransition } from "react"
 import { createFinancialYear, updateFinancialYear } from "./actions"
 
@@ -102,6 +104,7 @@ export function FinancialYearModal({
           if (res.error) {
             setError(res.error)
           } else {
+            toast.success("Financial year saved")
             onClose()
           }
         } else {
@@ -116,6 +119,7 @@ export function FinancialYearModal({
           if (res.error) {
             setError(res.error)
           } else {
+            toast.success("Financial year saved")
             onClose()
           }
         }

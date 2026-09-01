@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition, useMemo } from "react"
 import { addCommitteeMember, updateMemberRoleAssignment } from "../roles/actions"
 import { type ResidentItem } from "./ResidentsDirectoryClient"
@@ -141,6 +143,7 @@ export function MemberRoleModal({
           if (res.error) {
             setError(res.error)
           } else {
+            toast.success("Role updated successfully")
             onClose()
           }
         } catch (err: unknown) {
@@ -189,8 +192,10 @@ export function MemberRoleModal({
         if (res.error) {
           setError(res.error)
         } else if (res.setupLink) {
+          toast.success("Committee member added successfully")
           setCreatedSetupLink({ email: targetEmail, link: res.setupLink })
         } else {
+          toast.success("Committee member added successfully")
           onClose()
         }
       } catch (err: unknown) {

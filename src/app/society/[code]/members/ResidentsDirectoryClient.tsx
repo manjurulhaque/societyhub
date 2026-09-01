@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useMemo, useTransition } from "react"
 import Link from "next/link"
 import { AdminTable, AdminBadge } from "@/components/admin"
@@ -80,6 +82,7 @@ export function ResidentsDirectoryClient({
         if (res.error) {
           setDeleteError(res.error)
         } else {
+          toast.success("Resident removed successfully")
           setDeletingResident(null)
         }
       } catch (err: unknown) {

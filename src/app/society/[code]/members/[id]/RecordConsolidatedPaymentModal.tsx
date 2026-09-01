@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition, useMemo } from "react"
 import { recordConsolidatedPayment, type ConsolidatedBillAllocation } from "@/app/society/[code]/payments/actions"
 import type { PaymentMode } from "@/generated/prisma/client"
@@ -163,6 +165,7 @@ export function RecordConsolidatedPaymentModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Consolidated payment recorded")
           setSuccessMessage(res.message || "Payment successfully recorded.")
           setTimeout(() => {
             onClose()
