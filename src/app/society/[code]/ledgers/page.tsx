@@ -10,6 +10,7 @@ import { recordAuditLog } from "@/lib/audit"
 import { prisma } from "@/lib/prisma"
 
 import { seedSocietyChartOfAccounts } from "@/lib/chartOfAccounts"
+import { formatFinancialYearRange } from "@/lib/datetime"
 import type { LedgerGroup, BalanceType } from "@/generated/prisma/client"
 
 import { LedgerExplorer } from "./LedgerExplorer"
@@ -144,7 +145,7 @@ export default async function SocietyLedgersPage({
                   {currentFY.name}
                 </span>
                 <span className="text-xs text-stone-500 font-medium">
-                  ({new Date(currentFY.startDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} – {new Date(currentFY.endDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})
+                  ({formatFinancialYearRange(currentFY.startDate, currentFY.endDate)})
                 </span>
                 {currentFY.isLocked ? (
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">

@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: "Expenses" }
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { canApproveDataEntry, isManagerRole } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
-import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { formatDateInAppTimeZone, formatFinancialYearRange } from "@/lib/datetime"
 import { approveExpenseAction, rejectExpenseAction } from "./actions"
 import { ensureStandardExpenseCategories } from "@/lib/expenseCategories"
 import { ExpenseCategoriesModal } from "./ExpenseCategoriesModal"
@@ -154,7 +154,7 @@ export default async function SocietyExpensesPage({
                   {currentFY.name}
                 </span>
                 <span className="text-xs text-stone-500 font-medium">
-                  ({new Date(currentFY.startDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} – {new Date(currentFY.endDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})
+                  ({formatFinancialYearRange(currentFY.startDate, currentFY.endDate)})
                 </span>
                 {currentFY.isLocked ? (
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">

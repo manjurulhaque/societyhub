@@ -16,6 +16,7 @@ import {
 import { AuditLockModal } from "./AuditLockModal"
 import { FinancialYearDeleteDialog } from "./FinancialYearDeleteDialog"
 import { setCurrentFinancialYear, toggleYearClosure } from "./actions"
+import { formatFinancialYearDate } from "@/lib/datetime"
 
 interface FinancialYearsClientViewProps {
   societyCode: string
@@ -83,12 +84,7 @@ export function FinancialYearsClientView({
 
   const formatDate = (isoString: string) => {
     try {
-      const d = new Date(isoString)
-      return d.toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      })
+      return formatFinancialYearDate(isoString)
     } catch {
       return isoString.slice(0, 10)
     }

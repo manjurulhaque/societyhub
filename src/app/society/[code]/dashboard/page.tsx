@@ -12,7 +12,7 @@ import {
   AdminTable,
   AdminButton,
 } from "@/components/admin"
-import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { formatDateInAppTimeZone, formatFinancialYearRange } from "@/lib/datetime"
 import { SocietyDashboardCharts } from "./SocietyDashboardCharts"
 import { getDashboardStats, getRecentBills, getRecentPayments } from "./data"
 
@@ -113,7 +113,7 @@ export default async function SocietyDashboardPage({
                   {currentFY.name}
                 </span>
                 <span className="text-xs text-stone-500 font-medium">
-                  ({new Date(currentFY.startDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} – {new Date(currentFY.endDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})
+                  ({formatFinancialYearRange(currentFY.startDate, currentFY.endDate)})
                 </span>
                 {currentFY.isLocked ? (
                   <AdminBadge variant="warning" size="sm">AUDIT FROZEN</AdminBadge>

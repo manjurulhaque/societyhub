@@ -274,3 +274,30 @@ export function formatCurrentTimeInTimeZone(timeZone: string = APP_TIME_ZONE): s
 export function subtractDays(value: Date, days: number) {
   return new Date(value.getTime() - days * 24 * 60 * 60 * 1000)
 }
+
+/**
+ * Formats a financial year date boundary safely without UTC-midnight spillover.
+ * Example: "2026-04-01" -> "1 Apr 2026", "2027-03-31" -> "31 Mar 2027"
+ */
+export function formatFinancialYearDate(value: Date | string): string {
+  const d = new Date(value)
+  if (isNaN(d.getTime())) return String(value)
+
+  return getFormatter(
+    {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    },
+    "en-IN",
+    "UTC"
+  ).format(d)
+}
+
+/**
+ * Formats a full financial year date range cleanly.
+ * Example: "1 Apr 2026 – 31 Mar 2027"
+ */
+export function formatFinancialYearRange(startDate: Date | string, endDate: Date | string): string {
+  return `${formatFinancialYearDate(startDate)} – ${formatFinancialYearDate(endDate)}`
+}

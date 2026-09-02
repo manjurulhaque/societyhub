@@ -30,6 +30,7 @@ import {
   formatAuditAlertPayload,
 } from "../src/lib/auditAlerts"
 import { CACHE_TAGS } from "../src/lib/cache/cacheTags"
+import { formatFinancialYearDate, formatFinancialYearRange } from "../src/lib/datetime"
 
 let passedTests = 0
 let failedTests = 0
@@ -531,6 +532,26 @@ try {
   assert(customRel === "noopener noreferrer author", "Preserves custom rel value while maintaining security")
 } catch (e: unknown) {
   assert(false, "External Link Security threw unexpected error", e instanceof Error ? e.message : String(e))
+}
+
+// -----------------------------------------------------------------------------
+// TEST 13: Financial Year Date Range & Accounting Cycle Boundary Formatter
+// -----------------------------------------------------------------------------
+console.log("\n▶ [13/13] Testing Financial Year Date Range & Accounting Cycle Boundary Formatter...")
+try {
+  // Test 13.1: Start Date Formatting (1 Apr 2026)
+  const formattedStart = formatFinancialYearDate("2026-04-01T00:00:00.000Z")
+  assert(formattedStart === "1 Apr 2026", "Formats FY start date strictly as '1 Apr 2026'")
+
+  // Test 13.2: End Date Formatting (31 Mar 2027)
+  const formattedEnd = formatFinancialYearDate("2027-03-31T00:00:00.000Z")
+  assert(formattedEnd === "31 Mar 2027", "Formats FY end date strictly as '31 Mar 2027'")
+
+  // Test 13.3: Full Range Formatting
+  const range = formatFinancialYearRange("2026-04-01T00:00:00.000Z", "2027-03-31T00:00:00.000Z")
+  assert(range === "1 Apr 2026 – 31 Mar 2027", "Accurately formats active financial year range as '1 Apr 2026 – 31 Mar 2027'")
+} catch (e: unknown) {
+  assert(false, "Financial Year Formatter threw unexpected error", e instanceof Error ? e.message : String(e))
 }
 
 // -----------------------------------------------------------------------------
