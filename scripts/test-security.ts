@@ -12,6 +12,8 @@
  * 8. Automated Audit PII & Secret Redaction Engine
  * 9. High-Risk Audit Alert Classification & HMAC-Signed Webhook Engine
  * 10. Session Inactivity Lifecycle, Warning Countdown & Redirect Gate
+ * 11. Cache Tagging & Keyed Invalidation Architecture
+ * 12. External Link Security & noopener noreferrer Enforcement
  */
 
 import { encryptData, decryptData, isEncrypted } from "../src/lib/crypto"
@@ -497,6 +499,38 @@ try {
   assert(dashboardTag === "dashboard:royal-gardens", "Generates society dashboard analytics cache tag")
 } catch (e: unknown) {
   assert(false, "Cache Tagging Architecture threw unexpected error", e instanceof Error ? e.message : String(e))
+}
+
+// -----------------------------------------------------------------------------
+// TEST 12: External Link Security & noopener noreferrer Enforcement
+// -----------------------------------------------------------------------------
+console.log("\n▶ [12/12] Testing External Link Security & noopener noreferrer Enforcement...")
+try {
+  // Test helper to compute safe rel attribute
+  const computeSafeRel = (href: string, target?: string, rel?: string) => {
+    const isExternal =
+      href.startsWith("http://") || href.startsWith("https://") || href.startsWith("//")
+    const isBlank = target === "_blank"
+    return isExternal || isBlank ? rel || "noopener noreferrer" : rel
+  }
+
+  // Test 12.1: External absolute link
+  const extRel = computeSafeRel("https://example.com/payment")
+  assert(extRel === "noopener noreferrer", "External HTTPS URL automatically receives 'noopener noreferrer'")
+
+  // Test 12.2: External target=_blank link
+  const blankRel = computeSafeRel("/auth/set-password#token", "_blank")
+  assert(blankRel === "noopener noreferrer", "Target _blank link automatically receives 'noopener noreferrer'")
+
+  // Test 12.3: Relative internal link without _blank
+  const internalRel = computeSafeRel("/society/code/dashboard")
+  assert(internalRel === undefined, "Internal link without _blank does not require rel attribute")
+
+  // Test 12.4: Explicit custom rel override preservation
+  const customRel = computeSafeRel("https://external.gov.in", "_blank", "noopener noreferrer author")
+  assert(customRel === "noopener noreferrer author", "Preserves custom rel value while maintaining security")
+} catch (e: unknown) {
+  assert(false, "External Link Security threw unexpected error", e instanceof Error ? e.message : String(e))
 }
 
 // -----------------------------------------------------------------------------

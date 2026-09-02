@@ -243,6 +243,8 @@ export default function LoginPage() {
                       />
                       <a
                         href={devSetupLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="block text-center rounded-xl bg-stone-900 py-2 text-xs font-semibold text-white hover:bg-stone-800 transition"
                       >
                         Open Password Setup Now &rarr;
