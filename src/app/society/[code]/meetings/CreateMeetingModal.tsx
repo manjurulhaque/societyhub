@@ -74,7 +74,7 @@ export function CreateMeetingModal({
       isOpen={isOpen}
       onClose={onClose}
       title="Schedule General Body / Committee Meeting"
-      description="Record an upcoming AGM, SGM, Managing Committee, or Emergency meeting."
+      description="Record an upcoming AGM, SGM, Managing Committee, Executive Committee, or Emergency meeting."
       maxWidth="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -107,6 +107,7 @@ export function CreateMeetingModal({
               className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs text-stone-900 focus:border-stone-900 focus:outline-none"
             >
               <option value="MANAGING_COMMITTEE">Managing Committee Meeting (MCM)</option>
+              <option value="EXECUTIVE_COMMITTEE">Executive Committee Meeting (ECM)</option>
               <option value="AGM">Annual General Meeting (AGM)</option>
               <option value="SGM">Special General Meeting (SGM / EGM)</option>
               <option value="EMERGENCY">Emergency Executive Meeting</option>

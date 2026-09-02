@@ -45,7 +45,7 @@ export default async function SocietyMeetingsPage({
             Meetings & Resolutions Register (Minutes Book)
           </h1>
           <p className="text-sm text-stone-500">
-            Statutory records of AGM, SGM, and Managing Committee (MCM) meetings, attendance quorum, and formal resolutions for {society.name}.
+            Statutory records of AGM, SGM, Managing Committee (MCM), and Executive Committee (ECM) meetings, attendance quorum, and formal resolutions for {society.name}.
           </p>
         </div>
       </div>
@@ -87,6 +87,7 @@ export default async function SocietyMeetingsPage({
                 className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs text-stone-900 outline-none focus:border-stone-950 focus:ring-1 focus:ring-stone-950"
               >
                 <option value="MANAGING_COMMITTEE">Managing Committee (MCM)</option>
+                <option value="EXECUTIVE_COMMITTEE">Executive Committee (ECM)</option>
                 <option value="AGM">Annual General Meeting (AGM)</option>
                 <option value="SGM">Special General Meeting (SGM)</option>
                 <option value="EMERGENCY">Emergency Committee Meeting</option>
@@ -237,7 +238,7 @@ export default async function SocietyMeetingsPage({
                     <div className="flex items-center gap-2">
                       <h3 className="font-bold text-stone-950 text-base">{m.title}</h3>
                       <span className="rounded-full bg-stone-100 px-2.5 py-0.5 text-[10px] font-bold text-stone-700">
-                        {m.meetingType.replace(/_/g, " ")}
+                        {m.meetingType === "EXECUTIVE_COMMITTEE" ? "Executive Committee" : m.meetingType.replace(/_/g, " ")}
                       </span>
                     </div>
                     <p className="text-xs text-stone-500 mt-0.5">

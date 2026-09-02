@@ -97,11 +97,15 @@ export function MeetingDetailClient({
                 ? "purple"
                 : meeting.meetingType === "SGM"
                   ? "warning"
-                  : "info"
+                  : meeting.meetingType === "EXECUTIVE_COMMITTEE"
+                    ? "neutral"
+                    : meeting.meetingType === "EMERGENCY"
+                      ? "danger"
+                      : "info"
             }
             size="md"
           >
-            {meeting.meetingType.replace(/_/g, " ")}
+            {meeting.meetingType === "EXECUTIVE_COMMITTEE" ? "Executive Committee Meeting" : meeting.meetingType.replace(/_/g, " ")}
           </AdminBadge>
           <AdminBadge variant={quorumMet ? "success" : "danger"} size="md" dot>
             {quorumMet ? "Quorum Formed" : "Quorum Adjourned"}
