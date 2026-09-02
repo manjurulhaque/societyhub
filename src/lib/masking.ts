@@ -54,7 +54,7 @@ export function maskPhone(phone: string | null | undefined): string {
 
 /**
  * Masks an email address for privacy.
- * Example: "manjurul@societyhub.in" -> "m••••••@societyhub.in"
+ * Example: "manjurul@sarws.in" -> "m••••••@sarws.in"
  */
 export function maskEmail(email: string | null | undefined): string {
   if (!email || email === "—") return "—"

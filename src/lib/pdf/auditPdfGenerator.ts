@@ -35,7 +35,7 @@ export function generateAuditReportPDF(options: GenerateAuditPDFOptions) {
 
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
-  const societyName = options.society?.name || options.scopeName || "SocietyHub Audit Trail Ledger"
+  const societyName = options.society?.name || options.scopeName || "SARWS Connect Audit Trail Ledger"
 
   let currentY = 14
 

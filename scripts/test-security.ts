@@ -1,5 +1,5 @@
 /**
- * SocietyHub Comprehensive Security & Cryptographic Self-Test Suite.
+ * SARWS Connect Comprehensive Security & Cryptographic Self-Test Suite.
  *
  * Mathematically validates:
  * 1. AES-256-GCM Cryptographic Parity & Envelope Integrity
@@ -45,7 +45,7 @@ function assert(condition: boolean, testName: string, detail?: string) {
 }
 
 console.log("\n================================================================================")
-console.log("             SOCIETYHUB SECURITY & CRYPTOGRAPHY SELF-TEST SUITE                  ")
+console.log("             SARWS CONNECT SECURITY & CRYPTOGRAPHY SELF-TEST SUITE              ")
 console.log("================================================================================\n")
 
 // -----------------------------------------------------------------------------
@@ -270,7 +270,7 @@ try {
   assert(!validatePasswordStrength(noSymbolPass).isValid, "Requires at least one special symbol")
   assert(validatePasswordStrength(validPass).isValid, "Accepts compliant high-entropy passphrase")
   assert(
-    !validatePasswordStrength(emailContextPass, { email: "manjurul@societyhub.in" }).isValid,
+    !validatePasswordStrength(emailContextPass, { email: "manjurul@sarws.in" }).isValid,
     "Rejects password containing user's email username"
   )
 } catch (e: unknown) {
@@ -402,7 +402,7 @@ try {
       id: "alert-format-test",
       action: "DELETE",
       entity: "SocietyMember",
-      userEmail: "president@societyhub.in",
+      userEmail: "president@sarws.in",
       ipAddress: "127.0.0.1",
       description: "Removed Secretary from committee",
       createdAt: new Date(),

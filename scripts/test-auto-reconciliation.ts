@@ -17,7 +17,7 @@ function assert(condition: boolean, msg: string) {
 }
 
 console.log("\n=======================================================")
-console.log(" 🧪 SocietyHub Bank Statement Auto-Reconciliation Tests ")
+console.log(" 🧪 SARWS Connect Bank Statement Auto-Reconciliation Tests ")
 console.log("=======================================================\n")
 
 // Test 1: Amount Sanitizer

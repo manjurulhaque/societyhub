@@ -123,7 +123,7 @@ export function AutoReconciliationEngine({
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `SocietyHub_Sample_Bank_Statement.csv`
+      a.download = `SARWS_Connect_Sample_Bank_Statement.csv`
       a.click()
       URL.revokeObjectURL(url)
     } catch {

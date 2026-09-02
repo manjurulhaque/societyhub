@@ -185,7 +185,7 @@ export function BrsBalanceBridge({
             {difference > 0 ? (
               <>
                 <li>
-                  <strong>Adjusted book balance is HIGHER than Bank Passbook:</strong> The bank statement has debited ₹{difference.toLocaleString("en-IN")} that is not yet booked in SocietyHub.
+                  <strong>Adjusted book balance is HIGHER than Bank Passbook:</strong> The bank statement has debited ₹{difference.toLocaleString("en-IN")} that is not yet booked in SARWS Connect.
                 </li>
                 <li>
                   Check for unbooked <em>Bank Service Charges, SMS alert fees, debit card annual maintenance fees</em>, or outward vendor ECS debits in the bank statement.
@@ -197,7 +197,7 @@ export function BrsBalanceBridge({
             ) : (
               <>
                 <li>
-                  <strong>Bank Passbook is HIGHER than Adjusted book balance:</strong> The bank has received ₹{Math.abs(difference).toLocaleString("en-IN")} in credits not yet recorded in SocietyHub.
+                  <strong>Bank Passbook is HIGHER than Adjusted book balance:</strong> The bank has received ₹{Math.abs(difference).toLocaleString("en-IN")} in credits not yet recorded in SARWS Connect.
                 </li>
                 <li>
                   Check for unassigned <em>direct NEFT/UPI resident maintenance transfers</em> in the Bank Statement Auto-Reconciliation tab.
