@@ -26,6 +26,7 @@ enum SocietyRole {
   ACCOUNTANT
   SECURITY
   MEMBER
+  EXECUTIVE_MEMBER
 }
 
 enum SocietyType {

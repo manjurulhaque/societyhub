@@ -42,7 +42,8 @@ const DESIGNATION_OPTIONS: { value: SocietyRole; label: string; badge: string; d
   { value: "MANAGER", label: "Manager / Estate Officer", badge: "Operations", desc: "Day-to-day property maintenance and collections" },
   { value: "ACCOUNTANT", label: "Accountant", badge: "Operations", desc: "Bookkeeper for vouchers, bills, and ledgers" },
   { value: "SECURITY", label: "Security Guard / Incharge", badge: "Staff", desc: "Gatekeeping & facility access check" },
-  { value: "MEMBER", label: "Committee Member (General)", badge: "Committee", desc: "Elected managing committee member" },
+  { value: "MEMBER", label: "Management Committee Member", badge: "Committee", desc: "Elected management committee member" },
+  { value: "EXECUTIVE_MEMBER", label: "Executive Committee Member", badge: "Executive", desc: "Appointed executive committee member" },
 ]
 
 export function MemberRoleModal({

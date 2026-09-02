@@ -209,7 +209,11 @@ export function CommitteeMembersClient({
 
                 <td className="px-4 py-3.5">
                   <AdminBadge variant={badgeVariant} size="sm" dot>
-                    {m.designation.replace(/_/g, " ")}
+                    {m.designation === "MEMBER"
+                      ? "Management Committee Member"
+                      : m.designation === "EXECUTIVE_MEMBER"
+                        ? "Executive Committee Member"
+                        : m.designation.replace(/_/g, " ")}
                   </AdminBadge>
                 </td>
 

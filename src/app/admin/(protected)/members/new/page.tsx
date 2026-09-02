@@ -95,7 +95,8 @@ export default async function NewMemberPage() {
                   { label: "Society Manager", value: "MANAGER" },
                   { label: "Accountant", value: "ACCOUNTANT" },
                   { label: "Security In-Charge", value: "SECURITY" },
-                  { label: "General Committee Member", value: "MEMBER" },
+                  { label: "Management Committee Member", value: "MEMBER" },
+                  { label: "Executive Committee Member", value: "EXECUTIVE_MEMBER" },
                 ]}
               />
             </div>
