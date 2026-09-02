@@ -7,6 +7,7 @@ import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
 import { logger } from "@/lib/logger"
+import { revalidatePaymentCache } from "@/lib/cache/cacheTags"
 import type { PaymentMode, PaymentStatus } from "@/generated/prisma/client"
 
 export type PaymentActionState = {
@@ -188,11 +189,12 @@ export async function recordPayment(
       },
     })
 
-    revalidatePath(`/society/${societyCode}/payments`)
-    revalidatePath(`/society/${societyCode}/bills`)
-    revalidatePath(`/society/${societyCode}/accounts`)
-    revalidatePath(`/society/${societyCode}/dashboard`)
-    revalidatePath(`/society/${societyCode}/reports`)
+    revalidatePaymentCache(societyCode, {
+      paymentId: result.id,
+      flatId: targetFlatId || undefined,
+      billId: targetBillId || undefined,
+      accountId: data.accountId || undefined,
+    })
 
     return {
       success: true,
@@ -298,10 +300,12 @@ export async function voidPayment(
       newData: { status: "REFUNDED", reason: sanitizedReason },
     })
 
-    revalidatePath(`/society/${societyCode}/payments`)
-    revalidatePath(`/society/${societyCode}/bills`)
-    revalidatePath(`/society/${societyCode}/accounts`)
-    revalidatePath(`/society/${societyCode}/dashboard`)
+    revalidatePaymentCache(societyCode, {
+      paymentId,
+      flatId: payment.flatId || payment.bill?.flatId || undefined,
+      billId: payment.billId || undefined,
+      accountId: payment.accountId || undefined,
+    })
 
     return {
       success: true,
@@ -525,12 +529,10 @@ export async function recordConsolidatedPayment(
 
     revalidatePath(`/society/${societyCode}/members/${person.id}`)
     revalidatePath(`/society/${societyCode}/members`)
-    revalidatePath(`/society/${societyCode}/payments`)
-    revalidatePath(`/society/${societyCode}/bills`)
-    revalidatePath(`/society/${societyCode}/accounts`)
     revalidatePath(`/society/${societyCode}/flats`)
-    revalidatePath(`/society/${societyCode}/dashboard`)
-    revalidatePath(`/society/${societyCode}/reports`)
+    revalidatePaymentCache(societyCode, {
+      accountId: data.accountId || undefined,
+    })
 
     return {
       success: true,

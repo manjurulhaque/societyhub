@@ -7,6 +7,7 @@ import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
 import { logger } from "@/lib/logger"
+import { revalidateSocietyTreasuryCache } from "@/lib/cache/cacheTags"
 import { parseBankStatementCsv, generateSampleBankStatementCsv } from "@/lib/accounting/bankStatementParser"
 import {
   analyzeBankStatement,
@@ -367,15 +368,11 @@ export async function executeAutoReconciliationBatch(
       },
     })
 
-    // Revalidate paths
+    // Revalidate paths & cache tags
     revalidatePath(`/society/${societyCode}/accounts/reconciliation`)
-    revalidatePath(`/society/${societyCode}/accounts`)
-    revalidatePath(`/society/${societyCode}/bills`)
-    revalidatePath(`/society/${societyCode}/payments`)
     revalidatePath(`/society/${societyCode}/expenses`)
     revalidatePath(`/society/${societyCode}/cheques`)
-    revalidatePath(`/society/${societyCode}/dashboard`)
-    revalidatePath(`/society/${societyCode}/reports`)
+    revalidateSocietyTreasuryCache(societyCode)
 
     return {
       success: true,

@@ -27,6 +27,7 @@ import {
   signWebhookPayload,
   formatAuditAlertPayload,
 } from "../src/lib/auditAlerts"
+import { CACHE_TAGS } from "../src/lib/cache/cacheTags"
 
 let passedTests = 0
 let failedTests = 0
@@ -448,6 +449,54 @@ try {
   assert(redirectUrl.includes("next=%2Fsociety%2Froyal-gardens%2Faccounts"), "Redirect URL safely preserves deep-link return destination")
 } catch (e: unknown) {
   assert(false, "Session Inactivity Engine threw unexpected error", e instanceof Error ? e.message : String(e))
+}
+
+// -----------------------------------------------------------------------------
+// TEST 11: Cache Tagging & Keyed Invalidation Architecture
+// -----------------------------------------------------------------------------
+console.log("\n▶ [11/11] Testing Cache Tagging & Keyed Invalidation Architecture...")
+try {
+  const socCode = "ROYAL-GARDENS"
+  const flatId = "flat-101-abc"
+  const billId = "bill-2026-xyz"
+  const paymentId = "pay-999-rst"
+  const accountId = "acc-hdfc-001"
+
+  // Test 11.1: Billing Tag Structure
+  const billsTag = CACHE_TAGS.bills(socCode)
+  assert(billsTag === "bills:royal-gardens", "Generates normalized lowercase society bills cache tag")
+
+  const billDetailTag = CACHE_TAGS.billDetail(billId)
+  assert(billDetailTag === "bill:bill-2026-xyz", "Generates precise bill entity cache tag")
+
+  const flatBillsTag = CACHE_TAGS.flatBills(flatId)
+  assert(flatBillsTag === "bills:flat:flat-101-abc", "Generates flat-scoped bills cache tag")
+
+  // Test 11.2: Payments Tag Structure
+  const paymentsTag = CACHE_TAGS.payments(socCode)
+  assert(paymentsTag === "payments:royal-gardens", "Generates normalized society payments cache tag")
+
+  const paymentDetailTag = CACHE_TAGS.paymentDetail(paymentId)
+  assert(paymentDetailTag === "payment:pay-999-rst", "Generates precise payment receipt cache tag")
+
+  const flatPaymentsTag = CACHE_TAGS.flatPayments(flatId)
+  assert(flatPaymentsTag === "payments:flat:flat-101-abc", "Generates flat-scoped payments cache tag")
+
+  // Test 11.3: Accounts & Treasury Tag Structure
+  const accountsTag = CACHE_TAGS.accounts(socCode)
+  assert(accountsTag === "accounts:royal-gardens", "Generates normalized treasury accounts cache tag")
+
+  const accountDetailTag = CACHE_TAGS.accountDetail(accountId)
+  assert(accountDetailTag === "account:acc-hdfc-001", "Generates account detail cache tag")
+
+  // Test 11.4: Reports & Dashboard Tag Structure
+  const reportsTag = CACHE_TAGS.reports(socCode)
+  assert(reportsTag === "reports:royal-gardens", "Generates society reports cache tag")
+
+  const dashboardTag = CACHE_TAGS.dashboard(socCode)
+  assert(dashboardTag === "dashboard:royal-gardens", "Generates society dashboard analytics cache tag")
+} catch (e: unknown) {
+  assert(false, "Cache Tagging Architecture threw unexpected error", e instanceof Error ? e.message : String(e))
 }
 
 // -----------------------------------------------------------------------------

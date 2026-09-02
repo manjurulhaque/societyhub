@@ -7,6 +7,7 @@ import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
 import { logger } from "@/lib/logger"
+import { revalidateBillCache } from "@/lib/cache/cacheTags"
 import type { BillType, BillStatus } from "@/generated/prisma/client"
 
 export type BillActionState = {
@@ -184,9 +185,7 @@ export async function generateBatchBills(
       newData: { month, year, billType, generatedCount, skippedCount, totalGeneratedAmount },
     })
 
-    revalidatePath(`/society/${societyCode}/bills`)
-    revalidatePath(`/society/${societyCode}/dashboard`)
-    revalidatePath(`/society/${societyCode}/reports`)
+    revalidateBillCache(societyCode)
 
     if (generatedCount === 0 && skippedCount > 0) {
       return {
@@ -307,8 +306,10 @@ export async function createIndividualBill(
       newData: { billNumber, flatId: data.flatId, amount, billType: data.billType },
     })
 
-    revalidatePath(`/society/${societyCode}/bills`)
-    revalidatePath(`/society/${societyCode}/dashboard`)
+    revalidateBillCache(societyCode, {
+      flatId: data.flatId,
+      billId: bill.id,
+    })
 
     return {
       success: true,
@@ -369,8 +370,10 @@ export async function cancelBill(
       newData: { status: updatedBill.status, reason: sanitizedReason },
     })
 
-    revalidatePath(`/society/${societyCode}/bills`)
-    revalidatePath(`/society/${societyCode}/dashboard`)
+    revalidateBillCache(societyCode, {
+      flatId: bill.flatId,
+      billId: bill.id,
+    })
 
     return {
       success: true,
