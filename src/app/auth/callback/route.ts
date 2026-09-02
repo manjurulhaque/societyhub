@@ -3,6 +3,7 @@ import type { EmailOtpType } from "@supabase/supabase-js"
 import { cookies } from "next/headers"
 import { NextResponse, type NextRequest } from "next/server"
 import { getSafeRedirectUrl } from "@/lib/auth/safeRedirect"
+import { logger } from "@/lib/logger"
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
   const errorDescription = searchParams.get("error_description") || searchParams.get("error")
 
   if (errorDescription) {
-    console.error("Auth callback error:", errorDescription)
+    logger.error("Auth callback error", undefined, "GET /auth/callback", { errorDescription })
     return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(errorDescription)}`)
   }
 
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest) {
       return response
     }
 
-    console.error("Auth token verification failed:", authError.message)
+    logger.error("Auth token verification failed", authError, "GET /auth/callback")
     return NextResponse.redirect(
       `${origin}/login?error=${encodeURIComponent("Your invitation or reset link is invalid or has expired. Please request a new one.")}`
     )

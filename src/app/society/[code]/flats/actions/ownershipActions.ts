@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 import type { TransferType, FlatRole } from "@/generated/prisma/client"
 import type { FlatActionState } from "./types"
 
@@ -156,7 +157,7 @@ export async function transferFlatOwnership(
       message: `Ownership of Flat ${flat.number} successfully transferred to ${toPerson.name}.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to transfer flat ownership:", err)
+    logger.error("Failed to transfer flat ownership", err, "transferFlatOwnership", { societyCode, flatId, toPersonId: data.toPersonId })
     return { error: getSafeErrorMessage(err, "Failed to transfer ownership.") }
   }
 }
@@ -231,7 +232,7 @@ export async function addFlatPerson(
 
     return { success: true, message: `${person.name} assigned to Flat ${flat.number} as ${data.role}.` }
   } catch (err: unknown) {
-    console.error("Failed to add flat resident:", err)
+    logger.error("Failed to add flat resident", err, "addFlatPerson", { societyCode, flatId, personId: data.personId, role: data.role })
     return { error: getSafeErrorMessage(err, "Failed to add flat resident.") }
   }
 }
@@ -279,7 +280,7 @@ export async function removeFlatPerson(
 
     return { success: true, message: `Occupancy ended for ${record.person.name}.` }
   } catch (err: unknown) {
-    console.error("Failed to remove flat resident:", err)
+    logger.error("Failed to remove flat resident", err, "removeFlatPerson", { societyCode, flatPersonId, flatId })
     return { error: getSafeErrorMessage(err, "Failed to end occupancy.") }
   }
 }

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
+import { logger } from "@/lib/logger"
 import type { ReconStatus } from "@/generated/prisma/client"
 
 export type ReconActionState = {
@@ -80,7 +81,7 @@ export async function commitBankReconciliation(
       reconId: recon.id,
     }
   } catch (err: unknown) {
-    console.error("Failed to commit bank reconciliation:", err)
+    logger.error("Failed to commit bank reconciliation", err, "commitBankReconciliation", { societyCode, accountId: data.accountId })
     const message = err instanceof Error ? err.message : "Failed to commit reconciliation."
     return { error: message }
   }
@@ -169,7 +170,7 @@ export async function clearChequeInlineAction(
       chequeId: cheque.id,
     }
   } catch (err: unknown) {
-    console.error("Failed to mark cheque as cleared:", err)
+    logger.error("Failed to mark cheque as cleared", err, "clearChequeInlineAction", { societyCode, chequeId })
     const message = err instanceof Error ? err.message : "Failed to clear cheque."
     return { error: message }
   }

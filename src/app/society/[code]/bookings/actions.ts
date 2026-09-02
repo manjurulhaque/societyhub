@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
+import { logger } from "@/lib/logger"
 import type { BookingStatus, PaymentMode } from "@/generated/prisma/client"
 
 export type BookingActionState = {
@@ -114,7 +115,7 @@ export async function createBooking(
       bookingId: booking.id,
     }
   } catch (err: unknown) {
-    console.error("Failed to create facility booking:", err)
+    logger.error("Failed to create facility booking", err, "createBooking", { societyCode, amenityId: data.amenityId, flatId: data.flatId })
     const message = err instanceof Error ? err.message : "Failed to create reservation."
     return { error: message }
   }
@@ -157,7 +158,7 @@ export async function updateBookingStatus(
 
     return { success: true, message: `Booking marked as ${status}.` }
   } catch (err: unknown) {
-    console.error("Failed to update booking status:", err)
+    logger.error("Failed to update booking status", err, "updateBookingStatus", { societyCode, bookingId, status })
     const message = err instanceof Error ? err.message : "Failed to update booking."
     return { error: message }
   }
@@ -202,7 +203,7 @@ export async function refundCautionDeposit(
 
     return { success: true, message: "Caution deposit marked as refunded." }
   } catch (err: unknown) {
-    console.error("Failed to refund deposit:", err)
+    logger.error("Failed to refund deposit", err, "refundCautionDeposit", { societyCode, bookingId })
     const message = err instanceof Error ? err.message : "Failed to refund deposit."
     return { error: message }
   }

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 import type { SocietyType, MaintenanceType } from "@/generated/prisma/client"
 
 export type UpdateSocietySettingsState = {
@@ -149,7 +150,7 @@ export async function updateSocietySettings(
       message: "Society settings updated successfully.",
     }
   } catch (err: unknown) {
-    console.error("Failed to update society settings:", err)
+    logger.error("Failed to update society settings", err, "updateSocietySettings", { societyId, societyCode })
     return { error: getSafeErrorMessage(err, "Failed to update society settings. Please try again.") }
   }
 }

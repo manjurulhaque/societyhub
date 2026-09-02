@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { checkRateLimit } from "@/lib/rateLimit"
 import { recordAuditLog } from "@/lib/audit"
 import { updateEmailSchema, updatePasswordSchema } from "@/lib/validations/auth"
+import { logger } from "@/lib/logger"
 
 export async function POST(req: Request) {
   try {
@@ -177,7 +178,7 @@ export async function POST(req: Request) {
       { status: 400 }
     )
   } catch (error) {
-    console.error("Profile update error:", error)
+    logger.error("Profile update error", error, "POST /api/auth/update-profile")
     return NextResponse.json(
       { error: "Internal server error while updating profile." },
       { status: 500 }

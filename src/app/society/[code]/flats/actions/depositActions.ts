@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 import type { FlatActionState } from "./types"
 
 /**
@@ -63,7 +64,7 @@ export async function recordMemberDeposit(
     revalidatePath(`/society/${societyCode}/flats/${flatId}`)
     return { success: true, message: "Deposit recorded successfully." }
   } catch (err: unknown) {
-    console.error("Failed to record deposit:", err)
+    logger.error("Failed to record deposit", err, "recordMemberDeposit", { societyCode, flatId, depositType: data.depositType })
     return { error: getSafeErrorMessage(err, "Failed to record deposit.") }
   }
 }
@@ -105,7 +106,7 @@ export async function refundMemberDeposit(
     revalidatePath(`/society/${societyCode}/flats/${flatId}`)
     return { success: true, message: "Deposit marked as REFUNDED." }
   } catch (err: unknown) {
-    console.error("Failed to refund deposit:", err)
+    logger.error("Failed to refund deposit", err, "refundMemberDeposit", { societyCode, flatId, depositId })
     return { error: getSafeErrorMessage(err, "Failed to refund deposit.") }
   }
 }
@@ -144,7 +145,7 @@ export async function forfeitMemberDeposit(
     revalidatePath(`/society/${societyCode}/flats/${flatId}`)
     return { success: true, message: "Deposit marked as FORFEITED." }
   } catch (err: unknown) {
-    console.error("Failed to forfeit deposit:", err)
+    logger.error("Failed to forfeit deposit", err, "forfeitMemberDeposit", { societyCode, flatId, depositId })
     return { error: getSafeErrorMessage(err, "Failed to forfeit deposit.") }
   }
 }

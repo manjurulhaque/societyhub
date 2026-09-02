@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 import type { UnitType, OccupancyStatus } from "@/generated/prisma/client"
 import type { FlatActionState, BulkFlatItemInput, BulkCreateFlatsResult } from "./types"
 
@@ -91,7 +92,7 @@ export async function createFlat(
       message: `Flat "${number}" in ${block.name} created successfully.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to create flat:", err)
+    logger.error("Failed to create flat", err, "createFlat", { societyCode, blockId: data.blockId, number: data.number })
     return { error: getSafeErrorMessage(err, "Failed to create flat.") }
   }
 }
@@ -194,7 +195,7 @@ export async function updateFlatDetails(
 
     return { success: true, message: "Flat details updated successfully." }
   } catch (err: unknown) {
-    console.error("Failed to update flat details:", err)
+    logger.error("Failed to update flat details", err, "updateFlatDetails", { societyCode, flatId })
     return { error: getSafeErrorMessage(err, "Failed to update flat details.") }
   }
 }
@@ -257,7 +258,7 @@ export async function deleteFlat(
       message: `Flat "${flat.number}" deleted successfully.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to delete flat:", err)
+    logger.error("Failed to delete flat", err, "deleteFlat", { societyCode, flatId })
     return { error: getSafeErrorMessage(err, "Failed to delete flat.") }
   }
 }
@@ -429,7 +430,7 @@ export async function bulkCreateFlats(
       message: `Successfully generated ${createdRecords.length} unit(s)${skippedFlats.length > 0 ? ` (${skippedFlats.length} skipped as duplicates/invalid)` : ""}.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to bulk create flats:", err)
+    logger.error("Failed to bulk create flats", err, "bulkCreateFlats", { societyCode, count: flats.length })
     return { error: getSafeErrorMessage(err, "Failed to bulk create flats.") }
   }
 }

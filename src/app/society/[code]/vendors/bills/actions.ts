@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, FINANCIAL_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
+import { logger } from "@/lib/logger"
 import type { BillStatus } from "@/generated/prisma/client"
 
 export type VendorBillActionState = {
@@ -94,7 +95,7 @@ export async function createVendorBill(
       billId: vendorBill.id,
     }
   } catch (err: unknown) {
-    console.error("Failed to create vendor bill:", err)
+    logger.error("Failed to create vendor bill", err, "createVendorBill", { societyCode, vendorId: data.vendorId, billNumber: data.billNumber })
     const message = err instanceof Error ? err.message : "Failed to create vendor bill."
     return { error: message }
   }
@@ -143,7 +144,7 @@ export async function updateVendorBillStatus(
 
     return { success: true, message: `Vendor bill updated to ${status}.` }
   } catch (err: unknown) {
-    console.error("Failed to update vendor bill status:", err)
+    logger.error("Failed to update vendor bill status", err, "updateVendorBillStatus", { societyCode, billId, status })
     const message = err instanceof Error ? err.message : "Failed to update status."
     return { error: message }
   }

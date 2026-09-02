@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 import type { AssetStatus } from "@/generated/prisma/client"
 
 export type AssetActionState = {
@@ -104,7 +105,7 @@ export async function createAsset(
       assetId: asset.id,
     }
   } catch (err: unknown) {
-    console.error("Failed to create asset:", err)
+    logger.error("Failed to create asset", err, "createAsset", { societyCode, name: data.name })
     return { error: getSafeErrorMessage(err, "Failed to create asset.") }
   }
 }
@@ -204,7 +205,7 @@ export async function updateAsset(
       assetId: updated.id,
     }
   } catch (err: unknown) {
-    console.error("Failed to update asset:", err)
+    logger.error("Failed to update asset", err, "updateAsset", { societyCode, assetId, name: data.name })
     return { error: getSafeErrorMessage(err, "Failed to update asset.") }
   }
 }
@@ -244,7 +245,7 @@ export async function deleteAsset(
     revalidatePath(`/society/${societyCode}/assets`)
     return { success: true, message: `Asset "${existing.name}" deleted successfully.` }
   } catch (err: unknown) {
-    console.error("Failed to delete asset:", err)
+    logger.error("Failed to delete asset", err, "deleteAsset", { societyCode, assetId })
     return { error: getSafeErrorMessage(err, "Failed to delete asset.") }
   }
 }
@@ -302,7 +303,7 @@ export async function createAssetCategory(
     revalidatePath(`/society/${societyCode}/assets`)
     return { success: true, message: `Category "${name}" created successfully.` }
   } catch (err: unknown) {
-    console.error("Failed to create category:", err)
+    logger.error("Failed to create category", err, "createAssetCategory", { societyCode, name: data.name })
     return { error: getSafeErrorMessage(err, "Failed to create category.") }
   }
 }
@@ -367,7 +368,7 @@ export async function createServiceLog(
     revalidatePath(`/society/${societyCode}/assets/${assetId}`)
     return { success: true, message: "Service record logged successfully." }
   } catch (err: unknown) {
-    console.error("Failed to log service record:", err)
+    logger.error("Failed to log service record", err, "createServiceLog", { societyCode, assetId })
     return { error: getSafeErrorMessage(err, "Failed to log service record.") }
   }
 }
@@ -398,7 +399,7 @@ export async function deleteServiceLog(
     revalidatePath(`/society/${societyCode}/assets/${assetId}`)
     return { success: true, message: "Service log removed." }
   } catch (err: unknown) {
-    console.error("Failed to delete service log:", err)
+    logger.error("Failed to delete service log", err, "deleteServiceLog", { societyCode, assetId, logId })
     return { error: getSafeErrorMessage(err, "Failed to delete service log.") }
   }
 }
@@ -438,7 +439,7 @@ export async function updateAssetStatus(
     revalidatePath(`/society/${societyCode}/assets/${assetId}`)
     return { success: true, message: `Asset status updated to ${status}.` }
   } catch (err: unknown) {
-    console.error("Failed to update asset status:", err)
+    logger.error("Failed to update asset status", err, "updateAssetStatus", { societyCode, assetId, status })
     return { error: getSafeErrorMessage(err, "Failed to update asset status.") }
   }
 }

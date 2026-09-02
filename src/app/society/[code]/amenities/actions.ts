@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 import type { AmenityType } from "@/generated/prisma/client"
 
 export type AmenityActionState = {
@@ -80,7 +81,7 @@ export async function createAmenity(
       amenityId: amenity.id,
     }
   } catch (err: unknown) {
-    console.error("Failed to create amenity:", err)
+    logger.error("Failed to create amenity", err, "createAmenity", { societyCode, name: data.name })
     return { error: getSafeErrorMessage(err, "Failed to create amenity.") }
   }
 }
@@ -140,7 +141,7 @@ export async function updateAmenity(
 
     return { success: true, message: "Amenity updated successfully." }
   } catch (err: unknown) {
-    console.error("Failed to update amenity:", err)
+    logger.error("Failed to update amenity", err, "updateAmenity", { societyCode, amenityId, name: data.name })
     return { error: getSafeErrorMessage(err, "Failed to update amenity.") }
   }
 }
@@ -180,7 +181,7 @@ export async function deleteAmenity(
 
     return { success: true, message: "Amenity deleted." }
   } catch (err: unknown) {
-    console.error("Failed to delete amenity:", err)
+    logger.error("Failed to delete amenity", err, "deleteAmenity", { societyCode, amenityId })
     return { error: getSafeErrorMessage(err, "Failed to delete amenity.") }
   }
 }

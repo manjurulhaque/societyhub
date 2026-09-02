@@ -3,6 +3,7 @@
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { getSafeErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 
 /**
  * Fetches comprehensive statement and financial ledger payload for a single flat
@@ -207,7 +208,7 @@ export async function getFlatStatementData(
       },
     }
   } catch (err: unknown) {
-    console.error("Failed to fetch flat statement data:", err)
+    logger.error("Failed to fetch flat statement data", err, "getFlatStatementData", { societyCode, flatId })
     return { error: getSafeErrorMessage(err, "Failed to generate statement data.") }
   }
 }

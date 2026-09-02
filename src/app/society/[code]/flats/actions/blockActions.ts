@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 import type { FlatActionState } from "./types"
 
 /**
@@ -63,7 +64,7 @@ export async function createBlock(
       message: `Block "${name}" created successfully.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to create block:", err)
+    logger.error("Failed to create block", err, "createBlock", { societyCode, name: data.name })
     return { error: getSafeErrorMessage(err, "Failed to create block.") }
   }
 }
@@ -140,7 +141,7 @@ export async function updateBlock(
       message: `Block "${name}" updated successfully.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to update block:", err)
+    logger.error("Failed to update block", err, "updateBlock", { societyCode, blockId, name: data.name })
     return { error: getSafeErrorMessage(err, "Failed to update block.") }
   }
 }
@@ -207,7 +208,7 @@ export async function batchUpdateBlockPrefix(
       message: `Successfully updated all ${blocks.length} block(s) to use "${newPrefix}" prefix.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to batch update block prefixes:", err)
+    logger.error("Failed to batch update block prefixes", err, "batchUpdateBlockPrefix", { societyCode, newPrefix })
     return { error: getSafeErrorMessage(err, "Failed to batch update block prefixes.") }
   }
 }
@@ -274,7 +275,7 @@ export async function deleteBlock(
       message: `Block "${block.name}" deleted successfully.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to delete block:", err)
+    logger.error("Failed to delete block", err, "deleteBlock", { societyCode, blockId })
     return { error: getSafeErrorMessage(err, "Failed to delete block.") }
   }
 }
@@ -441,7 +442,7 @@ export async function getTowerDirectoryData(
       },
     }
   } catch (err: unknown) {
-    console.error("Failed to fetch tower directory data:", err)
+    logger.error("Failed to fetch tower directory data", err, "getTowerDirectoryData", { societyCode, blockId })
     return { error: getSafeErrorMessage(err, "Failed to load tower directory data.") }
   }
 }

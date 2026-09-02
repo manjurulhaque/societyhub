@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 import type { VoucherType } from "@/generated/prisma/client"
 
 export type JournalActionState = {
@@ -144,7 +145,7 @@ export async function postJournalVoucher(
       journalId: journal.id,
     }
   } catch (err: unknown) {
-    console.error("Failed to post journal voucher:", err)
+    logger.error("Failed to post journal voucher", err, "postJournalVoucher", { societyCode, voucherType: data.voucherType })
     return { error: getSafeErrorMessage(err, "Failed to post voucher.") }
   }
 }
@@ -184,7 +185,7 @@ export async function voidJournalVoucher(
 
     return { success: true, message: "Voucher marked as VOID." }
   } catch (err: unknown) {
-    console.error("Failed to void voucher:", err)
+    logger.error("Failed to void voucher", err, "voidJournalVoucher", { societyCode, journalId })
     return { error: getSafeErrorMessage(err, "Failed to void voucher.") }
   }
 }

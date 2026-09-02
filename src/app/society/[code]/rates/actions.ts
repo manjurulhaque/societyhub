@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 import type { MaintenanceType, UnitType } from "@/generated/prisma/client"
 
 export type RateActionState = {
@@ -108,7 +109,7 @@ export async function createMaintenanceRate(
       rateId: newRate.id,
     }
   } catch (err: unknown) {
-    console.error("Failed to create maintenance rate:", err)
+    logger.error("Failed to create maintenance rate", err, "createMaintenanceRate", { societyCode, maintenanceType: data.maintenanceType })
     return { error: getSafeErrorMessage(err, "Failed to create rate rule.") }
   }
 }
@@ -147,7 +148,7 @@ export async function deleteMaintenanceRate(
 
     return { success: true, message: "Tariff rule deleted." }
   } catch (err: unknown) {
-    console.error("Failed to delete maintenance rate:", err)
+    logger.error("Failed to delete maintenance rate", err, "deleteMaintenanceRate", { societyCode, rateId })
     return { error: getSafeErrorMessage(err, "Failed to delete rate rule.") }
   }
 }

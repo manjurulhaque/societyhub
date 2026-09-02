@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 import type { MeetingType } from "@/generated/prisma/client"
 
 export type MeetingActionState = {
@@ -77,7 +78,7 @@ export async function createMeeting(
       meetingId: meeting.id,
     }
   } catch (err: unknown) {
-    console.error("Failed to schedule meeting:", err)
+    logger.error("Failed to schedule meeting", err, "createMeeting", { societyCode, title: data.title })
     return { error: getSafeErrorMessage(err, "Failed to schedule meeting.") }
   }
 }
@@ -141,7 +142,7 @@ export async function updateMeeting(
 
     return { success: true, message: "Meeting details & minutes saved." }
   } catch (err: unknown) {
-    console.error("Failed to update meeting:", err)
+    logger.error("Failed to update meeting", err, "updateMeeting", { societyCode, meetingId })
     return { error: getSafeErrorMessage(err, "Failed to update meeting.") }
   }
 }
@@ -179,7 +180,7 @@ export async function deleteMeeting(
 
     return { success: true, message: "Meeting deleted successfully." }
   } catch (err: unknown) {
-    console.error("Failed to delete meeting:", err)
+    logger.error("Failed to delete meeting", err, "deleteMeeting", { societyCode, meetingId })
     return { error: getSafeErrorMessage(err, "Failed to delete meeting.") }
   }
 }
@@ -252,7 +253,7 @@ export async function createResolution(
 
     return { success: true, message: "Resolution recorded successfully.", resolutionId: resolution.id }
   } catch (err: unknown) {
-    console.error("Failed to create resolution:", err)
+    logger.error("Failed to create resolution", err, "createResolution", { societyCode, meetingId, title: data.title })
     return { error: getSafeErrorMessage(err, "Failed to create resolution.") }
   }
 }
@@ -291,7 +292,7 @@ export async function deleteResolution(
 
     return { success: true, message: "Resolution deleted." }
   } catch (err: unknown) {
-    console.error("Failed to delete resolution:", err)
+    logger.error("Failed to delete resolution", err, "deleteResolution", { societyCode, resolutionId, meetingId })
     return { error: getSafeErrorMessage(err, "Failed to delete resolution.") }
   }
 }

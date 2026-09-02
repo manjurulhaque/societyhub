@@ -7,6 +7,7 @@ import { recordAuditLog } from "@/lib/audit"
 import { encryptData } from "@/lib/crypto"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 import type { FlatRole } from "@/generated/prisma/client"
 
 export type ResidentActionState = {
@@ -130,7 +131,7 @@ export async function registerResident(
       message: `Resident "${name}" registered successfully.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to register resident:", err)
+    logger.error("Failed to register resident", err, "registerResident", { societyCode, name: data.name, flatId: data.flatId })
     return { error: getSafeErrorMessage(err, "Failed to register resident.") }
   }
 }
@@ -185,7 +186,7 @@ export async function removeResident(
       message: `Resident "${person.name}" was removed.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to remove resident:", err)
+    logger.error("Failed to remove resident", err, "removeResident", { societyCode, personId })
     return { error: getSafeErrorMessage(err, "Failed to remove resident.") }
   }
 }
@@ -233,7 +234,7 @@ export async function toggleResidentKyc(
       message: `KYC for ${person.name} marked as ${newKycStatus ? "VERIFIED" : "UNVERIFIED"}.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to toggle KYC:", err)
+    logger.error("Failed to toggle KYC", err, "toggleResidentKyc", { societyCode, personId })
     return { error: getSafeErrorMessage(err, "Failed to update KYC status.") }
   }
 }
@@ -361,7 +362,7 @@ export async function updateResident(
       message: `Profile for "${name}" updated successfully.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to update resident profile:", err)
+    logger.error("Failed to update resident profile", err, "updateResident", { societyCode, personId, name: data.name })
     return { error: getSafeErrorMessage(err, "Failed to update resident profile.") }
   }
 }
