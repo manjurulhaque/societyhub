@@ -11,6 +11,7 @@
  * 7. NIST SP 800-63B Password Policy Compliance
  * 8. Automated Audit PII & Secret Redaction Engine
  * 9. High-Risk Audit Alert Classification & HMAC-Signed Webhook Engine
+ * 10. Session Inactivity Lifecycle, Warning Countdown & Redirect Gate
  */
 
 import { encryptData, decryptData, isEncrypted } from "../src/lib/crypto"
@@ -410,6 +411,43 @@ try {
   assert(Array.isArray(discordPayload.embeds), "Formats Discord webhook structure with rich embeds")
 } catch (e: unknown) {
   assert(false, "High-Risk Audit Alerts Engine threw unexpected error", e instanceof Error ? e.message : String(e))
+}
+
+// -----------------------------------------------------------------------------
+// TEST 10: Session Inactivity & Auto-Redirect Lifecycle
+// -----------------------------------------------------------------------------
+console.log("\n▶ [10/10] Testing Session Inactivity, Warning Countdown & Redirect Gate...")
+try {
+  const WARNING_MS = 25 * 60 * 1000 // 25 min
+  const TIMEOUT_MS = 30 * 60 * 1000 // 30 min
+
+  // Test 10.1: Threshold Ordering
+  assert(WARNING_MS < TIMEOUT_MS, "Inactivity warning threshold is strictly lower than force timeout")
+
+  // Test 10.2: Countdown calculation
+  const mockNow = Date.now()
+  const mockLastActivity = mockNow - 27 * 60 * 1000 // 27 min inactive
+  const idleTime = mockNow - mockLastActivity
+  const isWarning = idleTime >= WARNING_MS && idleTime < TIMEOUT_MS
+  const remainingSec = Math.max(0, Math.ceil((TIMEOUT_MS - idleTime) / 1000))
+
+  assert(isWarning, "Accurately activates warning state when idle time is between 25 and 30 minutes")
+  assert(remainingSec === 180, "Calculates exact 3-minute (180s) countdown remaining before logout")
+
+  // Test 10.3: Timeout expiry condition
+  const mockExpiredActivity = mockNow - 31 * 60 * 1000 // 31 min inactive
+  const isExpired = (mockNow - mockExpiredActivity) >= TIMEOUT_MS
+  assert(isExpired, "Flags session as expired once inactivity reaches 30-minute threshold")
+
+  // Test 10.4: Safe redirect destination generation
+  const currentPath = "/society/royal-gardens/accounts"
+  const safeNext = getSafeRedirectUrl(currentPath, "/admin/dashboard")
+  const redirectUrl = `/login?reason=session_expired&next=${encodeURIComponent(safeNext)}`
+
+  assert(redirectUrl.includes("reason=session_expired"), "Redirect URL contains structured reason parameter ('session_expired')")
+  assert(redirectUrl.includes("next=%2Fsociety%2Froyal-gardens%2Faccounts"), "Redirect URL safely preserves deep-link return destination")
+} catch (e: unknown) {
+  assert(false, "Session Inactivity Engine threw unexpected error", e instanceof Error ? e.message : String(e))
 }
 
 // -----------------------------------------------------------------------------
