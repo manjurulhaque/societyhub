@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { AdminBadge } from "@/components/admin"
 import type { FlatListItem } from "./FlatsClientView"
-import { getFlatStatementData } from "./actions"
+import { getFlatStatementData } from "./actions/statementActions"
 import { generateFlatStatementPDF } from "@/lib/pdf/flatStatementPdfGenerator"
 
 interface FlatQuickDrawerProps {

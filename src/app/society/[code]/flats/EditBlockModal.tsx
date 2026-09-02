@@ -3,7 +3,7 @@
 import { toast } from "sonner"
 
 import { useState, useEffect, useTransition } from "react"
-import { updateBlock, deleteBlock } from "./actions"
+import { updateBlock, deleteBlock } from "./actions/blockActions"
 import type { BlockOption } from "./AddFlatModal"
 
 interface EditBlockModalProps {

@@ -3,7 +3,7 @@
 import { toast } from "sonner"
 
 import { useState, useTransition } from "react"
-import { createBlock } from "./actions"
+import { createBlock } from "./actions/blockActions"
 
 interface AddBlockModalProps {
   isOpen: boolean

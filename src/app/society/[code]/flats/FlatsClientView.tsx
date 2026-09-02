@@ -13,7 +13,8 @@ import { EditFlatModal } from "./EditFlatModal"
 import { BulkCreateFlatsModal } from "./BulkCreateFlatsModal"
 import { FlatMatrixView } from "./FlatMatrixView"
 import { FlatQuickDrawer } from "./FlatQuickDrawer"
-import { deleteFlat, getFlatStatementData } from "./actions"
+import { deleteFlat } from "./actions/flatActions"
+import { getFlatStatementData } from "./actions/statementActions"
 import { generateFlatStatementPDF } from "@/lib/pdf/flatStatementPdfGenerator"
 
 export type FlatOccupantSummary = {

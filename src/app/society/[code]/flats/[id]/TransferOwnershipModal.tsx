@@ -4,7 +4,7 @@ import { toast } from "sonner"
 
 import { useState, useTransition } from "react"
 import { AdminModal } from "@/components/admin"
-import { transferFlatOwnership } from "../actions"
+import { transferFlatOwnership } from "../actions/ownershipActions"
 import type { TransferType } from "@/generated/prisma/client"
 
 export type PersonDirectoryOption = {

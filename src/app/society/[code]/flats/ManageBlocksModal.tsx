@@ -4,7 +4,7 @@ import { toast } from "sonner"
 
 import { useState, useTransition } from "react"
 import { AdminBadge } from "@/components/admin"
-import { createBlock, updateBlock, deleteBlock, batchUpdateBlockPrefix, getTowerDirectoryData } from "./actions"
+import { createBlock, updateBlock, deleteBlock, batchUpdateBlockPrefix, getTowerDirectoryData } from "./actions/blockActions"
 import type { BlockOption } from "./AddFlatModal"
 import {
   generateTowerDirectoryPDF,
