@@ -93,9 +93,21 @@ export function AdminButton({
   )
 
   if ("href" in props && props.href !== undefined) {
-    const { href, ...linkProps } = props
+    const { href, rel, target, ...linkProps } = props
+    const isExternal =
+      typeof href === "string" &&
+      (href.startsWith("http://") || href.startsWith("https://") || href.startsWith("//"))
+    const isBlank = target === "_blank"
+    const safeRel = isExternal || isBlank ? rel || "noopener noreferrer" : rel
+
     return (
-      <Link href={href} className={combinedClassName} {...linkProps}>
+      <Link
+        href={href}
+        target={target}
+        rel={safeRel}
+        className={combinedClassName}
+        {...linkProps}
+      >
         {content}
       </Link>
     )

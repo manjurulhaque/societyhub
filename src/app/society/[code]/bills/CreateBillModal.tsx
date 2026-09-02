@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { createIndividualBill } from "./actions"
 import type { BillType } from "@/generated/prisma/client"
@@ -80,6 +82,7 @@ export function CreateBillModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Bill created successfully")
           setAmount("")
           setTitle("")
           onClose()

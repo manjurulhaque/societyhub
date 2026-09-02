@@ -10,7 +10,9 @@
     "start": "next start",
     "lint": "eslint",
     "test:security": "tsx scripts/test-security.ts",
-    "security:check": "tsx scripts/test-security.ts && eslint && next build"
+    "test:actions": "tsx scripts/validate-actions.ts",
+    "validate": "tsx scripts/validate-actions.ts && tsx scripts/test-security.ts",
+    "security:check": "tsx scripts/validate-actions.ts && tsx scripts/test-security.ts && eslint && next build"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

@@ -1,5 +1,8 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import Link from "next/link"
+
+export const metadata: Metadata = { title: "Settings" }
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { getCurrentFinancialYear } from "@/lib/society"
 import { AdminPageHeader } from "@/components/admin"

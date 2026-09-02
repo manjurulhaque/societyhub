@@ -26,6 +26,7 @@ enum SocietyRole {
   ACCOUNTANT
   SECURITY
   MEMBER
+  EXECUTIVE_MEMBER
 }
 
 enum SocietyType {
@@ -271,6 +272,7 @@ enum MeetingType {
   AGM
   SGM
   MANAGING_COMMITTEE
+  EXECUTIVE_COMMITTEE
   EMERGENCY
 }
 
@@ -772,6 +774,7 @@ model Person {
 
   @@index([societyId])
   @@index([societyId, isActive, deletedAt])
+  @@index([societyId, name])          // Name search within a society
   @@index([phone])
   @@index([email])
   @@index([panNumber])
@@ -897,6 +900,8 @@ model Bill {
   @@unique([flatId, billType, year, month, sequence])
   @@index([societyId])
   @@index([societyId, status, dueDate])
+  @@index([societyId, year, month])    // Dashboard/report period lookups
+  @@index([societyId, createdAt])      // Recent bills listing
   @@index([flatId, status])
   @@index([year, month])
   @@index([dueDate])
@@ -944,6 +949,8 @@ model Payment {
 
   @@index([societyId])
   @@index([societyId, status, paidOn])
+  @@index([societyId, mode, paidOn])   // Payment mode breakdown reports
+  @@index([societyId, createdAt])      // Recent payments listing
   @@index([billId, status])
   @@index([billId])
   @@index([flatId])
@@ -1382,6 +1389,7 @@ model Expense {
 
   @@index([societyId])
   @@index([societyId, status, expenseDate])
+  @@index([societyId, categoryId, expenseDate]) // Category-wise expense reports
   @@index([categoryId])
   @@index([accountId])
   @@index([vendorBillId])

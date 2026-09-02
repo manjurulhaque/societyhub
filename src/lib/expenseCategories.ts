@@ -136,7 +136,7 @@ export const STANDARD_EXPENSE_CATEGORIES: StandardExpenseCategoryDef[] = [
   {
     code: "5430",
     name: "Software & Communication Portal Fees",
-    description: "SocietyHub platform subscription, SMS gateway credits, email dispatch, and digital accounting software",
+    description: "SARWS Connect platform subscription, SMS gateway credits, email dispatch, and digital accounting software",
   },
   {
     code: "5440",

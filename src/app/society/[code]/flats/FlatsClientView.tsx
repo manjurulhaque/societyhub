@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useMemo, useTransition } from "react"
 import Link from "next/link"
 import { AdminTable, AdminBadge, AdminStatCard } from "@/components/admin"
@@ -11,7 +13,8 @@ import { EditFlatModal } from "./EditFlatModal"
 import { BulkCreateFlatsModal } from "./BulkCreateFlatsModal"
 import { FlatMatrixView } from "./FlatMatrixView"
 import { FlatQuickDrawer } from "./FlatQuickDrawer"
-import { deleteFlat, getFlatStatementData } from "./actions"
+import { deleteFlat } from "./actions/flatActions"
+import { getFlatStatementData } from "./actions/statementActions"
 import { generateFlatStatementPDF } from "@/lib/pdf/flatStatementPdfGenerator"
 
 export type FlatOccupantSummary = {
@@ -127,6 +130,7 @@ export function FlatsClientView({
         if (res.error) {
           setDeleteError(res.error)
         } else {
+          toast.success("Flat deleted successfully")
           setDeletingFlat(null)
         }
       } catch (err: unknown) {

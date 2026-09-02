@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useMemo, useTransition } from "react"
 import {
   AdminCard,
@@ -14,6 +16,7 @@ import {
 import { AuditLockModal } from "./AuditLockModal"
 import { FinancialYearDeleteDialog } from "./FinancialYearDeleteDialog"
 import { setCurrentFinancialYear, toggleYearClosure } from "./actions"
+import { formatFinancialYearDate } from "@/lib/datetime"
 
 interface FinancialYearsClientViewProps {
   societyCode: string
@@ -81,12 +84,7 @@ export function FinancialYearsClientView({
 
   const formatDate = (isoString: string) => {
     try {
-      const d = new Date(isoString)
-      return d.toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      })
+      return formatFinancialYearDate(isoString)
     } catch {
       return isoString.slice(0, 10)
     }
@@ -97,8 +95,10 @@ export function FinancialYearsClientView({
     startTransition(async () => {
       const res = await setCurrentFinancialYear(societyCode, fy.id)
       if (res.error) {
+        toast.error(res.error)
         setActionMessage({ text: res.error, type: "error" })
       } else {
+        toast.success(`Active financial year changed to ${fy.name}`)
         setActionMessage({ text: `Active financial year changed to ${fy.name}.`, type: "success" })
       }
     })
@@ -109,8 +109,10 @@ export function FinancialYearsClientView({
     startTransition(async () => {
       const res = await toggleYearClosure(societyCode, fy.id, !fy.isClosed)
       if (res.error) {
+        toast.error(res.error)
         setActionMessage({ text: res.error, type: "error" })
       } else {
+        toast.success(fy.isClosed ? `Reopened ${fy.name}` : `Closed ${fy.name}`)
         setActionMessage({
           text: fy.isClosed ? `Reopened ${fy.name}.` : `Closed ${fy.name}.`,
           type: "success",

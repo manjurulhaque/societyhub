@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { updateResident } from "./residentActions"
 
@@ -116,6 +118,7 @@ function EditResidentDialogContent({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Resident updated successfully")
           onClose()
         }
       } catch (err: unknown) {

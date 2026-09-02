@@ -24,6 +24,7 @@ export default function LoginPage() {
   const searchParams = useSearchParams()
   const nextParam = searchParams.get("next")
   const urlError = searchParams.get("error")
+  const reasonParam = searchParams.get("reason")
 
   const [mode, setMode] = useState<"LOGIN" | "RESET">("LOGIN")
   const [resetEmail, setResetEmail] = useState("")
@@ -242,6 +243,8 @@ export default function LoginPage() {
                       />
                       <a
                         href={devSetupLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="block text-center rounded-xl bg-stone-900 py-2 text-xs font-semibold text-white hover:bg-stone-800 transition"
                       >
                         Open Password Setup Now &rarr;
@@ -327,6 +330,32 @@ export default function LoginPage() {
             /* Normal Sign-in Mode */
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                {!error && reasonParam === "session_expired" ? (
+                  <div
+                    role="alert"
+                    className="flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50/90 p-3.5 text-xs font-medium text-amber-900"
+                  >
+                    <svg className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                    </svg>
+                    <span>
+                      Your session expired due to inactivity. Please sign in to resume where you left off.
+                    </span>
+                  </div>
+                ) : null}
+
+                {!error && reasonParam === "logged_out" ? (
+                  <div
+                    role="status"
+                    className="flex items-center gap-2.5 rounded-2xl border border-stone-200 bg-stone-50 p-3.5 text-xs font-medium text-stone-700"
+                  >
+                    <svg className="h-4 w-4 shrink-0 text-stone-500" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <span>You have been safely signed out.</span>
+                  </div>
+                ) : null}
+
                 {error ? (
                   <div
                     role="alert"

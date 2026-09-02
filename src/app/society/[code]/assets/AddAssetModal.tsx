@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { AdminModal } from "@/components/admin"
 import { createAsset } from "./actions"
@@ -79,6 +81,7 @@ export function AddAssetModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Asset registered successfully")
           onClose()
           // Reset form
           setName("")

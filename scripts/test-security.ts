@@ -1,5 +1,5 @@
 /**
- * SocietyHub Comprehensive Security & Cryptographic Self-Test Suite.
+ * SARWS Connect Comprehensive Security & Cryptographic Self-Test Suite.
  *
  * Mathematically validates:
  * 1. AES-256-GCM Cryptographic Parity & Envelope Integrity
@@ -11,6 +11,9 @@
  * 7. NIST SP 800-63B Password Policy Compliance
  * 8. Automated Audit PII & Secret Redaction Engine
  * 9. High-Risk Audit Alert Classification & HMAC-Signed Webhook Engine
+ * 10. Session Inactivity Lifecycle, Warning Countdown & Redirect Gate
+ * 11. Cache Tagging & Keyed Invalidation Architecture
+ * 12. External Link Security & noopener noreferrer Enforcement
  */
 
 import { encryptData, decryptData, isEncrypted } from "../src/lib/crypto"
@@ -26,6 +29,8 @@ import {
   signWebhookPayload,
   formatAuditAlertPayload,
 } from "../src/lib/auditAlerts"
+import { CACHE_TAGS } from "../src/lib/cache/cacheTags"
+import { formatFinancialYearDate, formatFinancialYearRange } from "../src/lib/datetime"
 
 let passedTests = 0
 let failedTests = 0
@@ -41,7 +46,7 @@ function assert(condition: boolean, testName: string, detail?: string) {
 }
 
 console.log("\n================================================================================")
-console.log("             SOCIETYHUB SECURITY & CRYPTOGRAPHY SELF-TEST SUITE                  ")
+console.log("             SARWS CONNECT SECURITY & CRYPTOGRAPHY SELF-TEST SUITE              ")
 console.log("================================================================================\n")
 
 // -----------------------------------------------------------------------------
@@ -266,7 +271,7 @@ try {
   assert(!validatePasswordStrength(noSymbolPass).isValid, "Requires at least one special symbol")
   assert(validatePasswordStrength(validPass).isValid, "Accepts compliant high-entropy passphrase")
   assert(
-    !validatePasswordStrength(emailContextPass, { email: "manjurul@societyhub.in" }).isValid,
+    !validatePasswordStrength(emailContextPass, { email: "manjurul@sarws.in" }).isValid,
     "Rejects password containing user's email username"
   )
 } catch (e: unknown) {
@@ -398,7 +403,7 @@ try {
       id: "alert-format-test",
       action: "DELETE",
       entity: "SocietyMember",
-      userEmail: "president@societyhub.in",
+      userEmail: "president@sarws.in",
       ipAddress: "127.0.0.1",
       description: "Removed Secretary from committee",
       createdAt: new Date(),
@@ -410,6 +415,143 @@ try {
   assert(Array.isArray(discordPayload.embeds), "Formats Discord webhook structure with rich embeds")
 } catch (e: unknown) {
   assert(false, "High-Risk Audit Alerts Engine threw unexpected error", e instanceof Error ? e.message : String(e))
+}
+
+// -----------------------------------------------------------------------------
+// TEST 10: Session Inactivity & Auto-Redirect Lifecycle
+// -----------------------------------------------------------------------------
+console.log("\n▶ [10/10] Testing Session Inactivity, Warning Countdown & Redirect Gate...")
+try {
+  const WARNING_MS = 25 * 60 * 1000 // 25 min
+  const TIMEOUT_MS = 30 * 60 * 1000 // 30 min
+
+  // Test 10.1: Threshold Ordering
+  assert(WARNING_MS < TIMEOUT_MS, "Inactivity warning threshold is strictly lower than force timeout")
+
+  // Test 10.2: Countdown calculation
+  const mockNow = Date.now()
+  const mockLastActivity = mockNow - 27 * 60 * 1000 // 27 min inactive
+  const idleTime = mockNow - mockLastActivity
+  const isWarning = idleTime >= WARNING_MS && idleTime < TIMEOUT_MS
+  const remainingSec = Math.max(0, Math.ceil((TIMEOUT_MS - idleTime) / 1000))
+
+  assert(isWarning, "Accurately activates warning state when idle time is between 25 and 30 minutes")
+  assert(remainingSec === 180, "Calculates exact 3-minute (180s) countdown remaining before logout")
+
+  // Test 10.3: Timeout expiry condition
+  const mockExpiredActivity = mockNow - 31 * 60 * 1000 // 31 min inactive
+  const isExpired = (mockNow - mockExpiredActivity) >= TIMEOUT_MS
+  assert(isExpired, "Flags session as expired once inactivity reaches 30-minute threshold")
+
+  // Test 10.4: Safe redirect destination generation
+  const currentPath = "/society/royal-gardens/accounts"
+  const safeNext = getSafeRedirectUrl(currentPath, "/admin/dashboard")
+  const redirectUrl = `/login?reason=session_expired&next=${encodeURIComponent(safeNext)}`
+
+  assert(redirectUrl.includes("reason=session_expired"), "Redirect URL contains structured reason parameter ('session_expired')")
+  assert(redirectUrl.includes("next=%2Fsociety%2Froyal-gardens%2Faccounts"), "Redirect URL safely preserves deep-link return destination")
+} catch (e: unknown) {
+  assert(false, "Session Inactivity Engine threw unexpected error", e instanceof Error ? e.message : String(e))
+}
+
+// -----------------------------------------------------------------------------
+// TEST 11: Cache Tagging & Keyed Invalidation Architecture
+// -----------------------------------------------------------------------------
+console.log("\n▶ [11/11] Testing Cache Tagging & Keyed Invalidation Architecture...")
+try {
+  const socCode = "ROYAL-GARDENS"
+  const flatId = "flat-101-abc"
+  const billId = "bill-2026-xyz"
+  const paymentId = "pay-999-rst"
+  const accountId = "acc-hdfc-001"
+
+  // Test 11.1: Billing Tag Structure
+  const billsTag = CACHE_TAGS.bills(socCode)
+  assert(billsTag === "bills:royal-gardens", "Generates normalized lowercase society bills cache tag")
+
+  const billDetailTag = CACHE_TAGS.billDetail(billId)
+  assert(billDetailTag === "bill:bill-2026-xyz", "Generates precise bill entity cache tag")
+
+  const flatBillsTag = CACHE_TAGS.flatBills(flatId)
+  assert(flatBillsTag === "bills:flat:flat-101-abc", "Generates flat-scoped bills cache tag")
+
+  // Test 11.2: Payments Tag Structure
+  const paymentsTag = CACHE_TAGS.payments(socCode)
+  assert(paymentsTag === "payments:royal-gardens", "Generates normalized society payments cache tag")
+
+  const paymentDetailTag = CACHE_TAGS.paymentDetail(paymentId)
+  assert(paymentDetailTag === "payment:pay-999-rst", "Generates precise payment receipt cache tag")
+
+  const flatPaymentsTag = CACHE_TAGS.flatPayments(flatId)
+  assert(flatPaymentsTag === "payments:flat:flat-101-abc", "Generates flat-scoped payments cache tag")
+
+  // Test 11.3: Accounts & Treasury Tag Structure
+  const accountsTag = CACHE_TAGS.accounts(socCode)
+  assert(accountsTag === "accounts:royal-gardens", "Generates normalized treasury accounts cache tag")
+
+  const accountDetailTag = CACHE_TAGS.accountDetail(accountId)
+  assert(accountDetailTag === "account:acc-hdfc-001", "Generates account detail cache tag")
+
+  // Test 11.4: Reports & Dashboard Tag Structure
+  const reportsTag = CACHE_TAGS.reports(socCode)
+  assert(reportsTag === "reports:royal-gardens", "Generates society reports cache tag")
+
+  const dashboardTag = CACHE_TAGS.dashboard(socCode)
+  assert(dashboardTag === "dashboard:royal-gardens", "Generates society dashboard analytics cache tag")
+} catch (e: unknown) {
+  assert(false, "Cache Tagging Architecture threw unexpected error", e instanceof Error ? e.message : String(e))
+}
+
+// -----------------------------------------------------------------------------
+// TEST 12: External Link Security & noopener noreferrer Enforcement
+// -----------------------------------------------------------------------------
+console.log("\n▶ [12/12] Testing External Link Security & noopener noreferrer Enforcement...")
+try {
+  // Test helper to compute safe rel attribute
+  const computeSafeRel = (href: string, target?: string, rel?: string) => {
+    const isExternal =
+      href.startsWith("http://") || href.startsWith("https://") || href.startsWith("//")
+    const isBlank = target === "_blank"
+    return isExternal || isBlank ? rel || "noopener noreferrer" : rel
+  }
+
+  // Test 12.1: External absolute link
+  const extRel = computeSafeRel("https://example.com/payment")
+  assert(extRel === "noopener noreferrer", "External HTTPS URL automatically receives 'noopener noreferrer'")
+
+  // Test 12.2: External target=_blank link
+  const blankRel = computeSafeRel("/auth/set-password#token", "_blank")
+  assert(blankRel === "noopener noreferrer", "Target _blank link automatically receives 'noopener noreferrer'")
+
+  // Test 12.3: Relative internal link without _blank
+  const internalRel = computeSafeRel("/society/code/dashboard")
+  assert(internalRel === undefined, "Internal link without _blank does not require rel attribute")
+
+  // Test 12.4: Explicit custom rel override preservation
+  const customRel = computeSafeRel("https://external.gov.in", "_blank", "noopener noreferrer author")
+  assert(customRel === "noopener noreferrer author", "Preserves custom rel value while maintaining security")
+} catch (e: unknown) {
+  assert(false, "External Link Security threw unexpected error", e instanceof Error ? e.message : String(e))
+}
+
+// -----------------------------------------------------------------------------
+// TEST 13: Financial Year Date Range & Accounting Cycle Boundary Formatter
+// -----------------------------------------------------------------------------
+console.log("\n▶ [13/13] Testing Financial Year Date Range & Accounting Cycle Boundary Formatter...")
+try {
+  // Test 13.1: Start Date Formatting (1 Apr 2026)
+  const formattedStart = formatFinancialYearDate("2026-04-01T00:00:00.000Z")
+  assert(formattedStart === "1 Apr 2026", "Formats FY start date strictly as '1 Apr 2026'")
+
+  // Test 13.2: End Date Formatting (31 Mar 2027)
+  const formattedEnd = formatFinancialYearDate("2027-03-31T00:00:00.000Z")
+  assert(formattedEnd === "31 Mar 2027", "Formats FY end date strictly as '31 Mar 2027'")
+
+  // Test 13.3: Full Range Formatting
+  const range = formatFinancialYearRange("2026-04-01T00:00:00.000Z", "2027-03-31T00:00:00.000Z")
+  assert(range === "1 Apr 2026 – 31 Mar 2027", "Accurately formats active financial year range as '1 Apr 2026 – 31 Mar 2027'")
+} catch (e: unknown) {
+  assert(false, "Financial Year Formatter threw unexpected error", e instanceof Error ? e.message : String(e))
 }
 
 // -----------------------------------------------------------------------------

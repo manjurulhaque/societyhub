@@ -1,8 +1,10 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { AdminModal } from "@/components/admin"
-import { addFlatPerson } from "../actions"
+import { addFlatPerson } from "../actions/ownershipActions"
 import type { PersonDirectoryOption } from "./TransferOwnershipModal"
 import type { FlatRole } from "@/generated/prisma/client"
 
@@ -52,6 +54,7 @@ export function AddFlatPersonModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Person added to flat")
           onClose()
           setPersonId("")
           setRole("TENANT")

@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { AdminModal } from "@/components/admin"
 import { recordAssessmentInstallmentPayment } from "../actions"
@@ -45,6 +47,7 @@ export function RecordInstallmentPaymentModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Installment payment recorded")
           onClose()
         }
       } catch (err: unknown) {

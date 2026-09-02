@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 
 export type CashClosingActionState = {
   success?: boolean
@@ -98,7 +99,7 @@ export async function recordCashClosing(
       logId: log.id,
     }
   } catch (err: unknown) {
-    console.error("Failed to record cash closing log:", err)
+    logger.error("Failed to record cash closing log", err, "recordCashClosing", { societyCode, closingDate: data.closingDate })
     return { error: getSafeErrorMessage(err, "Failed to record cash count.") }
   }
 }

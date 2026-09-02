@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { sanitizeText } from "@/lib/sanitize"
+import { logger } from "@/lib/logger"
 
 export async function requestPasswordSetupLink(emailInput: string): Promise<{
   success: boolean
@@ -88,12 +89,9 @@ export async function requestPasswordSetupLink(emailInput: string): Promise<{
       // Non-blocking
     }
 
-    // In development or local testing, log link to console for instant 1-click access
+    // In development or local testing, log link for instant 1-click access
     if (setupLink) {
-      console.log(`\n==================================================`)
-      console.log(`🔑 PASSWORD SETUP LINK FOR [${rawEmail}]:`)
-      console.log(setupLink)
-      console.log(`==================================================\n`)
+      logger.info(`🔑 PASSWORD SETUP LINK FOR [${rawEmail}]: ${setupLink}`, "requestPasswordSetupLink")
     }
 
     return {
@@ -102,7 +100,7 @@ export async function requestPasswordSetupLink(emailInput: string): Promise<{
       devLink: process.env.NODE_ENV !== "production" ? setupLink : undefined,
     }
   } catch (err: unknown) {
-    console.error("Failed to request password link:", err)
+    logger.error("Failed to request password link", err, "requestPasswordSetupLink", { email: emailInput })
     return { success: false, error: "An unexpected error occurred. Please try again." }
   }
 }

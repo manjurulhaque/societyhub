@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, FINANCIAL_ROLES, EXECUTIVE_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
+import { logger } from "@/lib/logger"
 
 export type FinancialYearActionState = {
   success?: boolean
@@ -119,7 +120,7 @@ export async function createFinancialYear(
       message: `Financial Year "${name}" created successfully.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to create financial year:", err)
+    logger.error("Failed to create financial year", err, "createFinancialYear", { societyCode, name: data.name })
     const message = err instanceof Error ? err.message : "Failed to create financial year. Please try again."
     return { error: message }
   }
@@ -215,7 +216,7 @@ export async function updateFinancialYear(
       message: `Financial Year "${name}" updated successfully.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to update financial year:", err)
+    logger.error("Failed to update financial year", err, "updateFinancialYear", { societyCode, id, name: data.name })
     const message = err instanceof Error ? err.message : "Failed to update financial year. Please try again."
     return { error: message }
   }
@@ -276,7 +277,7 @@ export async function setCurrentFinancialYear(
       message: `"${fy.name}" is now set as the active financial year.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to switch current financial year:", err)
+    logger.error("Failed to switch current financial year", err, "setCurrentFinancialYear", { societyCode, id })
     const message = err instanceof Error ? err.message : "Failed to set active financial year. Please try again."
     return { error: message }
   }
@@ -335,7 +336,7 @@ export async function toggleAuditLock(
         : `"${fy.name}" has been unlocked for edits.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to toggle audit lock:", err)
+    logger.error("Failed to toggle audit lock", err, "toggleAuditLock", { societyCode, id, lock })
     const message = err instanceof Error ? err.message : "Failed to update audit lock status. Please try again."
     return { error: message }
   }
@@ -389,7 +390,7 @@ export async function toggleYearClosure(
         : `"${fy.name}" has been reopened.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to toggle year closure:", err)
+    logger.error("Failed to toggle year closure", err, "toggleYearClosure", { societyCode, id, close })
     const message = err instanceof Error ? err.message : "Failed to update year closure status. Please try again."
     return { error: message }
   }
@@ -464,7 +465,7 @@ export async function deleteFinancialYear(
       message: `Financial Year "${fy.name}" deleted successfully.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to delete financial year:", err)
+    logger.error("Failed to delete financial year", err, "deleteFinancialYear", { societyCode, id })
     const message = err instanceof Error ? err.message : "Failed to delete financial year. Please try again."
     return { error: message }
   }

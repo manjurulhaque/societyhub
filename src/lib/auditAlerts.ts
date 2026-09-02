@@ -220,7 +220,7 @@ export function formatAuditAlertPayload(
   }
 
   const slackPayload = {
-    text: `⚠️ [${evaluation.severity}] SocietyHub High-Risk Audit Alert: ${evaluation.reason}`,
+    text: `⚠️ [${evaluation.severity}] SARWS Connect High-Risk Audit Alert: ${evaluation.reason}`,
     blocks: [
       {
         type: "header",
@@ -276,7 +276,7 @@ export function formatAuditAlertPayload(
           { name: "Audit ID", value: `\`${log.id}\``, inline: false },
         ],
         timestamp,
-        footer: { text: "SocietyHub Cryptographic Audit Monitor" },
+        footer: { text: "SARWS Connect Cryptographic Audit Monitor" },
       },
     ],
   }
@@ -305,7 +305,7 @@ export async function dispatchAuditAlertWebhook(log: AuditAlertContext): Promise
     }
 
     const { genericJson, slackPayload, discordPayload } = formatAuditAlertPayload(log, evaluation)
-    const secret = process.env.AUDIT_ALERT_WEBHOOK_SECRET || process.env.AUDIT_SECRET_KEY || "societyhub-audit-alert-key"
+    const secret = process.env.AUDIT_ALERT_WEBHOOK_SECRET || process.env.AUDIT_SECRET_KEY || "sarws-connect-audit-alert-key"
 
     let bodyPayload: unknown = genericJson
     if (webhookUrl.includes("hooks.slack.com")) {
@@ -322,10 +322,10 @@ export async function dispatchAuditAlertWebhook(log: AuditAlertContext): Promise
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-SocietyHub-Signature": `sha256=${signature}`,
-        "X-SocietyHub-Event": "audit.high_risk_alert",
-        "X-SocietyHub-Severity": evaluation.severity,
-        "User-Agent": "SocietyHub-AuditAlert/1.0",
+        "X-SARWS-Signature": `sha256=${signature}`,
+        "X-SARWS-Event": "audit.high_risk_alert",
+        "X-SARWS-Severity": evaluation.severity,
+        "User-Agent": "SARWS-Connect-AuditAlert/1.0",
       },
       body: payloadString,
       signal: AbortSignal.timeout(5000),

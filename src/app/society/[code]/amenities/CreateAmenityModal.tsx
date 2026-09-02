@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { AdminModal } from "@/components/admin"
 import { createAmenity } from "./actions"
@@ -53,6 +55,7 @@ export function CreateAmenityModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Amenity created successfully")
           onClose()
           setName("")
           setType("CLUBHOUSE")

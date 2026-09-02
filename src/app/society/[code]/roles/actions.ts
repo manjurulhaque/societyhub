@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 import type { SocietyRole } from "@/generated/prisma/client"
 
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -96,7 +97,7 @@ export async function createCustomRole(
       message: `Custom role "${name}" created successfully.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to create custom role:", err)
+    logger.error("Failed to create custom role", err, "createCustomRole", { societyCode, name: data.name })
     return { error: getSafeErrorMessage(err, "Failed to create role. Please try again.") }
   }
 }
@@ -188,7 +189,7 @@ export async function updateRole(
       message: `Role "${role.name}" updated successfully.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to update role:", err)
+    logger.error("Failed to update role", err, "updateRole", { societyCode, roleId, name: data.name })
     return { error: getSafeErrorMessage(err, "Failed to update role. Please try again.") }
   }
 }
@@ -254,7 +255,7 @@ export async function deleteCustomRole(
       message: `Role "${role.name}" was deleted successfully.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to delete role:", err)
+    logger.error("Failed to delete role", err, "deleteCustomRole", { societyCode, roleId })
     return { error: getSafeErrorMessage(err, "Failed to delete role. Please try again.") }
   }
 }
@@ -328,7 +329,7 @@ export async function updateMemberRoleAssignment(
       message: `Role assignment for ${member.user.email} updated successfully.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to update member role assignment:", err)
+    logger.error("Failed to update member role assignment", err, "updateMemberRoleAssignment", { societyCode, memberId, designation: data.designation })
     return { error: getSafeErrorMessage(err, "Failed to update member assignment.") }
   }
 }
@@ -483,7 +484,7 @@ export async function addCommitteeMember(
             setupLink = linkRes.data.properties.action_link
           }
         } catch (linkErr) {
-          console.log("Direct link note:", linkErr)
+          logger.debug("Direct link note", "addCommitteeMember", { error: String(linkErr) })
         }
 
         // 2. Also dispatch outbound email
@@ -498,14 +499,14 @@ export async function addCommitteeMember(
           })
 
           if (inviteError) {
-            console.log(`Supabase invite note for ${email}:`, inviteError.message)
+            logger.info(`Supabase invite note for ${email}: ${inviteError.message}`, "addCommitteeMember")
           }
         } catch (inviteErr) {
-          console.warn("Outbound invite email could not be sent:", inviteErr)
+          logger.warn("Outbound invite email could not be sent", "addCommitteeMember", { error: String(inviteErr) })
         }
       }
     } catch (authErr) {
-      console.warn("Supabase auth integration note:", authErr)
+      logger.warn("Supabase auth integration note", "addCommitteeMember", { error: String(authErr) })
     }
 
     revalidatePath(`/society/${societyCode}/members`)
@@ -517,7 +518,7 @@ export async function addCommitteeMember(
       message: `${identifier} was added as ${data.designation.replace(/_/g, " ")}.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to add committee member:", err)
+    logger.error("Failed to add committee member", err, "addCommitteeMember", { societyCode, email: data.email })
     return { error: getSafeErrorMessage(err, "Failed to add member.") }
   }
 }
@@ -578,7 +579,7 @@ export async function getMemberActivationLink(
       setupLink: recoveryRes.data?.properties?.action_link,
     }
   } catch (err: unknown) {
-    console.error("Failed to generate activation link:", err)
+    logger.error("Failed to generate activation link", err, "getMemberActivationLink", { societyCode, email })
     return { error: getSafeErrorMessage(err, "Failed to generate link.") }
   }
 }
@@ -641,7 +642,7 @@ export async function removeCommitteeMember(
       message: `${member.user.email} was removed from the committee.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to remove committee member:", err)
+    logger.error("Failed to remove committee member", err, "removeCommitteeMember", { societyCode, memberId })
     return { error: getSafeErrorMessage(err, "Failed to remove member.") }
   }
 }

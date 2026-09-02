@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { registerResident } from "./residentActions"
 import type { FlatRole } from "@/generated/prisma/client"
@@ -86,6 +88,7 @@ export function RegisterResidentModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Resident registered successfully")
           setName("")
           setPhone("")
           setEmail("")

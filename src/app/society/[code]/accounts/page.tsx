@@ -1,5 +1,8 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+
+export const metadata: Metadata = { title: "Bank Accounts" }
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { prisma } from "@/lib/prisma"
 import { maskBankAccount } from "@/lib/masking"

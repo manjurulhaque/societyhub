@@ -392,8 +392,17 @@ export const DEFAULT_ROLE_TEMPLATES: {
   },
   {
     code: "MEMBER",
-    name: "Managing Committee Member",
-    description: "General committee review authority for meetings, reports, registers, and directory.",
+    name: "Management Committee Member",
+    description: "Management committee member review authority for meetings, reports, registers, and directory.",
+    permissions: [
+      "BILLS_VIEW", "PAYMENTS_VIEW", "EXPENSES_VIEW", "BUDGETS_VIEW",
+      "REGISTERS_VIEW", "MEMBERS_VIEW", "AMENITIES_VIEW", "REPORTS_VIEW",
+    ],
+  },
+  {
+    code: "EXECUTIVE_MEMBER",
+    name: "Executive Committee Member",
+    description: "Executive committee member authority for meetings, operational reviews, registers, and directory.",
     permissions: [
       "BILLS_VIEW", "PAYMENTS_VIEW", "EXPENSES_VIEW", "BUDGETS_VIEW",
       "REGISTERS_VIEW", "MEMBERS_VIEW", "AMENITIES_VIEW", "REPORTS_VIEW",

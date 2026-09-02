@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 import { Prisma } from "@/generated/prisma/client"
 
 export type BudgetActionState = {
@@ -140,7 +141,7 @@ export async function createBudget(
       message: `Budget plan "${name}" successfully created.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to create budget:", err)
+    logger.error("Failed to create budget", err, "createBudget", { societyCode, name: payload.name })
     return { error: getSafeErrorMessage(err, "Failed to create budget.") }
   }
 }
@@ -285,7 +286,7 @@ export async function updateBudget(
       message: `Budget "${name}" updated successfully.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to update budget:", err)
+    logger.error("Failed to update budget", err, "updateBudget", { societyCode, budgetId, name: payload.name })
     return { error: getSafeErrorMessage(err, "Failed to update budget.") }
   }
 }
@@ -346,7 +347,7 @@ export async function deleteBudget(
       message: `Budget "${budget.name}" was deleted successfully.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to delete budget:", err)
+    logger.error("Failed to delete budget", err, "deleteBudget", { societyCode, budgetId })
     return { error: getSafeErrorMessage(err, "Failed to delete budget.") }
   }
 }

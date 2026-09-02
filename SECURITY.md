@@ -1,12 +1,12 @@
-# SocietyHub Comprehensive Security Policy & Architecture Guide
+# SARWS Connect Comprehensive Security Policy & Architecture Guide
 
-This document outlines the complete **Defense-in-Depth Security Architecture**, cryptographic controls, access management matrices, threat mitigations, and compliance specifications implemented across **SocietyHub**.
+This document outlines the complete **Defense-in-Depth Security Architecture**, cryptographic controls, access management matrices, threat mitigations, and compliance specifications implemented across **SARWS Connect**.
 
 ---
 
 ## 1. Security Architecture Overview
 
-SocietyHub operates under a **Zero-Trust Multi-Tenant Architecture**. No client-side request or identity claim is trusted implicitly; all operations are strictly verified across network proxies, session guards, server-side action interceptors, and tenant-scoped database queries.
+SARWS Connect operates under a **Zero-Trust Multi-Tenant Architecture**. No client-side request or identity claim is trusted implicitly; all operations are strictly verified across network proxies, session guards, server-side action interceptors, and tenant-scoped database queries.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -55,7 +55,7 @@ SocietyHub operates under a **Zero-Trust Multi-Tenant Architecture**. No client-
 
 ## 2. Role-Based Access Control (RBAC) Matrix
 
-SocietyHub implements a 6-tier functional role hierarchy with strict separation of duties:
+SARWS Connect implements a 6-tier functional role hierarchy with strict separation of duties:
 
 | Role Category | Roles Included | Scope & Permissions |
 | :--- | :--- | :--- |
@@ -213,7 +213,7 @@ SocietyHub implements a 6-tier functional role hierarchy with strict separation 
     - **MEDIUM**: General record deletions across any database table.
 - **HMAC-SHA256 Signed Multi-Target Dispatcher**:
   - Automatically formats payloads for **Generic JSON / SIEM Webhooks**, **Slack Block Kit**, and **Discord Rich Embeds**.
-  - Signs all outbound webhook requests with HMAC-SHA256 in the `X-SocietyHub-Signature: sha256=...` header using `AUDIT_ALERT_WEBHOOK_SECRET` for recipient verification.
+  - Signs all outbound webhook requests with HMAC-SHA256 in the `X-SARWS-Signature: sha256=...` header using `AUDIT_ALERT_WEBHOOK_SECRET` for recipient verification.
   - Fully asynchronous and non-blocking with a strict 5-second timeout, ensuring zero impact on user response times.
 
 ### O. Security Health & Diagnostics Probe
@@ -242,10 +242,10 @@ This script executes:
 
 ## 5. Reporting a Vulnerability
 
-We take the security of SocietyHub and its residents seriously. If you discover a security vulnerability, please report it responsibly:
+We take the security of SARWS Connect and its residents seriously. If you discover a security vulnerability, please report it responsibly:
 
 1. **Do not** file public GitHub issues for security vulnerabilities.
-2. Email your findings with reproduction steps to **security@societyhub.in** (or contact the system administrator).
+2. Email your findings with reproduction steps to **security@sarws.in** (or contact the system administrator).
 3. Include:
    - Vulnerability description & potential impact.
    - Step-by-step reproduction guide or proof-of-concept.

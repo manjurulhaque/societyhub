@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -142,12 +143,15 @@ export function SocietySettingsForm({ society, currentCode }: SocietySettingsFor
       setState(result)
 
       if (result.success) {
+        toast.success(result.message || "Settings saved successfully")
         const newCode = values.code?.trim().toUpperCase()
         if (newCode && newCode !== currentCode) {
           router.push(`/society/${newCode}/settings`)
         } else {
           router.refresh()
         }
+      } else if (result.error) {
+        toast.error(result.error)
       }
     })
   }

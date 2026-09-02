@@ -262,7 +262,7 @@ export default async function AuditLogsPage({
             })}
             totalCount={totalCount}
             societyInfo={{
-              name: "SocietyHub Global Audit Trail",
+              name: "SARWS Connect Global Audit Trail",
             }}
             integrityStatus={integrity}
           />

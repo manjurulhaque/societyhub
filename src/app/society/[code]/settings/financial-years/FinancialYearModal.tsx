@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useEffect, useTransition } from "react"
 import { createFinancialYear, updateFinancialYear } from "./actions"
 
@@ -96,12 +98,13 @@ export function FinancialYearModal({
         if (isEdit && financialYear) {
           const res = await updateFinancialYear(societyCode, financialYear.id, {
             name: name.trim(),
-            startDate: new Date(startDate).toISOString(),
-            endDate: new Date(`${endDate}T23:59:59.999Z`).toISOString(),
+            startDate: new Date(`${startDate}T00:00:00.000Z`).toISOString(),
+            endDate: new Date(`${endDate}T00:00:00.000Z`).toISOString(),
           })
           if (res.error) {
             setError(res.error)
           } else {
+            toast.success("Financial year saved")
             onClose()
           }
         } else {
@@ -109,13 +112,14 @@ export function FinancialYearModal({
             name: name.trim(),
             startYear,
             endYear,
-            startDate: new Date(startDate).toISOString(),
-            endDate: new Date(`${endDate}T23:59:59.999Z`).toISOString(),
+            startDate: new Date(`${startDate}T00:00:00.000Z`).toISOString(),
+            endDate: new Date(`${endDate}T00:00:00.000Z`).toISOString(),
             isCurrent,
           })
           if (res.error) {
             setError(res.error)
           } else {
+            toast.success("Financial year saved")
             onClose()
           }
         }

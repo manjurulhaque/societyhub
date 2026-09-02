@@ -12,7 +12,7 @@ async function backfillAuditSignatures() {
   const { computeAuditSignature, verifyAuditTrailIntegrity } = await import("../src/lib/auditCrypto")
 
   console.log("================================================================================")
-  console.log("       SOCIETYHUB AUDIT TRAIL CRYPTOGRAPHIC SEAL BACKFILL ENGINE                 ")
+  console.log("       SARWS CONNECT AUDIT TRAIL CRYPTOGRAPHIC SEAL BACKFILL ENGINE              ")
   console.log("================================================================================\n")
 
   const societies = await prisma.society.findMany({ select: { id: true, name: true, code: true } })

@@ -28,6 +28,8 @@ export const COMMITTEE_ROLES: SocietyRole[] = [
   "TREASURER",
   "MANAGER",
   "ACCOUNTANT",
+  "EXECUTIVE_MEMBER",
+  "MEMBER",
 ]
 
 /**

@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useMemo, useTransition } from "react"
+import { toast } from "sonner"
+
+import { useState, useMemo, useTransition, useOptimistic } from "react"
 import { AdminTable, AdminBadge, AdminStatCard } from "@/components/admin"
 import {
   RecordPaymentModal,
@@ -31,6 +33,7 @@ export type PaymentListItem = {
   billPeriod?: string | null
   billType?: string | null
   accountName?: string | null
+  isOptimistic?: boolean
 }
 
 interface PaymentsClientViewProps {
@@ -66,9 +69,18 @@ export function PaymentsClientView({
   const [voidError, setVoidError] = useState<string | null>(null)
   const [isVoiding, startVoidTransition] = useTransition()
 
-  // Filtered payments
+  // Optimistic payments — instantly show a new row while the server action processes
+  const [optimisticPayments, addOptimisticPayment] = useOptimistic(
+    payments,
+    (currentPayments: PaymentListItem[], newPayment: PaymentListItem) => [
+      newPayment,
+      ...currentPayments,
+    ]
+  )
+
+  // Filtered payments (uses optimistic list for instant feedback)
   const filteredPayments = useMemo(() => {
-    return payments.filter((p) => {
+    return optimisticPayments.filter((p) => {
       if (selectedMode !== "ALL" && p.mode !== selectedMode) return false
       if (selectedStatus !== "ALL" && p.status !== selectedStatus) return false
 
@@ -83,18 +95,18 @@ export function PaymentsClientView({
 
       return true
     })
-  }, [payments, selectedMode, selectedStatus, searchQuery])
+  }, [optimisticPayments, selectedMode, selectedStatus, searchQuery])
 
-  // KPIs
-  const totalCollected = payments
+  // KPIs (uses optimistic list so totals update immediately)
+  const totalCollected = optimisticPayments
     .filter((p) => p.status === "SUCCESS")
     .reduce((acc, p) => acc + p.amount, 0)
 
-  const upiCollected = payments
+  const upiCollected = optimisticPayments
     .filter((p) => p.status === "SUCCESS" && (p.mode === "UPI" || p.mode === "APP"))
     .reduce((acc, p) => acc + p.amount, 0)
 
-  const bankCollected = payments
+  const bankCollected = optimisticPayments
     .filter(
       (p) =>
         p.status === "SUCCESS" &&
@@ -102,7 +114,7 @@ export function PaymentsClientView({
     )
     .reduce((acc, p) => acc + p.amount, 0)
 
-  const cashCollected = payments
+  const cashCollected = optimisticPayments
     .filter((p) => p.status === "SUCCESS" && p.mode === "CASH")
     .reduce((acc, p) => acc + p.amount, 0)
 
@@ -135,6 +147,7 @@ export function PaymentsClientView({
         if (res.error) {
           setVoidError(res.error)
         } else {
+          toast.success("Payment voided successfully")
           setVoidingPayment(null)
           setVoidReason("")
         }
@@ -294,7 +307,7 @@ export function PaymentsClientView({
             "Actions",
           ]}
           rows={filteredPayments.map((p) => (
-            <tr key={p.id} className="border-t border-stone-100 hover:bg-stone-50/60 transition-colors">
+            <tr key={p.id} className={`border-t border-stone-100 transition-colors ${p.isOptimistic ? "bg-emerald-50/60 animate-pulse" : "hover:bg-stone-50/60"}`}>
               <td className="px-4 py-3.5 font-mono text-xs font-bold text-stone-900">
                 {p.receiptNumber || `#${p.id.slice(0, 8)}`}
               </td>
@@ -328,13 +341,19 @@ export function PaymentsClientView({
                 {formatDateInAppTimeZone(new Date(p.paidOn))}
               </td>
               <td className="px-4 py-3.5">
-                <AdminBadge
-                  variant={p.status === "SUCCESS" ? "success" : "danger"}
-                  size="sm"
-                  dot
-                >
-                  {p.status}
-                </AdminBadge>
+                {p.isOptimistic ? (
+                  <AdminBadge variant="info" size="sm" dot>
+                    SAVING…
+                  </AdminBadge>
+                ) : (
+                  <AdminBadge
+                    variant={p.status === "SUCCESS" ? "success" : "danger"}
+                    size="sm"
+                    dot
+                  >
+                    {p.status}
+                  </AdminBadge>
+                )}
               </td>
               <td className="px-4 py-3.5">
                 <div className="flex items-center gap-1.5">
@@ -376,6 +395,7 @@ export function PaymentsClientView({
           residents={residents}
           accounts={accounts}
           flats={flats}
+          onOptimisticAdd={addOptimisticPayment}
         />
       ) : null}
 

@@ -185,20 +185,24 @@ export function AdminReportsClient({ data }: { data: AdminReportData }) {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="w-full min-w-0 max-w-full space-y-8">
       {/* Action Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-stone-200 pb-4 print:hidden">
-        <AdminTabs
-          items={[
-            { id: "leaderboard", label: "Society Financial Breakdown", count: data.societies.length },
-            { id: "breakdown", label: "Revenue & Payment Channels" },
-            { id: "recent", label: "Recent Collections Feed", count: data.recentPayments.length },
-          ]}
-          activeId={activeTab}
-          onChange={(tab) => setActiveTab(tab)}
-        />
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between min-w-0 border-b border-stone-200 pb-4 print:hidden">
+        <div className="min-w-0 w-full xl:flex-1">
+          <AdminTabs
+            wrap
+            items={[
+              { id: "leaderboard", label: "Society Financial Breakdown", count: data.societies.length },
+              { id: "breakdown", label: "Revenue & Payment Channels" },
+              { id: "recent", label: "Recent Collections Feed", count: data.recentPayments.length },
+            ]}
+            activeId={activeTab}
+            onChange={(tab) => setActiveTab(tab)}
+            className="w-full"
+          />
+        </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <AdminButton variant="primary" size="sm" onClick={handleDownloadPDF}>
             <svg
               className="mr-1.5 h-4 w-4 text-white"

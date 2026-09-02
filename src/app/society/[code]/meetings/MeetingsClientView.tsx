@@ -140,6 +140,7 @@ export function MeetingsClientView({
             <option value="AGM">Annual General Meeting (AGM)</option>
             <option value="SGM">Special General Meeting (SGM)</option>
             <option value="MANAGING_COMMITTEE">Managing Committee (MCM)</option>
+            <option value="EXECUTIVE_COMMITTEE">Executive Committee (ECM)</option>
             <option value="EMERGENCY">Emergency Executive</option>
           </select>
         </div>
@@ -217,13 +218,15 @@ export function MeetingsClientView({
                         ? "purple"
                         : m.meetingType === "SGM"
                           ? "warning"
-                          : m.meetingType === "EMERGENCY"
-                            ? "danger"
-                            : "info"
+                          : m.meetingType === "EXECUTIVE_COMMITTEE"
+                            ? "neutral"
+                            : m.meetingType === "EMERGENCY"
+                              ? "danger"
+                              : "info"
                     }
                     size="sm"
                   >
-                    {m.meetingType.replace(/_/g, " ")}
+                    {m.meetingType === "EXECUTIVE_COMMITTEE" ? "Executive Committee" : m.meetingType.replace(/_/g, " ")}
                   </AdminBadge>
                 </td>
 

@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma"
 import { computeAuditSignature } from "@/lib/auditCrypto"
 import { createClient } from "@/lib/supabase/server"
+import { logger } from "@/lib/logger"
 import type { AuditLogDetailData } from "@/components/audit/AuditLogDetailModal"
 
 export interface GetEntityAuditHistoryParams {
@@ -111,7 +112,7 @@ export async function getEntityAuditHistory(
       logs: validatedLogs,
     }
   } catch (error) {
-    console.error("[AuditTimeline] Error fetching entity audit history:", error)
+    logger.error("Failed to retrieve entity audit history", error, "getEntityAuditHistory", { entity: params.entity, entityId: params.entityId })
     return {
       success: false,
       logs: [],

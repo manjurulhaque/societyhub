@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { toggleAuditLock } from "./actions"
 import type { FinancialYearItem } from "./FinancialYearModal"
@@ -32,6 +34,7 @@ export function AuditLockModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Audit lock updated")
           onClose()
         }
       } catch (err: unknown) {

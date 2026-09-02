@@ -149,319 +149,8 @@ function ReportCustomTooltip({
   )
 }
 
-export type SocietyReportData = {
-  society: {
-    id: string
-    name: string
-    code: string | null
-    currencySymbol: string
-    address?: string | null
-    city?: string | null
-    state?: string | null
-    pincode?: string | null
-    registrationNumber?: string | null
-    panNumber?: string | null
-    gstin?: string | null
-  }
-  summary: {
-    totalBilled: number
-    totalCollected: number
-    totalOutstanding: number
-    collectionRate: number
-    totalBillsCount: number
-    totalPaymentsCount: number
-    totalExpenses: number
-    totalExpensesCount: number
-    netOperatingSurplus: number
-    liquidCashAndBank: number
-    totalFixedDeposits: number
-    totalFixedAssetsBookValue: number
-    totalReserves: number
-    defaultersCount: number
-    totalFlatsCount: number
-    defaulterRate: number
-    totalVendorPayables: number
-    totalMemberDepositsHeld: number
-  }
-  billsByCategory: {
-    billType: string
-    amount: number
-    count: number
-    percentage: number
-  }[]
-  expensesByCategory: {
-    categoryName: string
-    amount: number
-    count: number
-    percentage: number
-  }[]
-  paymentsByMode: {
-    mode: string
-    amount: number
-    count: number
-    percentage: number
-  }[]
-  bankAccounts: {
-    id: string
-    name: string
-    bankName: string | null
-    accountNumber: string | null
-    accountType: string
-    currentBalance: number
-    isDefault: boolean
-  }[]
-  fixedDeposits: {
-    id: string
-    fdNumber: string
-    bankName: string
-    principalAmount: number
-    interestRate: number
-    maturityAmount: number
-    maturityDate: string
-    status: string
-  }[]
-  fixedAssets: {
-    id: string
-    name: string
-    assetCode: string | null
-    categoryName: string
-    location: string | null
-    purchaseCost: number
-    currentBookValue: number
-    amcVendorName: string | null
-    status: string
-  }[]
-  defaulters: {
-    flatId: string
-    flatNumber: string
-    blockName: string
-    occupancyStatus: string
-    residentName: string
-    residentPhone: string | null
-    residentEmail: string | null
-    unpaidBillsCount: number
-    unpaidPrincipal: number
-    unpaidLateFees: number
-    totalOverdue: number
-    oldestDueDate: string | null
-    agingBucket: "OVER_90" | "DAYS_61_90" | "DAYS_31_60" | "DAYS_0_30"
-    daysOverdue: number
-    isVotingDisqualified: boolean
-  }[]
-  agingSummary: {
-    over90: { count: number; amount: number }
-    days61To90: { count: number; amount: number }
-    days31To60: { count: number; amount: number }
-    days0To30: { count: number; amount: number }
-  }
-  monthlyTrends: {
-    key: string
-    label: string
-    year: number
-    month: number
-    billedAmount: number
-    billedCount: number
-    collectedAmount: number
-    collectedCount: number
-    collectionRate: number
-    expenseAmount: number
-    netCashflow: number
-  }[]
-  pnl: {
-    incomeHeads: {
-      category: string
-      amount: number
-      count: number
-    }[]
-    totalIncome: number
-    expenseHeads: {
-      category: string
-      amount: number
-      count: number
-    }[]
-    totalExpense: number
-    netSurplus: number
-  }
-  balanceSheet: {
-    assets: {
-      liquidBankCash: number
-      maintenanceArrears: number
-      fixedDeposits: number
-      fixedAssetsBookValue: number
-      totalAssets: number
-    }
-    liabilities: {
-      memberDepositsHeld: number
-      vendorPayables: number
-      advanceCollections: number
-      sinkingAndGeneralReserves: number
-      totalLiabilitiesAndFunds: number
-    }
-    netFinancialPosition: number
-  }
-  budgetVariance: {
-    id: string
-    budgetName: string
-    headName: string
-    allocatedAmount: number
-    utilizedAmount: number
-    remainingAmount: number
-    utilizationRate: number
-    status: "ON_TRACK" | "WARNING" | "OVER_BUDGET"
-  }[]
-  statutory: {
-    shares: {
-      id: string
-      flatNumber: string
-      blockName: string
-      memberName: string
-      certificateNumber: string
-      sharesCount: number
-      distinctiveNumbers: string
-      faceValueTotal: number
-      issueDate: string
-      status: string
-    }[]
-    votingList: {
-      flatNumber: string
-      blockName: string
-      memberName: string
-      occupancyStatus: string
-      outstandingDues: number
-      isEligible: boolean
-      disqualificationReason: string | null
-    }[]
-    nominations: {
-      id: string
-      flatNumber: string
-      blockName: string
-      memberName: string
-      nomineeName: string
-      relationship: string
-      percentageShare: number
-      nominationDate: string
-      status: string
-    }[]
-    propertyLiens: {
-      id: string
-      flatNumber: string
-      blockName: string
-      memberName: string
-      bankName: string
-      loanAccountNumber: string | null
-      sanctionAmount: number | null
-      nocIssuedDate: string | null
-      nocReference: string | null
-      status: string
-    }[]
-  }
-  vendorAging: {
-    vendorId: string
-    vendorName: string
-    companyName: string | null
-    phone: string | null
-    totalBilledAmount: number
-    totalPaidAmount: number
-    outstandingDue: number
-    tdsDeducted: number
-    pendingBillsCount: number
-    agingBucket: "OVER_60" | "DAYS_31_60" | "DAYS_0_30"
-  }[]
-  cheques: {
-    id: string
-    chequeNumber: string
-    direction: "INWARD" | "OUTWARD"
-    partyName: string
-    bankName: string | null
-    accountName: string | null
-    amount: number
-    status: string
-    chequeDate: string
-    clearedOn: string | null
-    bouncedReason: string | null
-    bounceCharges: number
-  }[]
-  unitLedger: {
-    flatId: string
-    flatNumber: string
-    blockName: string
-    unitType: string | null
-    area: number | null
-    areaUnit: string
-    occupancyStatus: string
-    residentName: string
-    totalInvoicesCount: number
-    totalBilledAmount: number
-    totalPaidAmount: number
-    outstandingAmount: number
-    advanceAmount: number
-    accountStatus: "CLEAR" | "PENDING" | "OVERDUE" | "ADVANCE" | "NO_BILLS"
-  }[]
-  oneTimeFunds: {
-    campaigns: {
-      id: string
-      title: string
-      description: string | null
-      totalTargetAmount: number
-      totalAllocatedAmount: number
-      totalCollectedAmount: number
-      totalOutstandingAmount: number
-      realizationRate: number
-      calculationType: string
-      ratePerSqft: number | null
-      fixedAmountPerFlat: number | null
-      paymentPlan: string
-      numberOfInstallments: number
-      startDate: string
-      dueDate: string | null
-      status: string
-      approvedInMeeting: string | null
-      remarks: string | null
-      allocations: {
-        id: string
-        flatId: string
-        flatNumber: string
-        blockName: string
-        residentName: string
-        area: number | null
-        totalAmount: number
-        paidAmount: number
-        balanceAmount: number
-        status: string
-        installmentsCount: number
-        clearedInstallmentsCount: number
-      }[]
-    }[]
-    deposits: {
-      id: string
-      flatNumber: string
-      blockName: string
-      memberName: string
-      phone: string | null
-      depositType: string
-      amount: number
-      status: string
-      receivedOn: string
-      refundedOn: string | null
-      reference: string | null
-      remarks: string | null
-    }[]
-    totalTargetedAllCampaigns: number
-    totalCollectedAllCampaigns: number
-    totalOutstandingAllCampaigns: number
-    totalDepositsHeld: number
-    totalCorpusDeposits: number
-    totalSecurityDeposits: number
-  }
-  blocks: string[]
-  financialYears: {
-    id: string
-    name: string
-    startYear: number
-    endYear: number
-    isCurrent: boolean
-  }[]
-}
+import type { SocietyReportData } from "./types"
+export type { SocietyReportData } from "./types"
 
 export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
   const isMounted = useSyncExternalStore(
@@ -1418,39 +1107,16 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="w-full min-w-0 max-w-full space-y-8">
       {/* Action & Tab Bar */}
       <div className="space-y-4 border-b border-stone-200 pb-4 print:hidden">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <AdminTabs
-            items={[
-              { id: "overview", label: "Analytics & Overview" },
-              {
-                id: "one_time_funds",
-                label: "One-Time Funds & Special Assessments",
-                count: data.oneTimeFunds.campaigns.length,
-              },
-              { id: "balance_sheet", label: "Balance Sheet" },
-              { id: "budget_variance", label: "Budget Variance" },
-              {
-                id: "defaulters",
-                label: "Defaulters & Aging",
-                count: data.summary.defaultersCount,
-              },
-              { id: "statutory", label: "Statutory Registers (Form I/J)" },
-              { id: "vendors", label: "Vendor Payables Aging" },
-              { id: "cheques", label: "Cheque Register" },
-              { id: "monthly", label: "Monthly Trends" },
-              { id: "pnl", label: "Income & Expenditure" },
-              { id: "units", label: "Unit Ledger", count: data.summary.totalFlatsCount },
-            ]}
-            activeId={activeTab}
-            onChange={(tab) => setActiveTab(tab)}
-          />
-
-          <div className="flex items-center gap-2">
-            {/* Period / Financial Year Filter */}
-            <div className="w-44">
+        {/* Top Control Bar: Accounting Period & Export Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-stone-600">
+              Accounting Period:
+            </span>
+            <div className="w-56">
               <AdminSelect
                 value={periodFilter}
                 onChange={(e) => setPeriodFilter(e.target.value)}
@@ -1465,7 +1131,9 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                 ]}
               />
             </div>
+          </div>
 
+          <div className="flex flex-wrap items-center gap-2">
             <AdminButton
               variant="primary"
               size="sm"
@@ -1541,6 +1209,35 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
             </AdminButton>
           </div>
         </div>
+
+        {/* Tab Pills Bar - Full width wrapping, zero horizontal scroll */}
+        <AdminTabs
+          wrap
+          items={[
+            { id: "overview", label: "Analytics & Overview" },
+            {
+              id: "one_time_funds",
+              label: "Special Funds & Assessments",
+              count: data.oneTimeFunds.campaigns.length,
+            },
+            { id: "balance_sheet", label: "Balance Sheet" },
+            { id: "budget_variance", label: "Budget Variance" },
+            {
+              id: "defaulters",
+              label: "Defaulters & Aging",
+              count: data.summary.defaultersCount,
+            },
+            { id: "statutory", label: "Statutory Registers (Form I/J)" },
+            { id: "vendors", label: "Vendor Payables" },
+            { id: "cheques", label: "Cheque Register" },
+            { id: "monthly", label: "Monthly Trends" },
+            { id: "pnl", label: "Income & Expenditure" },
+            { id: "units", label: "Unit Ledger", count: data.summary.totalFlatsCount },
+          ]}
+          activeId={activeTab}
+          onChange={(tab) => setActiveTab(tab)}
+          className="w-full"
+        />
       </div>
 
       {/* Global KPI Cards */}
@@ -1639,7 +1336,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
       {activeTab === "one_time_funds" && (
         <div className="space-y-6">
           {/* Sub-Tab Navigation */}
-          <div className="flex items-center gap-2 border-b border-stone-200 pb-2">
+          <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 pb-2">
             <button
               type="button"
               onClick={() => setOneTimeSubTab("campaigns")}
@@ -3246,7 +2943,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
       {/* ========================================== */}
       {activeTab === "statutory" && (
         <div className="space-y-6">
-          <div className="flex items-center gap-2 border-b border-stone-200 pb-2">
+          <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 pb-2">
             <button
               type="button"
               onClick={() => setStatutorySubTab("shares")}

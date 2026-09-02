@@ -1,9 +1,9 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getSocietyAdmin } from "@/lib/auth/getSocietyAdmin"
 import { canApproveDataEntry, isManagerRole } from "@/lib/auth/requireAuth"
 import { getCurrentFinancialYear, getPendingExpenseSummary } from "@/lib/society"
-import { prisma } from "@/lib/prisma"
 import {
   AdminPageHeader,
   AdminStatCard,
@@ -12,8 +12,13 @@ import {
   AdminTable,
   AdminButton,
 } from "@/components/admin"
-import { formatDateInAppTimeZone } from "@/lib/datetime"
+import { formatDateInAppTimeZone, formatFinancialYearRange } from "@/lib/datetime"
 import { SocietyDashboardCharts } from "./SocietyDashboardCharts"
+import { getDashboardStats, getRecentBills, getRecentPayments } from "./data"
+
+export const metadata: Metadata = {
+  title: "Dashboard",
+}
 
 export default async function SocietyDashboardPage({
   params,
@@ -33,87 +38,17 @@ export default async function SocietyDashboardPage({
   const societyId = society.id
   const societyCode = society.code || society.id
 
+  // Cached aggregate stats (60s TTL) + fresh recent items + request-scoped helpers
   const [
-    flatStatusCounts,
-    totalPeople,
-    totalMembers,
-    billTotal,
-    paymentTotal,
+    { flatStatusCounts, totalPeople, totalMembers, billTotal, paymentTotal, blocks },
     recentBills,
     recentPayments,
-    blocks,
     pendingExpenseData,
     currentFY,
   ] = await Promise.all([
-    prisma.flat.groupBy({
-      by: ["status"],
-      where: { block: { societyId }, isActive: true, deletedAt: null },
-      _count: { _all: true },
-    }),
-
-    prisma.person.count({
-      where: { societyId, isActive: true, deletedAt: null },
-    }),
-
-    prisma.societyMember.count({
-      where: { societyId },
-    }),
-
-    prisma.bill.aggregate({
-      where: { societyId },
-      _sum: { amount: true },
-    }),
-
-    prisma.payment.aggregate({
-      where: { societyId },
-      _sum: { amount: true },
-    }),
-
-    prisma.bill.findMany({
-      where: { societyId },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      include: {
-        flat: {
-          select: {
-            number: true,
-            block: { select: { name: true } },
-          },
-        },
-      },
-    }),
-
-    prisma.payment.findMany({
-      where: { societyId },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      include: {
-        paidBy: { select: { name: true } },
-        bill: {
-          select: {
-            year: true,
-            month: true,
-            flat: {
-              select: {
-                number: true,
-                block: { select: { name: true } },
-              },
-            },
-          },
-        },
-      },
-    }),
-
-    prisma.block.findMany({
-      where: { societyId, isActive: true, deletedAt: null },
-      orderBy: { name: "asc" },
-      include: {
-        _count: {
-          select: { flats: true },
-        },
-      },
-    }),
-
+    getDashboardStats(societyId),
+    getRecentBills(societyId),
+    getRecentPayments(societyId),
     getPendingExpenseSummary(societyId),
     getCurrentFinancialYear(societyId),
   ])
@@ -178,7 +113,7 @@ export default async function SocietyDashboardPage({
                   {currentFY.name}
                 </span>
                 <span className="text-xs text-stone-500 font-medium">
-                  ({new Date(currentFY.startDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} – {new Date(currentFY.endDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})
+                  ({formatFinancialYearRange(currentFY.startDate, currentFY.endDate)})
                 </span>
                 {currentFY.isLocked ? (
                   <AdminBadge variant="warning" size="sm">AUDIT FROZEN</AdminBadge>

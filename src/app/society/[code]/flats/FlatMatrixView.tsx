@@ -4,7 +4,7 @@ import { useState, useMemo } from "react"
 import { AdminBadge } from "@/components/admin"
 import type { FlatListItem } from "./FlatsClientView"
 import type { BlockOption } from "./AddFlatModal"
-import { getTowerDirectoryData } from "./actions"
+import { getTowerDirectoryData } from "./actions/blockActions"
 import {
   generateTowerDirectoryPDF,
   exportTowerDirectoryCSV,

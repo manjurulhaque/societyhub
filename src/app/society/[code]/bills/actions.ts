@@ -6,6 +6,8 @@ import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
 import { sanitizeText } from "@/lib/sanitize"
 import { getSafeErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
+import { revalidateBillCache } from "@/lib/cache/cacheTags"
 import type { BillType, BillStatus } from "@/generated/prisma/client"
 
 export type BillActionState = {
@@ -183,9 +185,7 @@ export async function generateBatchBills(
       newData: { month, year, billType, generatedCount, skippedCount, totalGeneratedAmount },
     })
 
-    revalidatePath(`/society/${societyCode}/bills`)
-    revalidatePath(`/society/${societyCode}/dashboard`)
-    revalidatePath(`/society/${societyCode}/reports`)
+    revalidateBillCache(societyCode)
 
     if (generatedCount === 0 && skippedCount > 0) {
       return {
@@ -205,7 +205,7 @@ export async function generateBatchBills(
       totalAmount: totalGeneratedAmount,
     }
   } catch (err: unknown) {
-    console.error("Failed to generate batch bills:", err)
+    logger.error("Failed to generate batch bills", err, "generateBatchBills", { societyCode, month: data.month, year: data.year, billType: data.billType })
     return { error: getSafeErrorMessage(err, "Failed to execute batch billing.") }
   }
 }
@@ -306,15 +306,17 @@ export async function createIndividualBill(
       newData: { billNumber, flatId: data.flatId, amount, billType: data.billType },
     })
 
-    revalidatePath(`/society/${societyCode}/bills`)
-    revalidatePath(`/society/${societyCode}/dashboard`)
+    revalidateBillCache(societyCode, {
+      flatId: data.flatId,
+      billId: bill.id,
+    })
 
     return {
       success: true,
       message: `Bill ${billNumber} created successfully.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to create individual bill:", err)
+    logger.error("Failed to create individual bill", err, "createIndividualBill", { societyCode, flatId: data.flatId, amount: data.amount, billType: data.billType })
     return { error: getSafeErrorMessage(err, "Failed to create bill.") }
   }
 }
@@ -368,15 +370,17 @@ export async function cancelBill(
       newData: { status: updatedBill.status, reason: sanitizedReason },
     })
 
-    revalidatePath(`/society/${societyCode}/bills`)
-    revalidatePath(`/society/${societyCode}/dashboard`)
+    revalidateBillCache(societyCode, {
+      flatId: bill.flatId,
+      billId: bill.id,
+    })
 
     return {
       success: true,
       message: `Bill ${bill.billNumber || bill.id} has been cancelled.`,
     }
   } catch (err: unknown) {
-    console.error("Failed to cancel bill:", err)
+    logger.error("Failed to cancel bill", err, "cancelBill", { societyCode, billId })
     return { error: getSafeErrorMessage(err, "Failed to cancel bill.") }
   }
 }

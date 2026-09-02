@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useTransition } from "react"
 import { AdminModal } from "@/components/admin"
 import { createAssessmentCampaign } from "./actions"
@@ -62,6 +64,7 @@ export function CreateAssessmentModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Assessment created successfully")
           onClose()
           setTitle("")
           setDescription("")

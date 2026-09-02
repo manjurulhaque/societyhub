@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import { useState, useMemo, useTransition } from "react"
 import { AdminModal } from "@/components/admin"
 import { createVendorBill } from "./actions"
@@ -79,6 +81,7 @@ export function CreateVendorBillModal({
         if (res.error) {
           setError(res.error)
         } else {
+          toast.success("Vendor bill recorded")
           onClose()
           setBillNumber("")
           setAmount("")

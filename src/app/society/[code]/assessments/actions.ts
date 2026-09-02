@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { requireCommitteeAccess, COMMITTEE_ROLES } from "@/lib/auth/requireAuth"
 import { prisma } from "@/lib/prisma"
 import { recordAuditLog } from "@/lib/audit"
+import { logger } from "@/lib/logger"
 import type { MaintenanceType, PaymentPlan, AssessmentStatus, BillStatus } from "@/generated/prisma/client"
 
 export type AssessmentActionState = {
@@ -170,7 +171,7 @@ export async function createAssessmentCampaign(
       collectionId: collection.id,
     }
   } catch (err: unknown) {
-    console.error("Failed to create assessment campaign:", err)
+    logger.error("Failed to create assessment campaign", err, "createAssessmentCampaign", { societyCode, title: data.title })
     const message = err instanceof Error ? err.message : "Failed to create assessment campaign."
     return { error: message }
   }
@@ -212,7 +213,7 @@ export async function updateAssessmentStatus(
 
     return { success: true, message: `Campaign status updated to ${status}.` }
   } catch (err: unknown) {
-    console.error("Failed to update campaign status:", err)
+    logger.error("Failed to update campaign status", err, "updateAssessmentStatus", { societyCode, collectionId, status })
     const message = err instanceof Error ? err.message : "Failed to update campaign status."
     return { error: message }
   }
@@ -297,7 +298,7 @@ export async function recordAssessmentInstallmentPayment(
 
     return { success: true, message: "Payment recorded successfully against installment." }
   } catch (err: unknown) {
-    console.error("Failed to record installment payment:", err)
+    logger.error("Failed to record installment payment", err, "recordAssessmentInstallmentPayment", { societyCode, installmentId, amountPaid })
     const message = err instanceof Error ? err.message : "Failed to record payment."
     return { error: message }
   }
