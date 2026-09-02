@@ -32,7 +32,7 @@ export default async function SocietyReportsPage({
   })
 
   return (
-    <div className="mx-auto max-w-7xl space-y-8 px-4 py-6 sm:px-6 sm:py-8 md:px-8">
+    <div className="mx-auto max-w-7xl w-full min-w-0 max-w-full space-y-8 px-4 py-6 sm:px-6 sm:py-8 md:px-8">
       <ReportsHeader society={reportData.society} />
       <SocietyReportsClient data={reportData} />
     </div>

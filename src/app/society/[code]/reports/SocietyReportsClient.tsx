@@ -1107,39 +1107,16 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="w-full min-w-0 max-w-full space-y-8">
       {/* Action & Tab Bar */}
       <div className="space-y-4 border-b border-stone-200 pb-4 print:hidden">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <AdminTabs
-            items={[
-              { id: "overview", label: "Analytics & Overview" },
-              {
-                id: "one_time_funds",
-                label: "One-Time Funds & Special Assessments",
-                count: data.oneTimeFunds.campaigns.length,
-              },
-              { id: "balance_sheet", label: "Balance Sheet" },
-              { id: "budget_variance", label: "Budget Variance" },
-              {
-                id: "defaulters",
-                label: "Defaulters & Aging",
-                count: data.summary.defaultersCount,
-              },
-              { id: "statutory", label: "Statutory Registers (Form I/J)" },
-              { id: "vendors", label: "Vendor Payables Aging" },
-              { id: "cheques", label: "Cheque Register" },
-              { id: "monthly", label: "Monthly Trends" },
-              { id: "pnl", label: "Income & Expenditure" },
-              { id: "units", label: "Unit Ledger", count: data.summary.totalFlatsCount },
-            ]}
-            activeId={activeTab}
-            onChange={(tab) => setActiveTab(tab)}
-          />
-
-          <div className="flex items-center gap-2">
-            {/* Period / Financial Year Filter */}
-            <div className="w-44">
+        {/* Top Control Bar: Accounting Period & Export Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-stone-600">
+              Accounting Period:
+            </span>
+            <div className="w-56">
               <AdminSelect
                 value={periodFilter}
                 onChange={(e) => setPeriodFilter(e.target.value)}
@@ -1154,7 +1131,9 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
                 ]}
               />
             </div>
+          </div>
 
+          <div className="flex flex-wrap items-center gap-2">
             <AdminButton
               variant="primary"
               size="sm"
@@ -1230,6 +1209,35 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
             </AdminButton>
           </div>
         </div>
+
+        {/* Tab Pills Bar - Full width wrapping, zero horizontal scroll */}
+        <AdminTabs
+          wrap
+          items={[
+            { id: "overview", label: "Analytics & Overview" },
+            {
+              id: "one_time_funds",
+              label: "Special Funds & Assessments",
+              count: data.oneTimeFunds.campaigns.length,
+            },
+            { id: "balance_sheet", label: "Balance Sheet" },
+            { id: "budget_variance", label: "Budget Variance" },
+            {
+              id: "defaulters",
+              label: "Defaulters & Aging",
+              count: data.summary.defaultersCount,
+            },
+            { id: "statutory", label: "Statutory Registers (Form I/J)" },
+            { id: "vendors", label: "Vendor Payables" },
+            { id: "cheques", label: "Cheque Register" },
+            { id: "monthly", label: "Monthly Trends" },
+            { id: "pnl", label: "Income & Expenditure" },
+            { id: "units", label: "Unit Ledger", count: data.summary.totalFlatsCount },
+          ]}
+          activeId={activeTab}
+          onChange={(tab) => setActiveTab(tab)}
+          className="w-full"
+        />
       </div>
 
       {/* Global KPI Cards */}
@@ -1328,7 +1336,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
       {activeTab === "one_time_funds" && (
         <div className="space-y-6">
           {/* Sub-Tab Navigation */}
-          <div className="flex items-center gap-2 border-b border-stone-200 pb-2">
+          <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 pb-2">
             <button
               type="button"
               onClick={() => setOneTimeSubTab("campaigns")}
@@ -2935,7 +2943,7 @@ export function SocietyReportsClient({ data }: { data: SocietyReportData }) {
       {/* ========================================== */}
       {activeTab === "statutory" && (
         <div className="space-y-6">
-          <div className="flex items-center gap-2 border-b border-stone-200 pb-2">
+          <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 pb-2">
             <button
               type="button"
               onClick={() => setStatutorySubTab("shares")}
